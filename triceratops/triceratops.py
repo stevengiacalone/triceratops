@@ -138,15 +138,15 @@ class target:
 		Calculates the transit depth each source in the aperture would have if it were the source of the transit.
 		Args:
 			tdepth (float): Reported transit depth [ppm].
-			ap_pixels (numpy array): Aperture used to extract light curve. 
+			all_ap_pixels (numpy array): Apertures used to extract light curve. 
 		"""
 		
 		# find stars in all apertures
 		ap_mask = np.zeros(len(self.stars), dtype=bool)
-		for k in range(len(ap_pixels)):
+		for k in range(len(all_ap_pixels)):
 			for i in range(len(self.stars)):
-				for j in range(len(ap_pixels[k])):
-					in_ap = np.logical_and((ap_pixels[k][j,0]-0.5 <= self.pix_coords[k][i,0] <= ap_pixels[k][j,0]+0.5), (ap_pixels[k][j,1]-0.5 <= self.pix_coords[k][i,1] <= ap_pixels[k][j,1]+0.5))
+				for j in range(len(all_ap_pixels[k])):
+					in_ap = np.logical_and((all_ap_pixels[k][j,0]-0.5 <= self.pix_coords[k][i,0] <= all_ap_pixels[k][j,0]+0.5), (all_ap_pixels[k][j,1]-0.5 <= self.pix_coords[k][i,1] <= all_ap_pixels[k][j,1]+0.5))
 					if in_ap == True:
 						ap_mask[i] = in_ap
 
