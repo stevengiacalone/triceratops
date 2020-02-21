@@ -631,7 +631,7 @@ class target:
 					a = ((constants.G.cgs.value*df["ms"].values[k]*constants.M_sun.cgs.value)/(4*np.pi**2)*(P_orb*86400)**2)**(1/3)
 					logg = np.log10(constants.G.cgs.value*df["ms"].values[k]*constants.M_sun.cgs.value/(df["rs"].values[k]*constants.R_sun.cgs.value)**2)
 					u1, u2 = quad_coeffs(df["Teff"].values[k], logg, 0.0)
-					best_model = simulate_TP_transit((df["inc"].values[k], df["rp"].values[k]), time, P_orb, a, df["rs"].values[k], u1, u2, df["fluxratio"].values[k], comp)
+					best_model = simulate_TP_transit((df["inc"].values[k], df["rp"].values[k]), time, P_orb, a, df["rs"].values[k], u1, u2)
 					scenario_flux = renorm_flux(flux, df["fluxratio"].values[k], comp)
 					scenario_flux_err = renorm_flux_err(flux_err, df["fluxratio"].values[k], comp)
 				# all EBs
@@ -644,7 +644,7 @@ class target:
 					lum_EB = stellar_relations(Rad=df["rp"].values[k])[-1]
 					lum_primary = stellar_relations(Rad=df["rs"].values[k])[-1]
 					EB_fluxratio = lum_EB/(lum_EB+lum_primary)
-					best_model = simulate_EB_transit((df["inc"].values[k], EB_fluxratio), time, P_orb, lum_EB+lum_primary, df["fluxratio"].values[k], comp)
+					best_model = simulate_EB_transit((df["inc"].values[k], EB_fluxratio), time, P_orb, lum_EB+lum_primary)
 					scenario_flux = renorm_flux(flux, df["fluxratio"].values[k], comp)
 					scenario_flux_err = renorm_flux_err(flux_err, df["fluxratio"].values[k], comp)
 			
