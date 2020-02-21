@@ -363,14 +363,14 @@ class target:
 				# compute priors
 				j=0
 				unbound_companion_prior = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], 2.2)
-				companion_prior = (1-P.prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], 2.2)) * (1-unbound_companion_prior)
+				companion_prior = (1-prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], 2.2)) * (1-unbound_companion_prior)
 				if companion_prior > 0.0:
 					lnprior[i+j] = np.log(companion_prior * prior_TP(P_orb, (best_rp[i+j]*(constants.R_earth.cgs.value/constants.R_sun.cgs.value)/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j]))
 				else:
 					lnprior[i+j] = -np.inf
 				j=1
 				unbound_companion_prior = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], 2.2)
-				companion_prior = (1-P.prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], 2.2)) * (1-unbound_companion_prior)
+				companion_prior = (1-prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], 2.2)) * (1-unbound_companion_prior)
 				if companion_prior > 0.0:
 					lnprior[i+j] = np.log(companion_prior * prior_EB(P_orb, (best_rp[i+j]/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j], EBs["period"], EBs["pdepth"]))
 				else:
@@ -410,7 +410,7 @@ class target:
 				j=6
 				best_res = contrast_curve(contrast_curve_file, best_Delta_mags[i+j])
 				unbound_companion_prior = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], best_res)
-				companion_prior = (1-P.prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], 2.2)) * unbound_companion_prior
+				companion_prior = (1-prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], 2.2)) * unbound_companion_prior
 				if companion_prior > 0.0:
 					lnprior[i+j] = np.log(companion_prior * prior_TP(P_orb, (best_rp[i+j]*(constants.R_earth.cgs.value/constants.R_sun.cgs.value)/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j]))
 				else:
@@ -418,7 +418,7 @@ class target:
 				j=7
 				best_res = contrast_curve(contrast_curve_file, best_Delta_mags[i+j])
 				unbound_companion_prior = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], best_res)
-				companion_prior = (1-P.prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], 2.2)) * unbound_companion_prior
+				companion_prior = (1-prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], 2.2)) * unbound_companion_prior
 				if companion_prior > 0.0:
 					lnprior[i+j] = np.log(companion_prior * prior_EB(P_orb, (best_rp[i+j]/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j], EBs["period"], EBs["pdepth"]))
 				else:
@@ -426,7 +426,7 @@ class target:
 				j=8
 				best_res = contrast_curve(contrast_curve_file, best_Delta_mags[i+j])
 				unbound_companion_prior = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], best_res)
-				companion_prior = (1-P.prior_bound_companion(primary_ms_BTP, filtered_stars["plx"].values[i], 2.2)) * unbound_companion_prior
+				companion_prior = (1-prior_bound_companion(primary_ms_BTP, filtered_stars["plx"].values[i], 2.2)) * unbound_companion_prior
 				if companion_prior > 0.0:
 					lnprior[i+j] = np.log(companion_prior * prior_TP(P_orb, (best_rp[i+j]*(constants.R_earth.cgs.value/constants.R_sun.cgs.value)/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j]))
 				else:
@@ -434,7 +434,7 @@ class target:
 				j=9
 				best_res = contrast_curve(contrast_curve_file, best_Delta_mags[i+j])
 				unbound_companion_prior = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], best_res)
-				companion_prior = (1-P.prior_bound_companion(primary_ms_BEB, filtered_stars["plx"].values[i], 2.2)) * unbound_companion_prior
+				companion_prior = (1-prior_bound_companion(primary_ms_BEB, filtered_stars["plx"].values[i], 2.2)) * unbound_companion_prior
 				if companion_prior > 0.0:
 					lnprior[i+j] = np.log(companion_prior * prior_EB(P_orb, (best_rp[i+j]/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j], EBs["period"], EBs["pdepth"]))
 				else:
@@ -476,7 +476,7 @@ class target:
 						best_fluxratio[i+j] = 0.0
 						best_Delta_mags[i+j] = -np.inf
 						best_ms[i+j], best_rs[i+j], best_Teff[i+j], best_lum[i+j] = filtered_stars["mass"].values[i], filtered_stars["rad"].values[i], filtered_stars["Teff"].values[i], filtered_stars["lum"].values[i]
-						lnprior[i+j] = np.log(P.prior_TP(P_orb, (best_rp[i+j]*(constants.R_earth.cgs.value/constants.R_sun.cgs.value)/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j]))
+						lnprior[i+j] = np.log(prior_TP(P_orb, (best_rp[i+j]*(constants.R_earth.cgs.value/constants.R_sun.cgs.value)/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j]))
 
 						j=11 + (i-2)
 						targets[i+j] = ID
@@ -488,7 +488,7 @@ class target:
 						x, best_rp[i+j], x, x, x = stellar_relations(lum=filtered_stars["lum"].values[i]*(best_EB_fluxratio))
 						best_fluxratio[i+j] = 0.0
 						best_Delta_mags[i+j] = -np.inf
-						lnprior[i+j] = np.log(P.prior_EB(P_orb, (best_rp[i+j]/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j], EBs["period"], EBs["pdepth"]))
+						lnprior[i+j] = np.log(prior_EB(P_orb, (best_rp[i+j]/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j], EBs["period"], EBs["pdepth"]))
 
 					# if above doesn't work, use V and Ks mags
 					elif ~np.isnan(filtered_stars["Vmag"].values[i]) and ~np.isnan(filtered_stars["Kmag"].values[i]):
@@ -511,7 +511,7 @@ class target:
 						best_fluxratio[i+j] = 0.0
 						best_Delta_mags[i+j] = -np.inf
 						best_ms[i+j], best_rs[i+j], best_Teff[i+j], best_lum[i+j] = filtered_stars["mass"].values[i], filtered_stars["rad"].values[i], filtered_stars["Teff"].values[i], filtered_stars["lum"].values[i]
-						lnprior[i+j] = np.log(P.prior_TP(P_orb, (best_rp[i+j]*(constants.R_earth.cgs.value/constants.R_sun.cgs.value)/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j]))
+						lnprior[i+j] = np.log(prior_TP(P_orb, (best_rp[i+j]*(constants.R_earth.cgs.value/constants.R_sun.cgs.value)/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j]))
 
 						j=11 + (i-2)
 						targets[i+j] = ID
@@ -523,7 +523,7 @@ class target:
 						x, best_rp[i+j], x, x, x = stellar_relations(lum=filtered_stars["lum"].values[i]*(best_EB_fluxratio))
 						best_fluxratio[i+j] = 0.0
 						best_Delta_mags[i+j] = -np.inf
-						lnprior[i+j] = np.log(P.prior_EB(P_orb, (best_rp[i+j]/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j], EBs["period"], EBs["pdepth"]))
+						lnprior[i+j] = np.log(prior_EB(P_orb, (best_rp[i+j]/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j], EBs["period"], EBs["pdepth"]))
 
 					# last resort, assume MS and try a bunch of spectral types
 					else:
@@ -540,7 +540,7 @@ class target:
 						best_ms[i+j], best_rs[i+j], x, x, best_lum[i+j] = stellar_relations(Teff=best_Teff[i+j])
 						best_fluxratio[i+j] = 0.0
 						best_Delta_mags[i+j] = -np.inf
-						lnprior[i+j] = np.log(P.prior_TP(P_orb, (best_rp[i+j]*(constants.R_earth.cgs.value/constants.R_sun.cgs.value)/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j]))
+						lnprior[i+j] = np.log(prior_TP(P_orb, (best_rp[i+j]*(constants.R_earth.cgs.value/constants.R_sun.cgs.value)/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j]))
 
 						j=11 + (i-2)
 						targets[i+j] = ID
@@ -553,7 +553,7 @@ class target:
 						x, best_rp[i+j], x, x, x = stellar_relations(lum=fgbg_lum_guess*(best_EB_fluxratio))
 						best_fluxratio[i+j] = 0.0
 						best_Delta_mags[i+j] = -np.inf
-						lnprior[i+j] = np.log(P.prior_EB(P_orb, (best_rp[i+j]/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j], EBs["period"], EBs["pdepth"]))
+						lnprior[i+j] = np.log(prior_EB(P_orb, (best_rp[i+j]/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j], EBs["period"], EBs["pdepth"]))
 
 
 				else:
@@ -568,7 +568,7 @@ class target:
 					best_fluxratio[i+j] = 0.0
 					best_Delta_mags[i+j] = -np.inf
 					best_ms[i+j], best_rs[i+j], best_Teff[i+j], best_lum[i+j] = filtered_stars["mass"].values[i], filtered_stars["rad"].values[i], filtered_stars["Teff"].values[i], filtered_stars["lum"].values[i]
-					lnprior[i+j] = np.log(P.prior_TP(P_orb, (best_rp[i+j]*(constants.R_earth.cgs.value/constants.R_sun.cgs.value)/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j]))
+					lnprior[i+j] = np.log(prior_TP(P_orb, (best_rp[i+j]*(constants.R_earth.cgs.value/constants.R_sun.cgs.value)/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j]))
 
 					j=11 + (i-2)
 					targets[i+j] = ID
@@ -580,7 +580,7 @@ class target:
 					x, best_rp[i+j], x, x, x = stellar_relations(lum=filtered_stars["lum"].values[i]*(best_EB_fluxratio))
 					best_fluxratio[i+j] = 0.0
 					best_Delta_mags[i+j] = -np.inf
-					lnprior[i+j] = np.log(P.prior_EB(P_orb, (best_rp[i+j]/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j], EBs["period"], EBs["pdepth"]))
+					lnprior[i+j] = np.log(prior_EB(P_orb, (best_rp[i+j]/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j], EBs["period"], EBs["pdepth"]))
 
 		# normalize likelihoods
 		lnL *= -1
