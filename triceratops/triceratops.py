@@ -133,7 +133,7 @@ class target:
 		plt.show()
 		return
 
-	def calc_depths(self, tdepth:float, ap_pixels):
+	def calc_depths(self, tdepth:float, all_ap_pixels):
 		"""
 		Calculates the transit depth each source in the aperture would have if it were the source of the transit.
 		Args:
@@ -169,7 +169,7 @@ class target:
 		self.stars["tdepth"] = tdepths
 		return
 
-	def calc_prob(self, time, flux_0, flux_err_0, P_orb:float, contrast_curve_file:str = None):
+	def calc_probs(self, time, flux_0, flux_err_0, P_orb:float, contrast_curve_file:str = None):
 		"""
 		Calculates the relative probability of each scenario.
 		Args:
@@ -362,79 +362,79 @@ class target:
 
 				# compute priors
 				j=0
-				prior_unbound_companion = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], 2.2)
-				companion_prior = (1-P.prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], 2.2)) * (1-prior_unbound_companion)
+				unbound_companion_prior = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], 2.2)
+				companion_prior = (1-P.prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], 2.2)) * (1-unbound_companion_prior)
 				if companion_prior > 0.0:
 					lnprior[i+j] = np.log(companion_prior * prior_TP(P_orb, (best_rp[i+j]*(constants.R_earth.cgs.value/constants.R_sun.cgs.value)/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j]))
 				else:
 					lnprior[i+j] = -np.inf
 				j=1
-				prior_unbound_companion = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], 2.2)
-				companion_prior = (1-P.prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], 2.2)) * (1-prior_unbound_companion)
+				unbound_companion_prior = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], 2.2)
+				companion_prior = (1-P.prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], 2.2)) * (1-unbound_companion_prior)
 				if companion_prior > 0.0:
 					lnprior[i+j] = np.log(companion_prior * prior_EB(P_orb, (best_rp[i+j]/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j], EBs["period"], EBs["pdepth"]))
 				else:
 					lnprior[i+j] = -np.inf
 				j=2
-				prior_unbound_companion = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], 2.2)
+				unbound_companion_prior = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], 2.2)
 				best_res = contrast_curve(contrast_curve_file, best_Delta_mags[i+j])
-				companion_prior = prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], best_res) * (1-prior_unbound_companion)
+				companion_prior = prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], best_res) * (1-unbound_companion_prior)
 				if companion_prior > 0.0:
 					lnprior[i+j] = np.log(companion_prior * prior_TP(P_orb, (best_rp[i+j]*(constants.R_earth.cgs.value/constants.R_sun.cgs.value)/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j]))
 				else:
 					lnprior[i+j] = -np.inf
 				j=3
-				prior_unbound_companion = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], 2.2)
+				unbound_companion_prior = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], 2.2)
 				best_res = contrast_curve(contrast_curve_file, best_Delta_mags[i+j])
-				companion_prior = prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], best_res) * (1-prior_unbound_companion)
+				companion_prior = prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], best_res) * (1-unbound_companion_prior)
 				if companion_prior > 0.0:
 					lnprior[i+j] = np.log(companion_prior * prior_EB(P_orb, (best_rp[i+j]/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j], EBs["period"], EBs["pdepth"]))
 				else:
 					lnprior[i+j] = -np.inf
 				j=4
-				prior_unbound_companion = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], 2.2)
+				unbound_companion_prior = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], 2.2)
 				best_res = contrast_curve(contrast_curve_file, best_Delta_mags[i+j])
-				companion_prior = prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], best_res) * (1-prior_unbound_companion)
+				companion_prior = prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], best_res) * (1-unbound_companion_prior)
 				if companion_prior > 0.0:
 					lnprior[i+j] = np.log(companion_prior * prior_TP(P_orb, (best_rp[i+j]*(constants.R_earth.cgs.value/constants.R_sun.cgs.value)/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j]))
 				else:
 					lnprior[i+j] = -np.inf
 				j=5
-				prior_unbound_companion = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], 2.2)
+				unbound_companion_prior = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], 2.2)
 				best_res = contrast_curve(contrast_curve_file, best_Delta_mags[i+j])
-				companion_prior = prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], best_res) * (1-prior_unbound_companion)
+				companion_prior = prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], best_res) * (1-unbound_companion_prior)
 				if companion_prior > 0.0:
 					lnprior[i+j] = np.log(companion_prior * prior_EB(P_orb, (best_rp[i+j]/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j], EBs["period"], EBs["pdepth"]))
 				else:
 					lnprior[i+j] = -np.inf
 				j=6
 				best_res = contrast_curve(contrast_curve_file, best_Delta_mags[i+j])
-				prior_unbound_companion = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], best_res)
-				companion_prior = (1-P.prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], 2.2)) * prior_unbound_companion
+				unbound_companion_prior = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], best_res)
+				companion_prior = (1-P.prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], 2.2)) * unbound_companion_prior
 				if companion_prior > 0.0:
 					lnprior[i+j] = np.log(companion_prior * prior_TP(P_orb, (best_rp[i+j]*(constants.R_earth.cgs.value/constants.R_sun.cgs.value)/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j]))
 				else:
 					lnprior[i+j] = -np.inf
 				j=7
 				best_res = contrast_curve(contrast_curve_file, best_Delta_mags[i+j])
-				prior_unbound_companion = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], best_res)
-				companion_prior = (1-P.prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], 2.2)) * prior_unbound_companion
+				unbound_companion_prior = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], best_res)
+				companion_prior = (1-P.prior_bound_companion(best_ms[i+j], filtered_stars["plx"].values[i], 2.2)) * unbound_companion_prior
 				if companion_prior > 0.0:
 					lnprior[i+j] = np.log(companion_prior * prior_EB(P_orb, (best_rp[i+j]/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j], EBs["period"], EBs["pdepth"]))
 				else:
 					lnprior[i+j] = -np.inf
 				j=8
 				best_res = contrast_curve(contrast_curve_file, best_Delta_mags[i+j])
-				prior_unbound_companion = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], best_res)
-				companion_prior = (1-P.prior_bound_companion(primary_ms_BTP, filtered_stars["plx"].values[i], 2.2)) * prior_unbound_companion
+				unbound_companion_prior = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], best_res)
+				companion_prior = (1-P.prior_bound_companion(primary_ms_BTP, filtered_stars["plx"].values[i], 2.2)) * unbound_companion_prior
 				if companion_prior > 0.0:
 					lnprior[i+j] = np.log(companion_prior * prior_TP(P_orb, (best_rp[i+j]*(constants.R_earth.cgs.value/constants.R_sun.cgs.value)/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j]))
 				else:
 					lnprior[i+j] = -np.inf
 				j=9
 				best_res = contrast_curve(contrast_curve_file, best_Delta_mags[i+j])
-				prior_unbound_companion = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], best_res)
-				companion_prior = (1-P.prior_bound_companion(primary_ms_BEB, filtered_stars["plx"].values[i], 2.2)) * prior_unbound_companion
+				unbound_companion_prior = prior_unbound_companion(output_url, filtered_stars["Tmag"].values[i], best_res)
+				companion_prior = (1-P.prior_bound_companion(primary_ms_BEB, filtered_stars["plx"].values[i], 2.2)) * unbound_companion_prior
 				if companion_prior > 0.0:
 					lnprior[i+j] = np.log(companion_prior * prior_EB(P_orb, (best_rp[i+j]/best_rs[i+j])**2, best_ms[i+j], best_rs[i+j], EBs["period"], EBs["pdepth"]))
 				else:
