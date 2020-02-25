@@ -1,4 +1,6 @@
 import numpy as np
+# ignore invalid floating-point operations, doesn't affect calculation
+np.seterr(invalid="ignore")
 from astropy import constants
 from scipy.optimize import minimize
 import batman

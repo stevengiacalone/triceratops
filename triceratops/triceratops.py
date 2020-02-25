@@ -37,8 +37,8 @@ class target:
 
 		# query TIC for nearby stars
 		pixel_size = 20.25*u.arcsec
-		df = Catalogs.query_object("TIC"+str(ID), radius=search_radius*pixel_size, catalog="TIC").to_pandas()
-		stars = df[["ID", "Tmag", "ra", "dec", "mass", "rad", "Teff", "logg", "lum", "plx", "Vmag", "Kmag"]]
+		df = Catalogs.query_object("TIC"+str(ID), radius=search_radius*pixel_size, catalog="TIC")
+		stars = df["ID", "Tmag", "ra", "dec", "mass", "rad", "Teff", "logg", "lum", "plx", "Vmag", "Kmag"].to_pandas()
 		self.stars = stars
 
 		TESS_images = []
@@ -595,6 +595,10 @@ class target:
 		prob_df = DataFrame({"ID": targets, "scenario": scenarios,"ms": best_ms, "rs": best_rs, "Teff": best_Teff, "lum": best_lum, "fluxratio": best_fluxratio, "Delta_mag": best_Delta_mags, "inc": best_i, "rp": best_rp, "lnL": lnL, "lnprior": lnprior, "prob": relative_probs})
 		self.probs = prob_df
 		self.star_num = star_num
+
+		# calculate the FPP
+		self.FPP = 1 - (prob_df.prob[0] + prob_df.prob[2] + prob_df.prob[6])
+
 		return
 
 	def plot_fits(self, time, flux_0, flux_err_0, P_orb:float):

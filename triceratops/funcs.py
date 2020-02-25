@@ -46,7 +46,7 @@ def stellar_relations(Mass:float = 0.0, Rad:float = 0.0, Teff:float = 0.0, lum:f
 		lum (float): Star luminosity [Solar luminosities].
 	"""
 
-	if (lum != 0.0 and lum > 0.095) or (Teff != 0.0 and Teff > 4000) or (Rad != 0.0 and Rad > 0.626):
+	if (lum != 0.0 and lum > 0.095) or (Teff != 0.0 and Teff > 4000) or (Rad != 0.0 and Rad > 0.626) or (Mass != 0.0 and Mass > 0.63):
 		Mass_all, Rad_all, Teff_all, logg_all, L_all = Mass_all_Torres, Rad_all_Torres, Teff_all_Torres, logg_all_Torres, L_all_Torres
 	else:
 		Mass_all, Rad_all, Teff_all, logg_all, L_all = Mass_all_cdwrf, Rad_all_cdwrf, Teff_all_cdwrf, logg_all_cdwrf, L_all_cdwrf
