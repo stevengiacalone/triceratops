@@ -185,6 +185,9 @@ def contrast_curve(path:str, Delta_mag:float):
 		data = np.loadtxt(path, delimiter=',')
 		seps = data.T[0]
 		Delta_mags = data.T[1]
+		# don't let the smallest separation be 0 arcseconds
+		if seps[0] == 0.0:
+			seps[0] = seps[1]/10
 		sep = np.interp(Delta_mag, Delta_mags, seps)
 		if sep < 2.2:
 			return sep

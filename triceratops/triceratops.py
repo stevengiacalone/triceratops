@@ -73,6 +73,27 @@ class target:
 		self.pix_coords = pix_coords
 		return
 
+	def add_star(self, ID:int, Tmag:float, bound:bool):
+		"""
+		Adds an additional star (e.g., an unresolved star identified with follow up) to the table of stars.
+		Args:
+			ID (int): Arbitrary ID for the new star.
+			Tmag (float): Estimated TESS magnitude of the new star.
+			bound (bool): True if new star is physically bound to target star, False if new star is unbound.
+		"""
+
+		# if bound, use same parallax as target star
+		if bound:
+			plx = self.stars['plx'].values[0]
+			new_star = df.DataFrame([[ID, Tmag, plx]], columns=["ID", "Tmag", "plx"])
+		else:
+			new_star = df.DataFrame([[ID, Tmag]], columns=["ID", "Tmag"])
+		self.stars = self.stars.append(new_star)
+		# for each set of pixel coordinates (corresponding to each sector), append a row for the new star with the same coordinates as the target star
+		for i in range(len(self.pix_coords)):
+			self.pix_coords[i] = np.append(target.pix_coords[i], target.pix_coords[i][0]).reshape(len(target.pix_coords[i])+1, 2)
+		return
+
 	def plot_field(self, sector:int = None, ap_pixels = None):
 		"""
 		Plots the field of stars and pixels around the target.
@@ -137,7 +158,7 @@ class target:
 		"""
 		Calculates the transit depth each source in the aperture would have if it were the source of the transit.
 		Args:
-			tdepth (float): Reported transit depth [ppm].
+			tdepth (float): Reported transit depth [%].
 			all_ap_pixels (numpy array): Apertures used to extract light curve. 
 		"""
 		
