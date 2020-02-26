@@ -231,38 +231,72 @@ class target:
 				output_url = query_TRILEGAL(filtered_stars["ra"].values[i], filtered_stars["dec"].values[i])
 
 				# check to see if there are any missing stellar parameters and, if there are, estimate them given at least one
-				if np.isnan(self.stars["mass"][i]) == True or np.isnan(self.stars["rad"][i]) == True or np.isnan(self.stars["Teff"][i]) == True or np.isnan(self.stars["logg"][i]) == True or np.isnan(self.stars["lum"][i]) == True:
+				# if np.isnan(self.stars["mass"][i]) == True or np.isnan(self.stars["rad"][i]) == True or np.isnan(self.stars["Teff"][i]) == True or np.isnan(self.stars["logg"][i]) == True or np.isnan(self.stars["lum"][i]) == True:
+				# 	done = 0
+				# 	if np.isnan(self.stars["mass"][i]) == True and np.isnan(self.stars["rad"][i]) == True and np.isnan(self.stars["Teff"][i]) == True and np.isnan(self.stars["logg"][i]) == True and np.isnan(self.stars["lum"][i]) == True:
+				# 		print("Insufficient information to validate " + str(ID) + ". Please provide an estimate for stellar mass, radius, Teff, logg, or luminosity.")
+				# 		break
+				# 	elif not np.isnan(self.stars["Teff"][i]) and done == 0:
+				# 		print("Estimating stellar properties for " + str(ID) + " based on Teff.")
+				# 		filtered_stars.at[i, "mass"] = stellar_relations(Teff=self.stars["Teff"][i])[0]
+				# 		filtered_stars.at[i, "rad"] = stellar_relations(Teff=self.stars["Teff"][i])[1]
+				# 		filtered_stars.at[i, "logg"] = stellar_relations(Teff=self.stars["Teff"][i])[3]
+				# 		filtered_stars.at[i, "lum"] = stellar_relations(Teff=self.stars["Teff"][i])[4]
+				# 		done = 1
+				# 	elif not np.isnan(self.stars["lum"][i]) and (self.stars["lum"][i] > 0.0) and done == 0:
+				# 		print("Estimating stellar properties for " + str(ID) + " based on luminosity.")
+				# 		filtered_stars.at[i, "mass"] = stellar_relations(lum=self.stars["lum"][i])[0]
+				# 		filtered_stars.at[i, "rad"] = stellar_relations(lum=self.stars["lum"][i])[1]
+				# 		filtered_stars.at[i, "Teff"] = stellar_relations(lum=self.stars["lum"][i])[2]
+				# 		filtered_stars.at[i, "logg"] = stellar_relations(lum=self.stars["lum"][i])[3]
+				# 		done = 1
+				# 	elif not np.isnan(self.stars["rad"][i]) and done == 0:
+				# 		print("Estimating stellar properties for " + str(ID) + " based on radius.")
+				# 		filtered_stars.at[i, "mass"] = stellar_relations(Rad=self.stars["rad"][i])[0]
+				# 		filtered_stars.at[i, "Teff"] = stellar_relations(Rad=self.stars["rad"][i])[2]
+				# 		filtered_stars.at[i, "logg"] = stellar_relations(Rad=self.stars["rad"][i])[3]
+				# 		filtered_stars.at[i, "lum"] = stellar_relations(Rad=self.stars["rad"][i])[4]
+				# 		done = 1
+				# 	elif not np.isnan(self.stars["mass"][i]) and done == 0:
+				# 		print("Estimating stellar properties for " + str(ID) + " based on mass.")
+				# 		filtered_stars.at[i, "rad"] = stellar_relations(Mass=self.stars["mass"][i])[1]
+				# 		filtered_stars.at[i, "Teff"] = stellar_relations(Mass=self.stars["mass"][i])[2]
+				# 		filtered_stars.at[i, "logg"] = stellar_relations(Mass=self.stars["mass"][i])[3]
+				# 		filtered_stars.at[i, "lum"] = stellar_relations(Mass=self.stars["mass"][i])[4]
+				# 		done = 1
+
+				if np.isnan(filtered_stars["mass"].values[i]) == True or np.isnan(filtered_stars["rad"].values[i]) == True or np.isnan(filtered_stars["Teff"].values[i]) == True or np.isnan(filtered_stars["logg"].values[i]) == True or np.isnan(filtered_stars["lum"].values[i]) == True:
 					done = 0
-					if np.isnan(self.stars["mass"][i]) == True and np.isnan(self.stars["rad"][i]) == True and np.isnan(self.stars["Teff"][i]) == True and np.isnan(self.stars["logg"][i]) == True and np.isnan(self.stars["lum"][i]) == True:
+					if np.isnan(filtered_stars["mass"].values[i]) == True and np.isnan(filtered_stars["rad"].values[i]) == True and np.isnan(filtered_stars["Teff"].values[i]) == True and np.isnan(filtered_stars["logg"].values[i]) == True and np.isnan(filtered_stars["lum"].values[i]) == True:
 						print("Insufficient information to validate " + str(ID) + ". Please provide an estimate for stellar mass, radius, Teff, logg, or luminosity.")
 						break
-					elif not np.isnan(self.stars["Teff"][i]) and done == 0:
+					elif not np.isnan(filtered_stars["Teff"].values[i]) and done == 0:
 						print("Estimating stellar properties for " + str(ID) + " based on Teff.")
-						filtered_stars.at[i, "mass"] = stellar_relations(Teff=self.stars["Teff"][i])[0]
-						filtered_stars.at[i, "rad"] = stellar_relations(Teff=self.stars["Teff"][i])[1]
-						filtered_stars.at[i, "logg"] = stellar_relations(Teff=self.stars["Teff"][i])[3]
-						filtered_stars.at[i, "lum"] = stellar_relations(Teff=self.stars["Teff"][i])[4]
+						filtered_stars.at[i, "mass"] = stellar_relations(Teff=filtered_stars["Teff"].values[i])[0]
+						filtered_stars.at[i, "rad"] = stellar_relations(Teff=filtered_stars["Teff"].values[i])[1]
+						filtered_stars.at[i, "logg"] = stellar_relations(Teff=filtered_stars["Teff"].values[i])[3]
+						filtered_stars.at[i, "lum"] = stellar_relations(Teff=filtered_stars["Teff"].values[i])[4]
 						done = 1
-					elif not np.isnan(self.stars["lum"][i]) and (self.stars["lum"][i] > 0.0) and done == 0:
+					elif not np.isnan(filtered_stars["lum"].values[i]) and (filtered_stars["lum"].values[i] > 0.0) and done == 0:
 						print("Estimating stellar properties for " + str(ID) + " based on luminosity.")
-						filtered_stars.at[i, "mass"] = stellar_relations(lum=self.stars["lum"][i])[0]
-						filtered_stars.at[i, "rad"] = stellar_relations(lum=self.stars["lum"][i])[1]
-						filtered_stars.at[i, "Teff"] = stellar_relations(lum=self.stars["lum"][i])[2]
-						filtered_stars.at[i, "logg"] = stellar_relations(lum=self.stars["lum"][i])[3]
+						filtered_stars.at[i, "mass"] = stellar_relations(lum=filtered_stars["lum"].values[i])[0]
+						filtered_stars.at[i, "rad"] = stellar_relations(lum=filtered_stars["lum"].values[i])[1]
+						filtered_stars.at[i, "Teff"] = stellar_relations(lum=filtered_stars["lum"].values[i])[2]
+						filtered_stars.at[i, "logg"] = stellar_relations(lum=filtered_stars["lum"].values[i])[3]
 						done = 1
-					elif not np.isnan(self.stars["rad"][i]) and done == 0:
+					elif not np.isnan(filtered_stars["rad"].values[i]) and done == 0:
 						print("Estimating stellar properties for " + str(ID) + " based on radius.")
-						filtered_stars.at[i, "mass"] = stellar_relations(Rad=self.stars["rad"][i])[0]
-						filtered_stars.at[i, "Teff"] = stellar_relations(Rad=self.stars["rad"][i])[2]
-						filtered_stars.at[i, "logg"] = stellar_relations(Rad=self.stars["rad"][i])[3]
-						filtered_stars.at[i, "lum"] = stellar_relations(Rad=self.stars["rad"][i])[4]
+						filtered_stars.at[i, "mass"] = stellar_relations(Rad=filtered_stars["rad"].values[i])[0]
+						filtered_stars.at[i, "Teff"] = stellar_relations(Rad=filtered_stars["rad"].values[i])[2]
+						filtered_stars.at[i, "logg"] = stellar_relations(Rad=filtered_stars["rad"].values[i])[3]
+						filtered_stars.at[i, "lum"] = stellar_relations(Rad=filtered_stars["rad"].values[i])[4]
 						done = 1
-					elif not np.isnan(self.stars["mass"][i]) and done == 0:
+					elif not np.isnan(filtered_stars["mass"].values[i]) and done == 0:
 						print("Estimating stellar properties for " + str(ID) + " based on mass.")
-						filtered_stars.at[i, "rad"] = stellar_relations(Mass=self.stars["mass"][i])[1]
-						filtered_stars.at[i, "Teff"] = stellar_relations(Mass=self.stars["mass"][i])[2]
-						filtered_stars.at[i, "logg"] = stellar_relations(Mass=self.stars["mass"][i])[3]
-						filtered_stars.at[i, "lum"] = stellar_relations(Mass=self.stars["mass"][i])[4]
+						filtered_stars.at[i, "rad"] = stellar_relations(Mass=filtered_stars["mass"].values[i])[1]
+						filtered_stars.at[i, "Teff"] = stellar_relations(Mass=filtered_stars["mass"].values[i])[2]
+						filtered_stars.at[i, "logg"] = stellar_relations(Mass=filtered_stars["mass"].values[i])[3]
+						filtered_stars.at[i, "lum"] = stellar_relations(Mass=filtered_stars["mass"].values[i])[4]
 						done = 1
 
 				print("Calculating TTP and TEB scenario probabilities for " + str(ID) + ".")
