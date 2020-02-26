@@ -85,9 +85,9 @@ class target:
 		# if bound, use same parallax as target star
 		if bound:
 			plx = self.stars['plx'].values[0]
-			new_star = pd.DataFrame([[ID, Tmag, plx]], columns=["ID", "Tmag", "plx"])
+			new_star = DataFrame([[ID, Tmag, plx]], columns=["ID", "Tmag", "plx"])
 		else:
-			new_star = pd.DataFrame([[ID, Tmag]], columns=["ID", "Tmag"])
+			new_star = DataFrame([[ID, Tmag]], columns=["ID", "Tmag"])
 		self.stars = self.stars.append(new_star)
 		# for each set of pixel coordinates (corresponding to each sector), append a row for the new star with the same coordinates as the target star
 		for i in range(len(self.pix_coords)):
