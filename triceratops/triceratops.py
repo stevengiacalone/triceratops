@@ -91,7 +91,7 @@ class target:
 		self.stars = self.stars.append(new_star)
 		# for each set of pixel coordinates (corresponding to each sector), append a row for the new star with the same coordinates as the target star
 		for i in range(len(self.pix_coords)):
-			self.pix_coords[i] = np.append(target.pix_coords[i], target.pix_coords[i][0]).reshape(len(target.pix_coords[i])+1, 2)
+			self.pix_coords[i] = np.append(self.pix_coords[i], self.pix_coords[i][0]).reshape(len(self.pix_coords[i])+1, 2)
 		return
 
 	def plot_field(self, sector:int = None, ap_pixels = None):
