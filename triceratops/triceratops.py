@@ -175,7 +175,7 @@ class target:
 		relative_flux = np.zeros(len(self.stars))
 		for i in range(len(self.stars)):
 			if ap_mask[i] == True:
-				relative_flux[i] = 10**((np.min(self.stars.Tmag[ap_mask]) - self.stars.Tmag[i])/2.5)
+				relative_flux[i] = 10**((np.min(self.stars.Tmag.values[ap_mask]) - self.stars.Tmag.values[i])/2.5)
 			else:
 				relative_flux[i] = 0
 		# append flux ratio to stars dataframe
