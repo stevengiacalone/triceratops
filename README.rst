@@ -41,7 +41,7 @@ If you are having trouble getting ``triceratops`` working on your machine, I rec
 
 You can replace ``myenv`` with an environment name of your choice. To exit this environment, run::
 
-    $ conda deactivate
+    (myenv) $ conda deactivate
 
 To delete this environment, run::
 
