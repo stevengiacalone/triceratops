@@ -1,5 +1,5 @@
 triceratops
-======
+===========
 
 .. image:: https://img.shields.io/badge/GitHub-stevengiacalone%2Ftriceratops-blue.svg?style=flat
     :target: https://github.com/stevengiacalone/triceratops
