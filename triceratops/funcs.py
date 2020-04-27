@@ -195,3 +195,16 @@ def contrast_curve(path:str, Delta_mag:float):
 			return 2.2
 	else:
 		return 2.2
+
+def Gauss2D(x, y, mu_x, mu_y, sigma, A):
+	"""
+	Calculates a circular Gaussian at specified grid points.
+	Args: 
+		x, y (1D numpy arrays): Grid that you would like to calculate Gaussian over.
+		mu_x, mu_y (floats): Locations of star / Gaussian peak.
+		sigma (float): Standard deviation of Gaussian
+		A (float): Area under Gaussian.
+	Returns:
+	"""
+    xgrid, ygrid = np.meshgrid(x, y)
+    return A/(2*np.pi*sigma**2) * np.exp(- ( ((xgrid-mu_x)**2 + (ygrid-mu_y)**2) ) / (2*sigma**2))

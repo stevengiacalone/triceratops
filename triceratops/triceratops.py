@@ -5,6 +5,7 @@ from astropy.wcs import WCS
 from astropy.wcs.utils import pixel_to_skycoord
 import astropy.units as u
 import numpy as np
+from scipy.integrate import dblquad
 from pandas import DataFrame, read_csv
 from math import floor, ceil
 import matplotlib.pyplot as plt
@@ -13,7 +14,7 @@ from pkg_resources import resource_filename
 
 from .priors import query_TRILEGAL, prior_TP, prior_EB, prior_bound_companion, prior_unbound_companion
 from .likelihoods import simulate_TP_transit, simulate_EB_transit, likelihood_TTP, likelihood_TEB, likelihood_PTP, likelihood_STP, likelihood_PEB, likelihood_SEB, likelihood_DTP, likelihood_BTP, likelihood_DEB, likelihood_BEB, likelihood_uncharacterized_NTP, likelihood_uncharacterized_NEB
-from .funcs import stellar_relations, contrast_curve, renorm_flux, renorm_flux_err, nearby_star_luminosity, color_Teff_relations, quad_coeffs
+from .funcs import stellar_relations, contrast_curve, renorm_flux, renorm_flux_err, nearby_star_luminosity, color_Teff_relations, quad_coeffs, Gauss2D
 
 # EB data that is used by default
 KEBC_FILE = resource_filename('triceratops','data/KeplerEBs.csv')
@@ -21,7 +22,7 @@ df = read_csv(KEBC_FILE, skiprows=7)
 EBs = df[(df.Teff > 0) & (df.period <= 50) & (df.morph > 0) & (df.morph < 0.8) & (df.pdepth > 0.0)]
 
 class target:
-	def __init__(self, ID:int, sectors:np.ndarray, search_radius:int = 5):
+	def __init__(self, ID:int, sectors:np.ndarray, search_radius:int = 10):
 		"""
 		Queries TIC for sources near the target and obtains a cutout of the pixels enclosing the target.
 		Args:
@@ -52,8 +53,6 @@ class target:
 			cutout_table = cutout_hdu[1].data
 			hdu = cutout_hdu[2].header
 			wcs = WCS(hdu)
-			# self.TESS_image = np.mean(cutout_table["FLUX"], axis=0)
-			# self.col0, self.row0 = cutout_hdu[1].header["1CRV4P"], cutout_hdu[1].header["2CRV4P"]
 			TESS_images.append(np.mean(cutout_table["FLUX"], axis=0))
 			col0, row0 = cutout_hdu[1].header["1CRV4P"], cutout_hdu[1].header["2CRV4P"]
 			col0s.append(col0)
@@ -156,30 +155,50 @@ class target:
 
 	def calc_depths(self, tdepth:float, all_ap_pixels):
 		"""
-		Calculates the transit depth each source in the aperture would have if it were the source of the transit.
+		Calculates the transit depth each source near the target would have if it were the source of the transit.
+		This is done by modeling the PSF of each source as a circular Gaussian with a standard deviation of 0.75 pixels.
 		Args:
 			tdepth (float): Reported transit depth [%].
 			all_ap_pixels (numpy array): Apertures used to extract light curve. 
 		"""
 		
-		# find stars in all apertures
-		ap_mask = np.zeros(len(self.stars), dtype=bool)
+		# # find stars in all apertures
+		# ap_mask = np.zeros(len(self.stars), dtype=bool)
+		# for k in range(len(all_ap_pixels)):
+		# 	for i in range(len(self.stars)):
+		# 		for j in range(len(all_ap_pixels[k])):
+		# 			in_ap = np.logical_and((all_ap_pixels[k][j,0]-0.5 <= self.pix_coords[k][i,0] <= all_ap_pixels[k][j,0]+0.5), (all_ap_pixels[k][j,1]-0.5 <= self.pix_coords[k][i,1] <= all_ap_pixels[k][j,1]+0.5))
+		# 			if in_ap == True:
+		# 				ap_mask[i] = in_ap
+
+		# # calculate relative flux of each star using Tmags
+		# relative_flux = np.zeros(len(self.stars))
+		# for i in range(len(self.stars)):
+		# 	if ap_mask[i] == True:
+		# 		relative_flux[i] = 10**((np.min(self.stars.Tmag.values[ap_mask]) - self.stars.Tmag.values[i])/2.5)
+		# 	else:
+		# 		relative_flux[i] = 0
+
+		# for each aperture, calculate contribution due to each star
+		relative_flux_per_aperture = np.zeros([len(all_ap_pixels), len(self.stars)])
+		flux_ratio_per_aperture = np.zeros([len(all_ap_pixels), len(self.stars)])
 		for k in range(len(all_ap_pixels)):
 			for i in range(len(self.stars)):
-				for j in range(len(all_ap_pixels[k])):
-					in_ap = np.logical_and((all_ap_pixels[k][j,0]-0.5 <= self.pix_coords[k][i,0] <= all_ap_pixels[k][j,0]+0.5), (all_ap_pixels[k][j,1]-0.5 <= self.pix_coords[k][i,1] <= all_ap_pixels[k][j,1]+0.5))
-					if in_ap == True:
-						ap_mask[i] = in_ap
+				# location of star in pixel space for aperture k
+				mu_x, mu_y = pix_coords[k][i,0], pix_coords[k][i,1]
+            	# star's flux normalized to brightest star 
+	            A = 10**((np.min(stars.Tmag.values) - stars.Tmag.values[i])/2.5)
+	            # integrate PSF in each pixel
+	            this_flux = 0
+	            for j in range(len(all_ap_pixels[k])):
+	                this_pixel = all_ap_pixels[k][j]
+	                this_flux += dblquad(Gauss2D, this_pixel[1]-0.5, this_pixel[1]+0.5, this_pixel[0]-0.5, this_pixel[0]+0.5, args=(mu_x,mu_y,0.75,A))[0]
+	            relative_flux_per_aperture[k,i] = this_flux
+	    	# calculate flux ratios for this aperture
+	    	flux_ratio_per_aperture[k,:] = relative_flux_per_aperture[k,:]/np.sum(relative_flux_per_aperture[k]) 
 
-		# calculate relative flux of each star using Tmags
-		relative_flux = np.zeros(len(self.stars))
-		for i in range(len(self.stars)):
-			if ap_mask[i] == True:
-				relative_flux[i] = 10**((np.min(self.stars.Tmag.values[ap_mask]) - self.stars.Tmag.values[i])/2.5)
-			else:
-				relative_flux[i] = 0
-		# append flux ratio to stars dataframe
-		flux_ratios = relative_flux/np.sum(relative_flux)
+		# take average of flux ratios across all apertures and append to stars dataframe
+		flux_ratios = np.mean(flux_ratio_per_aperture, axis=0)
 		self.stars["fluxratio"] = flux_ratios
 		# calculate transit depth of each star given input transit depth
 		tdepths = np.zeros(len(self.stars))
