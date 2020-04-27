@@ -133,6 +133,7 @@ class target:
 		ax[0].set_yticks(self.row0s[idx]+centers)
 		ax[0].set_xticks(self.col0s[idx]+centers, rotation=90)
 		ax[0].tick_params(width=0)
+		ax[0].tick_params(axis='x', labelrotation=90)
 		ax[0].set_ylabel("pixel row number", fontsize=12)
 		ax[0].set_xlabel("pixel column number", fontsize=12)
 		# TESS FFI
@@ -144,6 +145,7 @@ class target:
 		ax[1].set_yticks(self.row0s[idx]+centers)
 		ax[1].set_xticks(self.col0s[idx]+centers, rotation=90)
 		ax[1].tick_params(width=0)
+		ax[0].tick_params(axis='x', labelrotation=90)
 		ax[1].set_ylabel("pixel row number", fontsize=12)
 		ax[1].set_xlabel("pixel column number", fontsize=12)
 		# aperture
