@@ -127,11 +127,11 @@ class target:
 		cb1 = fig.colorbar(sc, ax=ax[0], pad=0.02)
 		cb1.ax.set_ylabel("T mag", rotation=270, fontsize=12, labelpad=18)
 		for i in range(len(self.stars)):
-			ax[0].annotate(str(i), (self.pix_coords[idx][i,0]-0.6, self.pix_coords[idx][i,1]-0.4), fontsize=12)
+			ax[0].annotate(str(i), (self.pix_coords[idx][i,0]-1, self.pix_coords[idx][i,1]-1), fontsize=12)
 		ax[0].set_ylim([min(self.row0s[idx]+corners), max(self.row0s[idx]+corners)])
 		ax[0].set_xlim([min(self.col0s[idx]+corners), max(self.col0s[idx]+corners)])
 		ax[0].set_yticks(self.row0s[idx]+centers)
-		ax[0].set_xticks(self.col0s[idx]+centers)
+		ax[0].set_xticks(self.col0s[idx]+centers, rotation=90)
 		ax[0].tick_params(width=0)
 		ax[0].set_ylabel("pixel row number", fontsize=12)
 		ax[0].set_xlabel("pixel column number", fontsize=12)
@@ -142,7 +142,7 @@ class target:
 		ax[1].set_ylim([min(self.row0s[idx]+corners), max(self.row0s[idx]+corners)])
 		ax[1].set_xlim([min(self.col0s[idx]+corners), max(self.col0s[idx]+corners)])
 		ax[1].set_yticks(self.row0s[idx]+centers)
-		ax[1].set_xticks(self.col0s[idx]+centers)
+		ax[1].set_xticks(self.col0s[idx]+centers, rotation=90)
 		ax[1].tick_params(width=0)
 		ax[1].set_ylabel("pixel row number", fontsize=12)
 		ax[1].set_xlabel("pixel column number", fontsize=12)
@@ -185,9 +185,9 @@ class target:
 		for k in range(len(all_ap_pixels)):
 			for i in range(len(self.stars)):
 				# location of star in pixel space for aperture k
-				mu_x, mu_y = pix_coords[k][i,0], pix_coords[k][i,1]
+				mu_x, mu_y = self.pix_coords[k][i,0], self.pix_coords[k][i,1]
 				# star's flux normalized to brightest star 
-				A = 10**((np.min(stars.Tmag.values) - stars.Tmag.values[i])/2.5)
+				A = 10**((np.min(self.stars.Tmag.values) - self.stars.Tmag.values[i])/2.5)
 				# integrate PSF in each pixel
 				this_flux = 0
 				for j in range(len(all_ap_pixels[k])):
