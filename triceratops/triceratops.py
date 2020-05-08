@@ -639,7 +639,7 @@ class target:
 		self.star_num = star_num
 
 		# calculate the FPP
-		self.FPP = 1 - (prob_df.prob[0] + prob_df.prob[2] + prob_df.prob[6])
+		self.FPP = 1 - (prob_df.prob[0] + prob_df.prob[2] + prob_df.prob[4] + prob_df.prob[6])
 
 		return
 
