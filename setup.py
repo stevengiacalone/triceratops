@@ -5,7 +5,7 @@ def readme():
         return f.read()
 
 setup(name = "triceratops",
-      version = '0.2.0',
+      version = '0.2.1',
       description = "Statistical Validation of TESS Objects of Interest",
       long_description = readme(),
       author = "Steven Giacalone",
