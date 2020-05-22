@@ -98,7 +98,7 @@ def nearby_star_luminosity(T1:float, T2:float, p1:float, p2:float, L1:float):
 	L2 = L1 * 10**( (T1-T2)/2.5 + 2*np.log10(p1/p2) )
 	return L2
 
-# load ld coefficients 
+# load ld coefficients
 LDC_FILE = resource_filename('triceratops','data/ldc.tsv')
 ldc = read_csv(LDC_FILE, sep='\t', skiprows=48, usecols=[0,1,2,3,4,5])[2:]
 ldc = DataFrame(ldc, dtype=float)
@@ -120,7 +120,7 @@ def quad_coeffs(Teff:float, logg:float, Z:float):
 	Teffs = np.array(list(dict.fromkeys(df_at_Z['Teff'])))
 	loggs = np.array(list(dict.fromkeys(df_at_Z['logg'])))
 	df = ldc[(ldc['Teff'] == Teffs[np.argmin(np.abs(Teffs-Teff))]) & (ldc['logg'] == loggs[np.argmin(np.abs(loggs-logg))])]
-	# find corresponding coefficients 
+	# find corresponding coefficients
 	u1s, u2s = df["aLSM"], df["bLSM"]
 	u1, u2 = np.mean(df["aLSM"].values), np.mean(df["bLSM"].values)
 	return u1, u2
@@ -131,7 +131,7 @@ def renorm_flux(flux, companion_fluxratio:float, compaion:bool):
 	Args:
 		flux (numpy array): Normalized flux of each data point.
 		companion_fluxratio (float): Proportion of flux that comes from the unresolved companion.
-		companion (bool): True if the transit is around the unresolved companion and False if it is not. 
+		companion (bool): True if the transit is around the unresolved companion and False if it is not.
 	Returns:
 		renormed_flux (nump array): Remormalized flux of each data point.
 	"""
@@ -148,7 +148,7 @@ def renorm_flux_err(flux_err, companion_fluxratio:float, compaion:bool):
 	Args:
 		flux_err (numpy array): Normalized flux error of each data point.
 		companion_fluxratio (float): Proportion of flux that comes from the unresolved companion.
-		companion (bool): True if the transit is around the unresolved companion and False if it is not. 
+		companion (bool): True if the transit is around the unresolved companion and False if it is not.
 	Returns:
 		renormed_flux_err (nump array): Remormalized flux error of each data point.
 	"""
@@ -199,7 +199,7 @@ def contrast_curve(path:str, Delta_mag:float):
 def Gauss2D(x, y, mu_x, mu_y, sigma, A):
 	"""
 	Calculates a circular Gaussian at specified grid points.
-	Args: 
+	Args:
 		x, y (1D numpy arrays): Grid that you would like to calculate Gaussian over.
 		mu_x, mu_y (floats): Locations of star / Gaussian peak.
 		sigma (float): Standard deviation of Gaussian

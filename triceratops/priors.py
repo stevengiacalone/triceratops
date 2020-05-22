@@ -11,7 +11,7 @@ def f_companion(M_s:float, max_sep:float):
 	Calculates the bound companion rate of the target star.
 	Args:
 		M_s (float): Star mass [Solar masses].
-		max_sep (float): Maximum physical separation resolved [au]. 
+		max_sep (float): Maximum physical separation resolved [au].
 	Returns:
 		f_act (float): Companion rate of target star/
 	"""
@@ -34,7 +34,7 @@ def f_companion(M_s:float, max_sep:float):
 			t1 = f1
 			t2 = 0.5*(2.0 - 1.0)*(2.0*f1 + (f2 - f1 - alpha*dlogP)*(2.0 - 1.0))
 			t3 = 0.5*alpha*(np.log10(max_Porb)**2 - 5.4*np.log10(max_Porb) + 6.8) + f2*(np.log10(max_Porb) - 2.0)
-			f_comp = t1 + t2 + t3 
+			f_comp = t1 + t2 + t3
 		elif 3.4 <= np.log10(max_Porb) < 5.5:
 			t1 = f1
 			t2 = 0.5*(2.0 - 1.0)*(2.0*f1 + (f2 - f1 - alpha*dlogP)*(2.0 - 1.0))
@@ -54,7 +54,7 @@ def f_companion(M_s:float, max_sep:float):
 			t3 = 0.5*alpha*(3.4**2 - 5.4*3.4 + 6.8) + f2*(3.4 - 2.0)
 			t4 = alpha*dlogP*(5.5 - 3.4) + f2*(5.5 - 3.4) + (f3 - f2 - alpha*dlogP)*(0.238095*5.5**2 - 0.952381*5.5 + 0.485714)
 			t5 = f3*(3.33333 - 17.3566*np.exp(-0.3*8.0))
-			f_comp = t1 + t2 + t3 + t4 + t5  
+			f_comp = t1 + t2 + t3 + t4 + t5
 		return f_comp
 	else:
 		M_act = M_s
@@ -76,7 +76,7 @@ def f_companion(M_s:float, max_sep:float):
 			t1 = f1
 			t2 = 0.5*(2.0 - 1.0)*(2.0*f1 + (f2 - f1 - alpha*dlogP)*(2.0 - 1.0))
 			t3 = 0.5*alpha*(np.log10(max_Porb)**2 - 5.4*np.log10(max_Porb) + 6.8) + f2*(np.log10(max_Porb) - 2.0)
-			f_comp = t1 + t2 + t3 
+			f_comp = t1 + t2 + t3
 		elif 3.4 <= np.log10(max_Porb) < 5.5:
 			t1 = f1
 			t2 = 0.5*(2.0 - 1.0)*(2.0*f1 + (f2 - f1 - alpha*dlogP)*(2.0 - 1.0))
@@ -96,7 +96,7 @@ def f_companion(M_s:float, max_sep:float):
 			t3 = 0.5*alpha*(3.4**2 - 5.4*3.4 + 6.8) + f2*(3.4 - 2.0)
 			t4 = alpha*dlogP*(5.5 - 3.4) + f2*(5.5 - 3.4) + (f3 - f2 - alpha*dlogP)*(0.238095*5.5**2 - 0.952381*5.5 + 0.485714)
 			t5 = f3*(3.33333 - 17.3566*np.exp(-0.3*8.0))
-			f_comp = t1 + t2 + t3 + t4 + t5  
+			f_comp = t1 + t2 + t3 + t4 + t5
 		f_act =  0.65*f_comp+0.35*f_comp*M_act
 		return f_act
 
@@ -232,7 +232,7 @@ def prob_EB_Rratio(tdepth:float, R_s:float, EB_pdepths):
 	dataset = []
 	for i in range(len(hist[0])):
 		for j in range(int(hist[0][i])):
-			dataset.append(hist[1][i])  
+			dataset.append(hist[1][i])
 	if len(dataset) > 0:
 		kde = gaussian_kde(dataset, 0.2)
 		x = np.linspace(np.sqrt(min_pdepth),1,10000)
@@ -242,7 +242,7 @@ def prob_EB_Rratio(tdepth:float, R_s:float, EB_pdepths):
 		return simps(prob[idx_lower+1:idx_upper], x[idx_lower+1:idx_upper]) / simps(prob, x)
 	else:
 		return 1/40
-	
+
 def prob_EB_geo(P_orb:float, tdepth:float, M_s:float, R_s:float):
 	"""
 	Calculates geometric transit probability for eclipsing binaries.
@@ -257,7 +257,7 @@ def prob_EB_geo(P_orb:float, tdepth:float, M_s:float, R_s:float):
 
 	a = ((constants.G.cgs.value*M_s*constants.M_sun.cgs.value)/(4*np.pi**2)*(P_orb*86400)**2)**(1/3)
 	return R_s*constants.R_sun.cgs.value*(1+np.sqrt(tdepth))/a
-	
+
 def prior_TP(P_orb:float, tdepth:float, M_s:float, R_s:float):
 	"""of
 	Calculates the prior probability of a transiting planet scenario.
@@ -267,12 +267,12 @@ def prior_TP(P_orb:float, tdepth:float, M_s:float, R_s:float):
 		M_s (float): Star mass [Solar masses].
 		R_s (float): Star radius [Solar radii].
 	Returns:
-		Prior probability of TP scenario. 
+		Prior probability of TP scenario.
 	"""
 
 	R_p = np.sqrt(tdepth)*R_s*constants.R_sun.cgs.value/constants.R_earth.cgs.value
 	return rate_planet(M_s) * prob_TP_Porb(P_orb) * prob_TP_Rp(R_p, M_s) * prob_TP_geo(P_orb, tdepth, M_s, R_s)
-	
+
 def prior_EB(P_orb:float, tdepth:float, M_s:float, R_s:float, EB_periods, EB_pdepths):
 	"""
 	Calculates the prior probability of an eclipsing binary scenario.
@@ -312,7 +312,7 @@ def query_TRILEGAL(RA:float, Dec:float):
 	Args:
 		RA, Dec: Coordinates of the target.
 	Returns:
-		output_url (str): URL of page with query results. 
+		output_url (str): URL of page with query results.
 	"""
 
 	# fill out and submit online TRILEGAL form
@@ -349,11 +349,11 @@ def query_TRILEGAL(RA:float, Dec:float):
 		sleep(5)
 		if len(browser.get_current_page().select("a")) == 0:
 			print("TRILEGAL too busy, using saved stellar populations instead.")
-			return None		
+			return None
 		else:
 			data_link = browser.get_current_page().select("a")[0].get("href")
 			output_url = "http://stev.oapd.inaf.it/"+data_link[3:]
-			return output_url	
+			return output_url
 	else:
 		data_link = browser.get_current_page().select("a")[0].get("href")
 		output_url = "http://stev.oapd.inaf.it/"+data_link[3:]
@@ -363,7 +363,7 @@ def prior_unbound_companion(output_url, Tmag:float, best_resolution:float = 2.2)
 	"""
 	Calculates the prior probability of an unbound companion.
 	Args:
-		output_url (str): URL of page with query results. 
+		output_url (str): URL of page with query results.
 		Tmag (float): TESS magnitude of the star.
 		best_resolution (float): Best angular resolution beyond which a companion with a given magnitude can be outruled.
 	Returns:
@@ -374,14 +374,14 @@ def prior_unbound_companion(output_url, Tmag:float, best_resolution:float = 2.2)
 		print("Could not access TRILEGAL. Ignoring BTP, BEB, DTP, and DEB scenarios.")
 		return 0.0
 	else:
-		for i in range(1000): 
+		for i in range(1000):
 			last = read_csv(output_url, header=None)[-1:]
 			if last.values[0,0] != "#TRILEGAL normally terminated":
 				print("...")
 				sleep(10)
 			elif last.values[0,0] == "#TRILEGAL normally terminated":
 				break
-		# find number of stars fainter than target within best resolution			
+		# find number of stars fainter than target within best resolution
 		df = read_csv(output_url, sep="\s+")[:-2]
 		headers = np.array(list(df))
 		# if we were able to use TRILEGAL v1.6 and get TESS mags, use them

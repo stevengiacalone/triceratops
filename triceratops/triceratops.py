@@ -63,7 +63,7 @@ class target:
 				RApix = np.asscalar(wcs.all_world2pix(ra[i],dec[i],0)[0])
 				Decpix = np.asscalar(wcs.all_world2pix(ra[i],dec[i],0)[1])
 				pix_coord[i,0] = col0+RApix
-				pix_coord[i,1] = row0+Decpix    
+				pix_coord[i,1] = row0+Decpix
 			# self.pix_coords = pix_coord
 			pix_coords.append(pix_coord)
 		self.TESS_images = TESS_images
@@ -98,9 +98,9 @@ class target:
 		Plots the field of stars and pixels around the target.
 		Args:
 			sector (int): Sector to plot.
-			ap_pixels (numpy array): Aperture used to extract light curve. 
+			ap_pixels (numpy array): Aperture used to extract light curve.
 		"""
-		
+
 		if len(self.sectors) > 1:
 			idx = np.argwhere(self.sectors == sector)[0,0]
 		else:
@@ -119,11 +119,16 @@ class target:
 			ax[0].plot(np.full_like(corners, self.col0s[idx]+i), self.row0s[idx]+corners, "k-", lw=0.5)
 			ax[0].plot(self.col0s[idx]+corners, np.full_like(corners, self.row0s[idx]+i), "k-", lw=0.5)
 		# search radius
-		ax[0].plot(self.pix_coords[idx][0,0]+self.search_radius*np.cos(np.linspace(0,2*np.pi,100)), 
-				   self.pix_coords[idx][0,1]+self.search_radius*np.sin(np.linspace(0,2*np.pi,100)), "k--", alpha=0.5)
+                ax[0].plot(self.pix_coords[idx][0,0]+self.search_radius*np.cos(np.linspace(0,2*np.pi,100)),
+                           self.pix_coords[idx][0,1]+self.search_radius*np.sin(np.linspace(0,2*np.pi,100)),
+                           "k--", alpha=0.5)
 		# stars
-		sc = ax[0].scatter(self.pix_coords[idx][:,0], self.pix_coords[idx][:,1], c=self.stars["Tmag"], s=75, edgecolors="k", cmap=cm.viridis_r, 
-						   vmin=floor(min(self.stars["Tmag"])), vmax=ceil(max(self.stars["Tmag"])))
+                sc = ax[0].scatter(self.pix_coords[idx][:,0],
+                                   self.pix_coords[idx][:,1],
+                                   c=self.stars["Tmag"], s=75, edgecolors="k",
+                                   cmap=cm.viridis_r,
+                                   vmin=floor(min(self.stars["Tmag"])),
+                                   vmax=ceil(max(self.stars["Tmag"])))
 		cb1 = fig.colorbar(sc, ax=ax[0], pad=0.02)
 		cb1.ax.set_ylabel("T mag", rotation=270, fontsize=12, labelpad=18)
 		for i in range(len(self.stars)):
@@ -161,9 +166,9 @@ class target:
 		This is done by modeling the PSF of each source as a circular Gaussian with a standard deviation of 0.75 pixels.
 		Args:
 			tdepth (float): Reported transit depth [%].
-			all_ap_pixels (numpy array): Apertures used to extract light curve. 
+			all_ap_pixels (numpy array): Apertures used to extract light curve.
 		"""
-		
+
 		# # find stars in all apertures
 		# ap_mask = np.zeros(len(self.stars), dtype=bool)
 		# for k in range(len(all_ap_pixels)):
@@ -188,7 +193,7 @@ class target:
 			for i in range(len(self.stars)):
 				# location of star in pixel space for aperture k
 				mu_x, mu_y = self.pix_coords[k][i,0], self.pix_coords[k][i,1]
-				# star's flux normalized to brightest star 
+				# star's flux normalized to brightest star
 				A = 10**((np.min(self.stars.Tmag.values) - self.stars.Tmag.values[i])/2.5)
 				# integrate PSF in each pixel
 				this_flux = 0
@@ -197,7 +202,7 @@ class target:
 					this_flux += dblquad(Gauss2D, this_pixel[1]-0.5, this_pixel[1]+0.5, this_pixel[0]-0.5, this_pixel[0]+0.5, args=(mu_x,mu_y,0.75,A))[0]
 				relative_flux_per_aperture[k,i] = this_flux
 			# calculate flux ratios for this aperture
-			flux_ratio_per_aperture[k,:] = relative_flux_per_aperture[k,:]/np.sum(relative_flux_per_aperture[k]) 
+			flux_ratio_per_aperture[k,:] = relative_flux_per_aperture[k,:]/np.sum(relative_flux_per_aperture[k])
 
 		# take average of flux ratios across all apertures and append to stars dataframe
 		flux_ratios = np.mean(flux_ratio_per_aperture, axis=0)
@@ -223,7 +228,7 @@ class target:
 										followed by column with Delta_mags.
 		"""
 
-		# construct a new dataframe that gives the values of lnL, best fit parameters, lnprior, and relative probability of each scenario considered 
+		# construct a new dataframe that gives the values of lnL, best fit parameters, lnprior, and relative probability of each scenario considered
 		filtered_stars = self.stars[self.stars["tdepth"] > 0]
 		N_scenarios = 2*len(filtered_stars) + 8
 		targets = np.zeros(N_scenarios, dtype=np.dtype("i8"))
@@ -365,7 +370,7 @@ class target:
 				lnL[i+j], best_i[i+j], best_rp[i+j], best_fluxratio[i+j] = likelihood_DTP(time, flux, flux_err, P_orb, filtered_stars["lum"].values[i])
 				best_Delta_mags[i+j] = np.abs(2.5*np.log10( best_fluxratio[i+j] / (1 - best_fluxratio[i+j]) ))
 				best_ms[i+j], best_rs[i+j], best_Teff[i+j], x, best_lum[i+j] = stellar_relations(lum=filtered_stars["lum"].values[i]*(1-best_fluxratio[i+j]))
-				
+
 
 				j=7
 				targets[i+j] = ID
@@ -376,7 +381,7 @@ class target:
 				best_Delta_mags[i+j] = np.abs(2.5*np.log10( best_fluxratio[i+j] / (1 - best_fluxratio[i+j]) ))
 				best_ms[i+j], best_rs[i+j], best_Teff[i+j], x, best_lum[i+j] = stellar_relations(lum=filtered_stars["lum"].values[i]*(1-best_EB_fluxratio)*(1-best_fluxratio[i+j]))
 				x, best_rp[i+j], x, x, x = stellar_relations(lum=filtered_stars["lum"].values[i]*(best_EB_fluxratio)*(1-best_fluxratio[i+j]))
-				
+
 
 				j=8
 				targets[i+j] = ID
@@ -400,7 +405,7 @@ class target:
 				best_ms[i+j], best_rs[i+j], best_Teff[i+j], x, best_lum[i+j] = stellar_relations(lum=fgbg_lum_guess*(1-best_EB_fluxratio))
 				x, best_rp[i+j], x, x, x = stellar_relations(lum=fgbg_lum_guess*(best_EB_fluxratio))
 				primary_ms_BEB, x, x, x, x = stellar_relations(lum=filtered_stars["lum"].values[i]*(1-best_fluxratio[i+j]))
-					
+
 
 				# compute priors
 				j=0
@@ -496,7 +501,7 @@ class target:
 
 				# check to see if there are stellar parameters we can use - if any are missing, assume MS and estimate properties based on TESS magnitude and parallax OR based on V and Ks
 				if np.isnan(filtered_stars["mass"].values[i]) or np.isnan(filtered_stars["rad"].values[i]) or np.isnan(filtered_stars["Teff"].values[i]) or np.isnan(filtered_stars["logg"].values[i]) or np.isnan(filtered_stars["lum"].values[i]):
-					
+
 					# first, try based on TESS magnitude and parallax
 					if ~np.isnan(filtered_stars["Tmag"].values[i]) and ~np.isnan(filtered_stars["plx"].values[i]) and ~np.isnan(filtered_stars["Tmag"].values[0]) and ~np.isnan(filtered_stars["plx"].values[0]) and ~np.isnan(filtered_stars["lum"].values[0]):
 						print(str(ID) + " missing info. Estimaing properties based on TESS mag and parallax.")
@@ -693,7 +698,7 @@ class target:
 					best_model = simulate_EB_transit((df["inc"].values[k], EB_fluxratio), time, P_orb, lum_EB+lum_primary)
 					scenario_flux = renorm_flux(flux, df["fluxratio"].values[k], comp)
 					scenario_flux_err = renorm_flux_err(flux_err, df["fluxratio"].values[k], comp)
-			
+
 				y_formatter = ticker.ScalarFormatter(useOffset=False)
 				ax[i,j].yaxis.set_major_formatter(y_formatter)
 				ax[i,j].errorbar(time, scenario_flux, scenario_flux_err, fmt=".", color="blue", alpha=0.2, zorder=0)

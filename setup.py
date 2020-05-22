@@ -18,7 +18,7 @@ setup(name = "triceratops",
         'Intended Audience :: Science/Research',
         'Operating System :: OS Independent',
         'Programming Language :: Python :: 3',
-   	'License :: OSI Approved :: MIT License',
+        'License :: OSI Approved :: MIT License',
         'Topic :: Scientific/Engineering :: Astronomy'
         ],
       install_requires=['numpy>=1.18.1','pandas>=0.23.4', 'scipy>=1.1.0', 'matplotlib>=3.0.3',
