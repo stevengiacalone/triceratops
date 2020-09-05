@@ -265,8 +265,8 @@ def trilegal_results(output_url, Tmag: float):
     """
     if output_url is None:
         print(
-            "Could not access TRILEGAL. \
-            Ignoring BTP, BEB, BEBx2P, DTP, DEB, and DEBx2P scenarios."
+            "Could not access TRILEGAL. "
+            + "Ignoring BTP, BEB, BEBx2P, DTP, DEB, and DEBx2P scenarios."
             )
         return 0.0
     else:

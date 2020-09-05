@@ -382,15 +382,15 @@ class target:
                     print(
                         "Insufficient information to validate "
                         + str(ID)
-                        + ". Please provide an estimate for stellar \
-                        mass, radius, and Teff."
+                        + ". Please provide an estimate for stellar "
+                        + "mass, radius, and Teff."
                         )
                     break
 
                 else:
                     print(
-                        "Calculating TP, EB, and EBx2P scenario \
-                        probabilities for " + str(ID) + "."
+                        "Calculating TP, EB, and EBx2P scenario "
+                        + "probabilities for " + str(ID) + "."
                         )
 
                     res = lnZ_TTP(
@@ -452,8 +452,8 @@ class target:
                     lnZ[j] = res_twin["lnZ"]
 
                     print(
-                        "Calculating PTP, PEB, and PEBx2P scenario \
-                        probabilities for " + str(ID) + "."
+                        "Calculating PTP, PEB, and PEBx2P scenario "
+                        + "probabilities for " + str(ID) + "."
                         )
 
                     res = lnZ_PTP(
@@ -517,8 +517,8 @@ class target:
                     lnZ[j] = res_twin["lnZ"]
 
                     print(
-                        "Calculating STP, SEB, and SEBx2P scenario \
-                        probabilities for " + str(ID) + "."
+                        "Calculating STP, SEB, and SEBx2P scenario "
+                        + "probabilities for " + str(ID) + "."
                         )
 
                     res = lnZ_STP(
@@ -582,8 +582,8 @@ class target:
                     lnZ[j] = res_twin["lnZ"]
 
                     print(
-                        "Calculating DTP, DEB, and DEBx2P scenario \
-                        probabilities for " + str(ID) + "."
+                        "Calculating DTP, DEB, and DEBx2P scenario "
+                        + "probabilities for " + str(ID) + "."
                         )
 
                     res = lnZ_DTP(
@@ -647,8 +647,8 @@ class target:
                     lnZ[j] = res_twin["lnZ"]
 
                     print(
-                        "Calculating BTP, BEB, and BEBx2P scenario \
-                        probabilities for " + str(ID) + "."
+                        "Calculating BTP, BEB, and BEBx2P scenario "
+                        + "probabilities for " + str(ID) + "."
                         )
 
                     res = lnZ_BTP(
@@ -717,8 +717,8 @@ class target:
                 if ~(np.isnan(R_s) and np.isnan(Teff)
                         and np.isnan(M_s)):
                     print(
-                        "Calculating NTP, NEB, and NEB2xP scenario \
-                        probabilities for " + str(ID) + "."
+                        "Calculating NTP, NEB, and NEB2xP scenario "
+                        + "probabilities for " + str(ID) + "."
                         )
 
                     res = lnZ_TTP(
@@ -783,8 +783,8 @@ class target:
                 # if no properties are known, use trilegal query
                 elif np.isnan(R_s) and np.isnan(Teff) and np.isnan(M_s):
                     print(
-                        "Calculating NTP, NEB, and NEBx2P scenario \
-                        probabilities for " + str(ID) + "."
+                        "Calculating NTP, NEB, and NEBx2P scenario "
+                        + "probabilities for " + str(ID) + "."
                         )
 
                     res = lnZ_NTP_unknown(
@@ -850,8 +850,8 @@ class target:
                 elif (~(np.isnan(R_s) and np.isnan(M_s))
                         and np.isnan(Teff)):
                     print(
-                        "Calculating NTP, NEB, and NEBx2P scenario \
-                        probabilities for " + str(ID) + "."
+                        "Calculating NTP, NEB, and NEBx2P scenario "
+                        + "probabilities for " + str(ID) + "."
                         )
 
                     Teff = stellar_relations(
