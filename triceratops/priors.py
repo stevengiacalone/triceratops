@@ -1,409 +1,600 @@
 import numpy as np
-from pandas import read_csv
-from scipy.stats import gaussian_kde
-from scipy.integrate import quad, simps
 from astropy import constants
-from mechanicalsoup import StatefulBrowser
-from time import sleep
+from .funcs import (file_to_contrast_curve,
+                    separation_at_contrast,
+                    trilegal_results)
 
-def f_companion(M_s:float, max_sep:float):
-	"""
-	Calculates the bound companion rate of the target star.
-	Args:
-		M_s (float): Star mass [Solar masses].
-		max_sep (float): Maximum physical separation resolved [au]. 
-	Returns:
-		f_act (float): Companion rate of target star/
-	"""
+Msun = constants.M_sun.cgs.value
+Rsun = constants.R_sun.cgs.value
+Rearth = constants.R_earth.cgs.value
+G = constants.G.cgs.value
+au = constants.au.cgs.value
+pi = np.pi
 
-	if M_s >= 1.0:
-		f1 = 0.020 + 0.04*np.log10(M_s) + 0.07*(np.log10(M_s))**2
-		f2 = 0.039 + 0.07*np.log10(M_s) + 0.01*(np.log10(M_s))**2
-		f3 = 0.078 - 0.05*np.log10(M_s) + 0.04*(np.log10(M_s))**2
-		alpha = 0.018
-		dlogP = 0.7
-		max_Porb = ((4*np.pi**2)/(constants.G.cgs.value*M_s*constants.M_sun.cgs.value)*(max_sep*constants.au.cgs.value)**3)**(1/2) / 86400
-		if np.log10(max_Porb) < 1.0:
-			t1 = f1
-			f_comp = t1
-		elif 1.0 <= np.log10(max_Porb) < 2.0:
-			t1 = f1
-			t2 = 0.5*(np.log10(max_Porb) - 1.0)*(2.0*f1 + (f2 - f1 - alpha*dlogP)*(np.log10(max_Porb) - 1.0))
-			f_comp = t1 + t2
-		elif 2.0 <= np.log10(max_Porb) < 3.4:
-			t1 = f1
-			t2 = 0.5*(2.0 - 1.0)*(2.0*f1 + (f2 - f1 - alpha*dlogP)*(2.0 - 1.0))
-			t3 = 0.5*alpha*(np.log10(max_Porb)**2 - 5.4*np.log10(max_Porb) + 6.8) + f2*(np.log10(max_Porb) - 2.0)
-			f_comp = t1 + t2 + t3 
-		elif 3.4 <= np.log10(max_Porb) < 5.5:
-			t1 = f1
-			t2 = 0.5*(2.0 - 1.0)*(2.0*f1 + (f2 - f1 - alpha*dlogP)*(2.0 - 1.0))
-			t3 = 0.5*alpha*(3.4**2 - 5.4*3.4 + 6.8) + f2*(3.4 - 2.0)
-			t4 = alpha*dlogP*(np.log10(max_Porb) - 3.4) + f2*(np.log10(max_Porb) - 3.4) + (f3 - f2 - alpha*dlogP)*(0.238095*np.log10(max_Porb)**2 - 0.952381*np.log10(max_Porb) + 0.485714)
-			f_comp = t1 + t2 + t3 + t4
-		elif 5.5 <= np.log10(max_Porb) < 8.0:
-			t1 = f1
-			t2 = 0.5*(2.0 - 1.0)*(2.0*f1 + (f2 - f1 - alpha*dlogP)*(2.0 - 1.0))
-			t3 = 0.5*alpha*(3.4**2 - 5.4*3.4 + 6.8) + f2*(3.4 - 2.0)
-			t4 = alpha*dlogP*(5.5 - 3.4) + f2*(5.5 - 3.4) + (f3 - f2 - alpha*dlogP)*(0.238095*5.5**2 - 0.952381*5.5 + 0.485714)
-			t5 = f3*(3.33333 - 17.3566*np.exp(-0.3*np.log10(max_Porb)))
-			f_comp = t1 + t2 + t3 + t4 + t5
-		elif np.log10(max_Porb) >= 8.0:
-			t1 = f1
-			t2 = 0.5*(2.0 - 1.0)*(2.0*f1 + (f2 - f1 - alpha*dlogP)*(2.0 - 1.0))
-			t3 = 0.5*alpha*(3.4**2 - 5.4*3.4 + 6.8) + f2*(3.4 - 2.0)
-			t4 = alpha*dlogP*(5.5 - 3.4) + f2*(5.5 - 3.4) + (f3 - f2 - alpha*dlogP)*(0.238095*5.5**2 - 0.952381*5.5 + 0.485714)
-			t5 = f3*(3.33333 - 17.3566*np.exp(-0.3*8.0))
-			f_comp = t1 + t2 + t3 + t4 + t5  
-		return f_comp
-	else:
-		M_act = M_s
-		M_s = 1.0
-		f1 = 0.020 + 0.04*np.log10(M_s) + 0.07*(np.log10(M_s))**2
-		f2 = 0.039 + 0.07*np.log10(M_s) + 0.01*(np.log10(M_s))**2
-		f3 = 0.078 - 0.05*np.log10(M_s) + 0.04*(np.log10(M_s))**2
-		alpha = 0.018
-		dlogP = 0.7
-		max_Porb = ((4*np.pi**2)/(constants.G.cgs.value*M_s*constants.M_sun.cgs.value)*(max_sep*constants.au.cgs.value)**3)**(1/2) / 86400
-		if np.log10(max_Porb) < 1.0:
-			t1 = f1
-			f_comp = t1
-		elif 1.0 <= np.log10(max_Porb) < 2.0:
-			t1 = f1
-			t2 = 0.5*(np.log10(max_Porb) - 1.0)*(2.0*f1 + (f2 - f1 - alpha*dlogP)*(np.log10(max_Porb) - 1.0))
-			f_comp = t1 + t2
-		elif 2.0 <= np.log10(max_Porb) < 3.4:
-			t1 = f1
-			t2 = 0.5*(2.0 - 1.0)*(2.0*f1 + (f2 - f1 - alpha*dlogP)*(2.0 - 1.0))
-			t3 = 0.5*alpha*(np.log10(max_Porb)**2 - 5.4*np.log10(max_Porb) + 6.8) + f2*(np.log10(max_Porb) - 2.0)
-			f_comp = t1 + t2 + t3 
-		elif 3.4 <= np.log10(max_Porb) < 5.5:
-			t1 = f1
-			t2 = 0.5*(2.0 - 1.0)*(2.0*f1 + (f2 - f1 - alpha*dlogP)*(2.0 - 1.0))
-			t3 = 0.5*alpha*(3.4**2 - 5.4*3.4 + 6.8) + f2*(3.4 - 2.0)
-			t4 = alpha*dlogP*(np.log10(max_Porb) - 3.4) + f2*(np.log10(max_Porb) - 3.4) + (f3 - f2 - alpha*dlogP)*(0.238095*np.log10(max_Porb)**2 - 0.952381*np.log10(max_Porb) + 0.485714)
-			f_comp = t1 + t2 + t3 + t4
-		elif 5.5 <= np.log10(max_Porb) < 8.0:
-			t1 = f1
-			t2 = 0.5*(2.0 - 1.0)*(2.0*f1 + (f2 - f1 - alpha*dlogP)*(2.0 - 1.0))
-			t3 = 0.5*alpha*(3.4**2 - 5.4*3.4 + 6.8) + f2*(3.4 - 2.0)
-			t4 = alpha*dlogP*(5.5 - 3.4) + f2*(5.5 - 3.4) + (f3 - f2 - alpha*dlogP)*(0.238095*5.5**2 - 0.952381*5.5 + 0.485714)
-			t5 = f3*(3.33333 - 17.3566*np.exp(-0.3*np.log10(max_Porb)))
-			f_comp = t1 + t2 + t3 + t4 + t5
-		elif np.log10(max_Porb) >= 8.0:
-			t1 = f1
-			t2 = 0.5*(2.0 - 1.0)*(2.0*f1 + (f2 - f1 - alpha*dlogP)*(2.0 - 1.0))
-			t3 = 0.5*alpha*(3.4**2 - 5.4*3.4 + 6.8) + f2*(3.4 - 2.0)
-			t4 = alpha*dlogP*(5.5 - 3.4) + f2*(5.5 - 3.4) + (f3 - f2 - alpha*dlogP)*(0.238095*5.5**2 - 0.952381*5.5 + 0.485714)
-			t5 = f3*(3.33333 - 17.3566*np.exp(-0.3*8.0))
-			f_comp = t1 + t2 + t3 + t4 + t5  
-		f_act =  0.65*f_comp+0.35*f_comp*M_act
-		return f_act
 
-def rate_planet(M_s:float):
-	"""
-	Estimates planet occurrence rate for all planet radii and orbital periods under 50 days.
-	Args:
-		M_s (float): Star mass [Solar masses].
-	Returns:
-		Planet occurrence rate.
-	"""
+def sample_rp(x, M_s):
+    """
+    Samples planet radii that are dependent on host mass.
+    Args:
+        x (numpy array): Random numbers between 0 and 1.
+        M_s (numpy array): Host star masses [Solar radii].
+    Returns:
+        x (numpy array): Sampled planet radii [Earth radii].
 
-	if (2.5 - 1.5*M_s) > 0.1:
-		return 2.5 - 1.5*M_s
-	else:
-		return 0.1
+    """
+    R_break1 = 3.0
+    R_break2 = 6.0
+    R_min = 0.5
+    R_max = 20.0
+    # power coefficients for M > 0.45
+    p1 = 0.0
+    p2 = -4.0
+    p3 = -0.5
+    # power coefficients for M <= 0.45
+    p4 = 0.0
+    p5 = -7.0
+    p6 = -0.5
+    # normalizing constants  for M > 0.45
+    A1 = R_break1**p1 / R_break1**p2
+    A2 = R_break2**p2 / R_break2**p3
+    I1 = (R_break1**(p1+1) - R_min**(p1+1))/(p1+1)
+    I2 = A1*(R_break2**(p2+1) - R_break1**(p2+1))/(p2+1)
+    I3 = A2*A1*(R_max**(p3+1) - R_break2**(p3+1))/(p3+1)
+    Norm1 = 1/(I1+I2+I3)
+    # normalizing constants  for M <= 0.45
+    A3 = R_break1**p4 / R_break1**p5
+    A4 = R_break2**p5 / R_break2**p6
+    I4 = (R_break1**(p4+1) - R_min**(p4+1))/(p4+1)
+    I5 = A3*(R_break2**(p5+1) - R_break1**(p5+1))/(p5+1)
+    I6 = A4*A3*(R_max**(p6+1) - R_break2**(p6+1))/(p6+1)
+    Norm2 = 1/(I4+I5+I6)
 
-def rate_binary(M_s:float):
-	"""
-	Estimates bound companion rate for binaries with orbital periods under 50 days.
-	Args:
-		M_s (float): Star mass [Solar masses].
-	Returns:
-		Companion rate.
-	"""
+    mask1 = (
+        (x <= Norm1*I1)
+        & (M_s > 0.45)
+        )
+    mask2 = (
+        (x > Norm1*I1)
+        & (x <= Norm1*(I1+I2))
+        & (M_s > 0.45)
+        )
+    mask3 = (
+        (x > Norm1*(I1+I2))
+        & (x <= Norm1*(I1+I2+I3))
+        & (M_s > 0.45)
+        )
+    mask4 = (
+        (x <= Norm2*I4)
+        & (M_s <= 0.45)
+        )
+    mask5 = (
+        (x > Norm2*I4)
+        & (x <= Norm2*(I4+I5))
+        & (M_s <= 0.45)
+        )
+    mask6 = (
+        (x > Norm2*(I4+I5))
+        & (x <= Norm2*(I4+I5+I6))
+        & (M_s <= 0.45)
+        )
+    x[mask1] = (
+        (x[mask1]/Norm1*(p1+1) + R_min**(p1+1))**(1/(p1+1))
+        )
+    x[mask2] = (
+        (
+            (x[mask2]/Norm1 - I1)*(p2+1)/A1
+            + R_break1**(p2+1)
+        )**(1/(p2+1))
+        )
+    x[mask3] = (
+        (
+            (x[mask3]/Norm1 - I1 - I2)*(p3+1)/(A1*A2)
+            + R_break2**(p3+1)
+        )**(1/(p3+1))
+        )
+    x[mask4] = (
+        (x[mask4]/Norm2*(p4+1) + R_min**(p4+1))**(1/(p4+1))
+        )
+    x[mask5] = (
+        (
+            (x[mask5]/Norm2 - I4)*(p5+1)/A3
+            + R_break1**(p5+1)
+        )**(1/(p5+1))
+        )
+    x[mask6] = (
+        (
+            (x[mask6]/Norm2 - I4 - I5)*(p6+1)/(A3*A4)
+            + R_break2**(p6+1)
+        )**(1/(p6+1))
+        )
+    return x
 
-	max_sep = ((constants.G.cgs.value*M_s*constants.M_sun.cgs.value)/(4*np.pi**2)*(50*86400)**2)**(1/3) / constants.au.cgs.value
-	return f_companion(M_s, max_sep)
 
-def prob_TP_Porb(P_orb:float):
-	"""
-	Calculates probability of a planet with a given orbital period.
-	Args:
-		P_orb (float): Orbital period [days].
-	Returns:
-		Probability.
-	"""
+def sample_inc(x, lower=0, upper=90):
+    """
+    Samples inclinations.
+    Args:
+        x (numpy array): Random numbers between 0 and 1.
+        lower (float): Lower bound of inclinations [deg].
+        Upper (float): Upper bound of inclinations [deg].
+    Returns:
+        x (numpy array): Sampled inclinations [deg].
 
-	if P_orb < 0.2:
-		P_orb = 0.2
-	elif P_orb > (10**(np.log10(50) - 0.1)):
-		P_orb = 10**(np.log10(50) - 0.1)
-	prob = lambda x: np.log10(10**x + 0.8)
-	if (np.log10(P_orb)-0.1) < np.log10(0.2):
-		return quad(prob, np.log10(0.2), np.log10(P_orb)+0.1)[0] / quad(prob, np.log10(0.2), np.log10(50))[0]
-	elif (np.log10(P_orb)+0.1) > np.log10(50):
-		return quad(prob, np.log10(P_orb)-0.1, np.log10(50))[0] / quad(prob, np.log10(0.2), np.log10(50))[0]
-	else:
-		return quad(prob, np.log10(P_orb)-0.1, np.log10(P_orb)+0.1)[0] / quad(prob, np.log10(0.2), np.log10(50))[0]
+    """
+    # normalizing constant
+    Norm = 1/(np.cos(lower*np.pi/180) - np.cos(upper*np.pi/180))
+    x = np.arccos(np.cos(lower*np.pi/180) - x/Norm) * 180/np.pi
+    return x
 
-def prob_TP_Rp(R_p:float, M_s:float):
-	"""
-	Calculates probability of a planet with a given radius.
-	Args:
-		R_p (float): Planet radius [Earth radii].
-		M_s (float): Star mass [Solar masses].
-	Returns:
-		Probability.
-	"""
 
-	if M_s <= 0.45:
-		prob = lambda x: 10**(2/(1+np.exp(1.5*(x-4))) - x/10)
-	else:
-		prob = lambda x: 10**(1/(1+np.exp(1.5*(x-4))) - x/10)
-	if (R_p <= 0) or (R_p >= 33):
-		return 0
-	elif(R_p > 0) and (R_p < 0.5):
-		return quad(prob, 0, 1)[0] / quad(prob, 0, 20)[0]
-	elif (R_p > 19.5) and (R_p < 33):
-		return quad(prob, 19, 20)[0] / quad(prob, 0, 20)[0]
-	else:
-		return quad(prob, R_p-0.5, R_p+0.5)[0] / quad(prob, 0, 20)[0]
+def sample_q(x):
+    """
+    Samples mass ratios of short-period binaries.
+    Args:
+        x (numpy array): Random numbers between 0 and 1.
+    Returns:
+        x (numpy array): Sampled mass ratios [deg].
+    """
+    # power coefficients
+    p1 = 0.3
+    p2 = -0.5
+    # normalizing constants
+    # continuity between first two segments
+    A1 = (0.3**p1)/(0.3**p2)
+    # satisfy F_twin condition
+    F_twin = 0.30
+    A2 = (
+        1 + (F_twin)/(1-F_twin)
+        * ((1.0**(p2+1) - 0.3**(p2+1))/(p2+1))
+        / ((1.0**(p2+1) - 0.95**(p2+1))/(p2+1))
+        )
+    I1 = (0.3**(p1+1) - 0.1**(p1+1))/(p1+1)
+    I2 = A1*(0.95**(p2+1) - 0.3**(p2+1))/(p2+1)
+    I3 = A2*A1*(1.0**(p2+1) - 0.95**(p2+1))/(p2+1)
+    Norm = 1/(I1+I2+I3)
 
-def prob_TP_geo(P_orb:float, tdepth:float, M_s:float, R_s:float):
-	"""
-	Calculates geometric transit probability for transiting planets.
-	Args:
-		R_p (float): Planet radius [Earth radii].
-		tdepth (float): Reported transit depth [ppm].
-		M_s (float): Star mass [Solar masses].
-		R_s (float): Star radius [Solar radii].
-	Returns:
-		Geometric transit probability.
-	"""
+    mask1 = x <= Norm*I1
+    mask2 = (x > Norm*I1) & (x <= Norm*(I1+I2))
+    mask3 = (x > Norm*(I1+I2)) & (x <= Norm*(I1+I2+I3))
+    x[mask1] = (
+        (x[mask1]/Norm*(p1+1) + 0.1**(p1+1))**(1/(p1+1))
+        )
+    x[mask2] = (
+        ((x[mask2]/Norm - I1)*(p2+1)/A1 + 0.3**(p2+1))**(1/(p2+1))
+        )
+    x[mask3] = (
+        (
+            (x[mask3]/Norm - I1 - I2)*(p2+1)/(A1*A2)
+            + 0.95**(p2+1))**(1/(p2+1))
+        )
+    return x
 
-	a = ((constants.G.cgs.value*M_s*constants.M_sun.cgs.value)/(4*np.pi**2)*(P_orb*86400)**2)**(1/3)
-	return R_s*constants.R_sun.cgs.value*(1+np.sqrt(tdepth))/a
 
-def prob_EB_Porb(P_orb:float, tdepth:float, M_s:float, R_s:float, EB_periods):
-	"""
-	Calculates probability of an EB with a given orbital periiod.
-	Args:
-		P_orb (float): Orbital period [days].
-		tdepth (float): Reported transit depth [ppm].
-		M_s (float): Star mass [Solar masses].
-		R_s (float): Star radius [Solar radii].
-		EB_periods (list): List of EB periods from the KEBC.
-	Returns:
-		Geometric transit probability.
-	"""
+def sample_q_companion(x):
+    """
+    Samples mass ratios of long-period companions.
+    Args:
+        x (numpy array): Random numbers between 0 and 1.
+    Returns:
+        x (numpy array): Sampled mass ratios [deg].
+    """
+    # power coefficients
+    p1 = 0.3
+    p2 = -0.95
+    # normalizing constants
+    # continuity between first two segments
+    A1 = (0.3**p1) / (0.3**p2)
+    # satisfy F_twin condition
+    F_twin = 0.05
+    A2 = (
+        1 + (F_twin)/(1-F_twin)
+        * ((1.0**(p2+1) - 0.3**(p2+1))/(p2+1))
+        / ((1.0**(p2+1) - 0.95**(p2+1))/(p2+1))
+        )
+    I1 = (0.3**(p1+1) - 0.1**(p1+1))/(p1+1)
+    I2 = A1*(0.95**(p2+1) - 0.3**(p2+1))/(p2+1)
+    I3 = A2*A1*(1.0**(p2+1) - 0.95**(p2+1))/(p2+1)
+    Norm = 1/(I1+I2+I3)
 
-	if P_orb < 0.2:
-		P_orb = 0.2
-	elif P_orb > (10**(np.log10(50) - 0.1)):
-		P_orb = 10**(np.log10(50) - 0.1)
-	hist = np.histogram(np.log10(EB_periods), bins=np.linspace(np.log10(0.2),np.log10(50),20))
-	dataset = []
-	for i in range(len(hist[0])):
-		for j in range(int(hist[0][i])):
-			dataset.append(hist[1][i])
-	kde = gaussian_kde(dataset, 0.2)
-	x = np.linspace(np.log10(0.2),np.log10(50),10000)
-	geo_corr = R_s*constants.R_sun.cgs.value*(1+np.sqrt(tdepth))/(((constants.G.cgs.value*M_s*constants.M_sun.cgs.value)/(4*np.pi**2)*(10**x * 86400)**2)**(1/3))
-	prob = kde.pdf(x)/geo_corr
-	idx_lower = np.argmin(abs(x-(np.log10(P_orb)-0.1)))
-	idx_upper = np.argmin(abs(x-(np.log10(P_orb)+0.1)))
-	return simps(prob[idx_lower+1:idx_upper], x[idx_lower+1:idx_upper]) / simps(prob, x)
+    mask1 = x <= Norm*I1
+    mask2 = (x > Norm*I1) & (x <= Norm*(I1+I2))
+    mask3 = (x > Norm*(I1+I2)) & (x <= Norm*(I1+I2+I3))
+    x[mask1] = (
+        (x[mask1]/Norm*(p1+1) + 0.1**(p1+1))**(1/(p1+1))
+        )
+    x[mask2] = (
+        ((x[mask2]/Norm - I1)*(p2+1)/A1 + 0.3**(p2+1))**(1/(p2+1))
+        )
+    x[mask3] = (
+        (
+            (x[mask3]/Norm - I1 - I2)*(p2+1)/(A1*A2)
+            + 0.95**(p2+1))**(1/(p2+1))
+        )
+    return x
 
-def prob_EB_Rratio(tdepth:float, R_s:float, EB_pdepths):
-	"""
-	Calculates probability of an EB of a given size.
-	Args:
-		tdepth (float): Reported transit depth [ppm].
-		R_s (float): Star radius [Solar radii].
-		EB_pdepths [list]: List of EB transit depths from the KEBC.
-	Returns:
-		Probability.
-	"""
 
-	min_pdepth = (0.1/R_s)**2
-	int_limit = (1-np.sqrt(min_pdepth))/20/2
-	hist = np.histogram(np.sqrt(EB_pdepths[EB_pdepths >= min_pdepth]), bins=np.linspace(np.sqrt(min_pdepth),1,20))
-	dataset = []
-	for i in range(len(hist[0])):
-		for j in range(int(hist[0][i])):
-			dataset.append(hist[1][i])  
-	if len(dataset) > 0:
-		kde = gaussian_kde(dataset, 0.2)
-		x = np.linspace(np.sqrt(min_pdepth),1,10000)
-		prob = kde.pdf(x)
-		idx_lower = np.argmin(abs(x-(np.sqrt(tdepth)-int_limit)))
-		idx_upper = np.argmin(abs(x-(np.sqrt(tdepth)+int_limit)))
-		return simps(prob[idx_lower+1:idx_upper], x[idx_lower+1:idx_upper]) / simps(prob, x)
-	else:
-		return 1/40
-	
-def prob_EB_geo(P_orb:float, tdepth:float, M_s:float, R_s:float):
-	"""
-	Calculates geometric transit probability for eclipsing binaries.
-	Args:
-		P_orb (float): Orbital period [days].
-		tdepth (float): Reported transit depth [ppm].
-		M_s (float): Star mass [Solar masses].
-		R_s (float): Star radius [Solar radii].
-	Returns:
-		Geometric transit probability.
-	"""
+def lnprior_Mstar_planet(M_s: np.array):
+    """
+    Estimates planet occurrence rate for all planet radii and orbital
+    periods under 50 days and turns it into a prior probability.
+    Args:
+        M_s (float): Star mass [Solar masses].
+    Returns:
+        lnprior_planet (float): The log probability of there being a
+                                short period planet
+                                around a star of mass M_s.
+    """
+    f_p = np.zeros(len(M_s))
+    mask = ((2.5 - 1.5*M_s) > 0.1)
+    f_p[mask] = 2.5 - 1.5*M_s[mask]
+    mask = ((2.5 - 1.5*M_s) <= 0.1)
+    f_p[mask] = 0.1
+    f_p[f_p > 1.0] = 1.0
+    lnprior_Mstar = np.log(f_p)
+    # return lnprior_Mstar as 0 (omitted due to bias)
+    return 0.0
 
-	a = ((constants.G.cgs.value*M_s*constants.M_sun.cgs.value)/(4*np.pi**2)*(P_orb*86400)**2)**(1/3)
-	return R_s*constants.R_sun.cgs.value*(1+np.sqrt(tdepth))/a
-	
-def prior_TP(P_orb:float, tdepth:float, M_s:float, R_s:float):
-	"""of
-	Calculates the prior probability of a transiting planet scenario.
-	Args:
-		P_orb (float): Orbital period [days].
-		tdepth (float): Reported transit depth [ppm].
-		M_s (float): Star mass [Solar masses].
-		R_s (float): Star radius [Solar radii].
-	Returns:
-		Prior probability of TP scenario. 
-	"""
 
-	R_p = np.sqrt(tdepth)*R_s*constants.R_sun.cgs.value/constants.R_earth.cgs.value
-	return rate_planet(M_s) * prob_TP_Porb(P_orb) * prob_TP_Rp(R_p, M_s) * prob_TP_geo(P_orb, tdepth, M_s, R_s)
-	
-def prior_EB(P_orb:float, tdepth:float, M_s:float, R_s:float, EB_periods, EB_pdepths):
-	"""
-	Calculates the prior probability of an eclipsing binary scenario.
-	Args:
-		P_orb (float): Orbital period [days].
-		tdepth (float): Reported transit depth [ppm].
-		M_s (float): Star mass [Solar masses].
-		R_s (float): Star radius [Solar radii].
-		EB_periods (list): List of EB periods from the KEBC.
-		EB_pdepths [list]: List of EB transit depths from the KEBC.
-	Returns:
-		Prior probability of an EB scenario.
-	"""
+def lnprior_Mstar_binary(M_s: np.array):
+    """
+    Calculates the companion rate of the host star for periods
+    under 50 days and turns it into a prior probability.
+    Args:
+        M_s (numpy array): Host star masses [solar masses].
+    Returns:
+        lnprior_EB (float): The log probability of there being
+                            a short period binary
+                            around a star of mass M_s.
+    """
+    f_comp = np.zeros(len(M_s))
+    f1 = np.zeros(len(M_s))
+    f2 = np.zeros(len(M_s))
+    f3 = np.zeros(len(M_s))
+    t1 = np.zeros(len(M_s))
+    t2_partial = np.zeros(len(M_s))
+    alpha = 0.018
+    dlogP = 0.7
+    max_Porb = 50
 
-	return rate_binary(M_s) * prob_EB_Porb(P_orb, tdepth, M_s, R_s, EB_periods) * prob_EB_Rratio(tdepth, R_s, EB_pdepths) * prob_EB_geo(P_orb, tdepth, M_s, R_s)
+    mask = (M_s >= 1.0)
+    f1[mask] = (
+        0.020 + 0.04*np.log10(M_s[mask])
+        + 0.07*(np.log10(M_s[mask]))**2
+        )
+    f2[mask] = (
+        0.039 + 0.07*np.log10(M_s[mask])
+        + 0.01*(np.log10(M_s[mask]))**2
+        )
+    f3[mask] = (
+        0.078 - 0.05*np.log10(M_s[mask])
+        + 0.04*(np.log10(M_s[mask]))**2
+        )
+    t1[mask] = f1[mask]
+    t2_partial[mask] = (
+        0.5*(np.log10(max_Porb) - 1.0)
+        * (
+            2.0*f1[mask]+(f2[mask]-f1[mask]-alpha*dlogP)
+            * (np.log10(max_Porb) - 1.0)
+            )
+        )
+    f_comp[mask] = t1[mask] + t2_partial[mask]
 
-def prior_bound_companion(M_s:float, plx:float, best_resolution:float = 2.2):
-	"""
-	Calculates the prior probability of a bound companion.
-	Args:
-		M_s (float): Star mass [Solar masses].
-		plx (float): Star parallax [mas].
-		best_resolution (float): Best angular resolution beyond which a companion with a given magnitude can be outruled.
-	Returns:
-		f_companion (float): Bound companion rate.
-	"""
+    mask = (M_s < 1.0)
+    f1[mask] = (
+        0.020 + 0.04*np.log10(1.0)
+        + 0.07*(np.log10(1.0))**2
+        )
+    f2[mask] = (
+        0.039 + 0.07*np.log10(1.0)
+        + 0.01*(np.log10(1.0))**2
+        )
+    f3[mask] = (
+        0.078 - 0.05*np.log10(1.0)
+        + 0.04*(np.log10(1.0))**2
+        )
+    t1[mask] = f1[mask]
+    t2_partial[mask] = (
+        0.5*(np.log10(max_Porb) - 1.0)
+        * (
+            2.0*f1[mask]+(f2[mask]-f1[mask]-alpha*dlogP)
+            * (np.log10(max_Porb) - 1.0)
+            )
+        )
+    f_comp[mask] = t1[mask] + t2_partial[mask]
+    f_comp[mask] = 0.65*f_comp[mask]+0.35*f_comp[mask]*M_s[mask]
 
-	if np.isnan(plx) == True:
-		plx = 0.1
-	d = 1000/plx
-	max_sep = best_resolution*d
-	return f_companion(M_s, max_sep)
+    f_comp[f_comp > 1.0] = 1.0
+    lnprior_Mstar = np.log(f_comp)
+    # return lnprior_Mstar (omitted due to bias)
+    return 0.0
 
-def query_TRILEGAL(RA:float, Dec:float):
-	"""
-	Begins TRILEGAL query.
-	Args:
-		RA, Dec: Coordinates of the target.
-	Returns:
-		output_url (str): URL of page with query results. 
-	"""
 
-	# fill out and submit online TRILEGAL form
-	browser = StatefulBrowser()
-	browser.open("http://stev.oapd.inaf.it/cgi-bin/trilegal_1.6")
-	browser.select_form(nr=0)
-	browser["gal_coord"] = "2"
-	browser["eq_alpha"] = str(RA)
-	browser["eq_delta"] = str(Dec)
-	browser["field"] = "0.1"
-	browser["photsys_file"] = "tab_mag_odfnew/tab_mag_TESS_2mass.dat"
-	browser["icm_lim"] = "1"
-	browser["mag_lim"] = "21"
-	browser["binary_kind"] = "0"
-	browser.submit_selected()
-	print("TRILEGAL form submitted.")
-	sleep(5)
-	if len(browser.get_current_page().select("a")) == 0:
-		# print("TRILEGAL too busy, using saved stellar populations instead.")
-		# return None
-		browser = StatefulBrowser()
-		browser.open("http://stev.oapd.inaf.it/cgi-bin/trilegal_1.5")
-		browser.select_form(nr=0)
-		browser["gal_coord"] = "2"
-		browser["eq_alpha"] = str(RA)
-		browser["eq_delta"] = str(Dec)
-		browser["field"] = "0.1"
-		browser["photsys_file"] = "tab_mag_odfnew/tab_mag_2mass.dat"
-		browser["icm_lim"] = "1"
-		browser["mag_lim"] = "21"
-		browser["binary_kind"] = "0"
-		browser.submit_selected()
-		# print("TRILEGAL form submitted.")
-		sleep(5)
-		if len(browser.get_current_page().select("a")) == 0:
-			print("TRILEGAL too busy, using saved stellar populations instead.")
-			return None		
-		else:
-			data_link = browser.get_current_page().select("a")[0].get("href")
-			output_url = "http://stev.oapd.inaf.it/"+data_link[3:]
-			return output_url	
-	else:
-		data_link = browser.get_current_page().select("a")[0].get("href")
-		output_url = "http://stev.oapd.inaf.it/"+data_link[3:]
-		return output_url
+def lnprior_Porb_planet(P_orb: float):
+    """
+    Calculates probability of a planet with a given
+    orbital period < 50 days.
+    Args:
+        P_orb (float): Orbital period [days].
+    Returns:
+        lnprior_Porb (float): Log probability of planet having an
+                              orbital period P_orb +/- 0.1 days.
+    """
+    P_break = 10
+    P_min = 0.1
+    P_max = 50
+    p1 = 1.5
+    p2 = 0.0
+    A = P_break**p1 / P_break**p2
+    I1 = (P_break**(p1+1) - P_min**(p1+1))/(p1+1)
+    I2 = A*(P_max**(p2+1) - P_break**(p2+1))/(p2+1)
+    Norm = 1/(I1+I2)
 
-def prior_unbound_companion(output_url, Tmag:float, best_resolution:float = 2.2):
-	"""
-	Calculates the prior probability of an unbound companion.
-	Args:
-		output_url (str): URL of page with query results. 
-		Tmag (float): TESS magnitude of the star.
-		best_resolution (float): Best angular resolution beyond which a companion with a given magnitude can be outruled.
-	Returns:
-		f_fgbg (float): Unbound companion rate.
-	"""
+    if P_orb < P_min+0.1:
+        P_orb = P_min+0.1
+    elif P_orb > P_max-0.1:
+        P_orb = P_max-0.1
 
-	if output_url == None:
-		print("Could not access TRILEGAL. Ignoring BTP, BEB, DTP, and DEB scenarios.")
-		return 0.0
-	else:
-		for i in range(1000): 
-			last = read_csv(output_url, header=None)[-1:]
-			if last.values[0,0] != "#TRILEGAL normally terminated":
-				print("...")
-				sleep(10)
-			elif last.values[0,0] == "#TRILEGAL normally terminated":
-				break
-		# find number of stars fainter than target within best resolution			
-		df = read_csv(output_url, sep="\s+")[:-2]
-		headers = np.array(list(df))
-		# if we were able to use TRILEGAL v1.6 and get TESS mags, use them
-		if "TESS" in headers:
-			Tmags = df["TESS"].values
-			# for i in range(df.shape[0]):
-				# Tmags[i] = df["TESS"][i]
-			N_fgbg = Tmags[Tmags >= Tmag].shape[0]
-		# otherwise, use 2mass mags from TRILEGAL v1.5 and convert to T mags using the relations from section 2.2.1.1 of Stassun et al. 2018
-		else:
-			Tmags = np.zeros(df.shape[0])
-			Jmags = df["J"].values
-			Kmags = df["Ks"].values
-			for i, (J, Ks) in enumerate(zip(Jmags, Kmags)):
-				if (-0.1 <= J-Ks <= 0.70):
-					Tmags[i] = Tmags[i] = J + 1.22163*(J-Ks)**3 - 1.74299*(J-Ks)**2 + 1.89115*(J-Ks) + 0.0563
-				elif (0.7 < J-Ks <= 1.0):
-					Tmags[i] = Tmags[i] = J - 269.372*(J-Ks)**3 + 668.453*(J-Ks)**2 - 545.64*(J-Ks) + 147.811
-				elif (J-Ks < -0.1):
-					Tmags[i] = J + 0.5
-				elif (J-Ks > 1.0):
-					Tmags[i] = J + 1.75
-			N_fgbg = Tmags[Tmags >= Tmag].shape[0]
-		f_fgbg = N_fgbg * 10/3600**2 * best_resolution**2
-		return f_fgbg
+    if P_orb <= P_break-0.1:
+        I1 = ((P_orb+0.1)**(p1+1) - (P_orb-0.1)**(p1+1))/(p1+1)
+        prob = Norm * I1
+    elif P_orb >= P_break+0.1:
+        I1 = A*((P_orb+0.1)**(p2+1) - (P_orb-0.1)**(p2+1))/(p2+1)
+        prob = Norm * I1
+    else:
+        I1 = (P_break**(p1+1) - (P_orb-0.1)**(p1+1))/(p1+1)
+        I2 = A*((P_orb+0.1)**(p2+1) - P_break**(p2+1))/(p2+1)
+        prob = Norm * (I1+I2)
+
+    lnprior_Porb = np.log(prob)
+    return lnprior_Porb
+
+
+def lnprior_Porb_binary(P_orb: float):
+    """
+    Calculates probability of a binary with a given
+    orbital period < 50 days.
+    Args:
+        P_orb (float): Orbital period [days].
+    Returns:
+        lnprior_Porb (float): Log probability of binary having an
+                              orbital period P_orb +/- 0.1 days.
+    """
+    P_break = 0.3
+    P_min = 0.1
+    P_max = 50
+    p1 = 5.0
+    p2 = 0.5
+
+    A = P_break**p1 / P_break**p2
+    I1 = (P_break**(p1+1) - P_min**(p1+1))/(p1+1)
+    I2 = A*(P_max**(p2+1) - P_break**(p2+1))/(p2+1)
+    Norm = 1/(I1+I2)
+
+    if P_orb < P_min+0.1:
+        P_orb = P_min+0.1
+    elif P_orb > P_max-0.1:
+        P_orb = P_max-0.1
+
+    if P_orb <= P_break-0.1:
+        I1 = ((P_orb+0.1)**(p1+1) - (P_orb-0.1)**(p1+1))/(p1+1)
+        prob = Norm * I1
+    elif P_orb >= P_break+0.1:
+        I1 = A*((P_orb+0.1)**(p2+1) - (P_orb-0.1)**(p2+1))/(p2+1)
+        prob = Norm * I1
+    else:
+        I1 = (P_break**(p1+1) - (P_orb-0.1)**(p1+1))/(p1+1)
+        I2 = A*((P_orb+0.1)**(p2+1) - P_break**(p2+1))/(p2+1)
+        prob = Norm * (I1+I2)
+
+    lnprior_Porb = np.log(prob)
+    return lnprior_Porb
+
+
+def lnprior_bound(M_s: float, plx: float, delta_mags: np.array,
+                  separations: np.array, contrasts: np.array):
+    """
+    Calculates the bound companion rate of the target star.
+    Args:
+        M_s (float): Target star mass [solar masses].
+        plx (float): Parallax of the target star [mas].
+        delta_mags (numpy array): Contrasts of simulated
+                                  companions (delta_mag).
+        separations (numpy array): Separation at contrast (arcsec).
+        contrasts (numpy array): Contrast at separation (delta_mag).
+    Returns:
+        lnprior_bound (float): The log probability of there being
+                               a bound companion.
+    """
+    # determine maximum physical separations based on angular
+    # separation constraints and parallax
+    if np.isnan(plx):
+        plx = 0.1
+    d = 1000/plx
+    seps = d*separation_at_contrast(delta_mags, separations, contrasts)
+
+    # calculate prior probability for M_s >= 1.0 solar masses
+    if M_s >= 1.0:
+        f1 = 0.020 + 0.04*np.log10(M_s) + 0.07*(np.log10(M_s))**2
+        f2 = 0.039 + 0.07*np.log10(M_s) + 0.01*(np.log10(M_s))**2
+        f3 = 0.078 - 0.05*np.log10(M_s) + 0.04*(np.log10(M_s))**2
+        alpha = 0.018
+        dlogP = 0.7
+        max_Porbs = ((4*pi**2)/(G*M_s*Msun)*(seps*au)**3)**(1/2)/86400
+
+        t1 = f1
+        t2_partial = (
+            0.5*(np.log10(max_Porbs) - 1.0)
+            * (
+                2.0*f1 + (f2 - f1 - alpha*dlogP)
+                * (np.log10(max_Porbs) - 1.0)
+                )
+            )
+        t2 = (
+            0.5*(2.0 - 1.0)
+            * (
+                2.0*f1 + (f2 - f1 - alpha*dlogP)
+                * (2.0 - 1.0)
+                )
+            )
+        t3_partial = (
+            0.5*alpha
+            * (
+                np.log10(max_Porbs)**2-5.4
+                * np.log10(max_Porbs)+6.8
+                )
+            + f2*(np.log10(max_Porbs) - 2.0)
+            )
+        t3 = 0.5*alpha*(3.4**2 - 5.4*3.4 + 6.8) + f2*(3.4 - 2.0)
+        t4_partial = (
+            alpha*dlogP*(np.log10(max_Porbs) - 3.4)
+            + f2*(np.log10(max_Porbs) - 3.4)
+            + (f3 - f2 - alpha*dlogP)
+            * (
+                0.238095*np.log10(max_Porbs)**2
+                - 0.952381*np.log10(max_Porbs)
+                + 0.485714
+                )
+            )
+        t4 = (
+            alpha*dlogP*(5.5 - 3.4) + f2*(5.5 - 3.4)
+            + (f3 - f2 - alpha*dlogP)
+            * (0.238095*5.5**2 - 0.952381*5.5 + 0.485714)
+            )
+        t5_partial = (
+            f3*(3.33333 - 17.3566*np.exp(-0.3*np.log10(max_Porbs)))
+            )
+        t5 = f3*(3.33333 - 17.3566*np.exp(-0.3*8.0))
+
+        f_comp = np.zeros(len(seps))
+        mask = (np.log10(max_Porbs) < 1.0)
+        f_comp[mask] = t1
+        mask = (
+            (np.log10(max_Porbs) >= 1.0)
+            & (np.log10(max_Porbs) < 2.0)
+            )
+        f_comp[mask] = t1 + t2_partial[mask]
+        mask = (
+            (np.log10(max_Porbs) >= 2.0)
+            & (np.log10(max_Porbs) < 3.4)
+            )
+        f_comp[mask] = t1 + t2 + t3_partial[mask]
+        mask = (
+            (np.log10(max_Porbs) >= 3.4)
+            & (np.log10(max_Porbs) < 5.5)
+            )
+        f_comp[mask] = t1 + t2 + t3 + t4_partial[mask]
+        mask = (
+            (np.log10(max_Porbs) >= 5.5)
+            & (np.log10(max_Porbs) < 8.0)
+            )
+        f_comp[mask] = t1 + t2 + t3 + t4 + t5_partial[mask]
+        mask = (np.log10(max_Porbs) >= 8.0)
+        f_comp[mask] = t1 + t2 + t3 + t4 + t5
+        lnprior_bound = np.log(f_comp)
+
+    # calculate prior probability for M_s < 1.0 solar masses
+    else:
+        M_act = M_s
+        M_s = 1.0
+        f1 = 0.020 + 0.04*np.log10(M_s) + 0.07*(np.log10(M_s))**2
+        f2 = 0.039 + 0.07*np.log10(M_s) + 0.01*(np.log10(M_s))**2
+        f3 = 0.078 - 0.05*np.log10(M_s) + 0.04*(np.log10(M_s))**2
+        alpha = 0.018
+        dlogP = 0.7
+        max_Porbs = ((4*pi**2)/(G*M_s*Msun)*(seps*au)**3)**(1/2)/86400
+
+        t1 = f1
+        t2_partial = (
+            0.5*(np.log10(max_Porbs) - 1.0)
+            * (
+                2.0*f1 + (f2 - f1 - alpha*dlogP)
+                * (np.log10(max_Porbs) - 1.0)
+                )
+            )
+        t2 = (
+            0.5*(2.0 - 1.0)
+            * (
+                2.0*f1 + (f2 - f1 - alpha*dlogP)
+                * (2.0 - 1.0)
+                )
+            )
+        t3_partial = (
+            0.5*alpha
+            * (
+                np.log10(max_Porbs)**2
+                - 5.4*np.log10(max_Porbs) + 6.8
+                )
+            + f2*(np.log10(max_Porbs) - 2.0)
+            )
+        t3 = 0.5*alpha*(3.4**2 - 5.4*3.4 + 6.8) + f2*(3.4 - 2.0)
+        t4_partial = (
+            alpha*dlogP*(np.log10(max_Porbs) - 3.4)
+            + f2*(np.log10(max_Porbs) - 3.4)
+            + (f3 - f2 - alpha*dlogP)
+            * (
+                0.238095*np.log10(max_Porbs)**2
+                - 0.952381*np.log10(max_Porbs) + 0.485714
+                )
+            )
+        t4 = (
+            alpha*dlogP*(5.5 - 3.4)
+            + f2*(5.5 - 3.4)
+            + (f3 - f2 - alpha*dlogP)
+            * (0.238095*5.5**2 - 0.952381*5.5 + 0.485714)
+            )
+        t5_partial = (
+            f3*(3.33333 - 17.3566*np.exp(-0.3*np.log10(max_Porbs)))
+            )
+        t5 = f3*(3.33333 - 17.3566*np.exp(-0.3*8.0))
+
+        f_comp = np.zeros(len(seps))
+        mask = (np.log10(max_Porbs) < 1.0)
+        f_comp[mask] = t1
+        mask = (
+            (np.log10(max_Porbs) >= 1.0)
+            & (np.log10(max_Porbs) < 2.0)
+            )
+        f_comp[mask] = t1 + t2_partial[mask]
+        mask = (
+            (np.log10(max_Porbs) >= 2.0)
+            & (np.log10(max_Porbs) < 3.4)
+            )
+        f_comp[mask] = t1 + t2 + t3_partial[mask]
+        mask = (
+            (np.log10(max_Porbs) >= 3.4)
+            & (np.log10(max_Porbs) < 5.5)
+            )
+        f_comp[mask] = t1 + t2 + t3 + t4_partial[mask]
+        mask = (
+            (np.log10(max_Porbs) >= 5.5)
+            & (np.log10(max_Porbs) < 8.0)
+            )
+        f_comp[mask] = t1 + t2 + t3 + t4 + t5_partial[mask]
+        mask = (np.log10(max_Porbs) >= 8.0)
+        f_comp[mask] = t1 + t2 + t3 + t4 + t5
+        f_act = 0.65*f_comp+0.35*f_comp*M_act
+        lnprior_bound = np.log(f_act)
+
+    return lnprior_bound
+
+
+def lnprior_background(N_comp: int, delta_mags: np.array,
+                       separations: np.array,
+                       contrasts: np.array):
+    """
+    Calculates the limiting separation (in arcsecs)
+    at a given delta_mag.
+    Args:
+        N_comp (int): Number of stars obtained from
+                      trilegal simulation.
+        delta_mags (numpy array): Contrasts of simulated
+                                  companions (delta_mag).
+        separations (numpy array): Separation at contrast (arcsec).
+        contrasts (numpy array): Contrast at separation (delta_mag).
+    Returns:
+        lnprior_bg (float): The log probability of there being
+                            a background star.
+    """
+    seps = separation_at_contrast(delta_mags, separations, contrasts)
+    lnprior_bg = np.log10((N_comp/0.1) * (1/3600)**2 * seps**2)
+    return lnprior_bg

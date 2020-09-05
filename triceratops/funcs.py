@@ -1,210 +1,324 @@
 import numpy as np
-from pandas import DataFrame, read_csv
+from pandas import read_csv
 from astropy import constants
 from scipy.interpolate import InterpolatedUnivariateSpline
-from pkg_resources import resource_filename
+from mechanicalsoup import StatefulBrowser
+from time import sleep
 
-Mass_nodes_Torres = np.array([0.26,0.47,0.59,0.69,0.87,0.98,1.085,1.4,1.65,2.0,2.5,3.0,4.4,15.0,40.0])
-Teff_nodes_Torres = np.array([3170,3520,3840,4410,5150,5560,5940,6650,7300,8180,9790,11400,15200,30000,42000])
-Rad_nodes_Torres = np.array([0.28,0.47,0.60,0.72,0.9,1.05,1.2,1.55,1.8,2.1,2.4,2.6,3.0,6.2,11.0])
-Teff_all_Torres = np.linspace(4000, 42000, (42000-4000) + 1)
-Rad_spline_Torres = InterpolatedUnivariateSpline(Teff_nodes_Torres, Rad_nodes_Torres)
-Mass_spline_Torres = InterpolatedUnivariateSpline(Teff_nodes_Torres, Mass_nodes_Torres)
-Rad_all_Torres = Rad_spline_Torres(Teff_all_Torres)
-Mass_all_Torres = Mass_spline_Torres(Teff_all_Torres)
-logg_all_Torres = np.log10((constants.G.cgs.value)*(Mass_all_Torres*constants.M_sun.cgs.value)/(Rad_all_Torres*constants.R_sun.cgs.value)**2)
-L_all_Torres = 4*np.pi*constants.sigma_sb.cgs.value*(Rad_all_Torres*constants.R_sun.cgs.value)**2 * Teff_all_Torres**4 / constants.L_sun.cgs.value
+Msun = constants.M_sun.cgs.value
+Rsun = constants.R_sun.cgs.value
+Rearth = constants.R_earth.cgs.value
+G = constants.G.cgs.value
+au = constants.au.cgs.value
+pi = np.pi
 
-Teff_nodes_cdwrf = np.array([2800, 3000, 3200, 3400, 3600, 3800, 4000])
-Mass_nodes_cdwrf = np.array([0.1, 0.135, 0.2, 0.35, 0.48, 0.58, 0.63])
-Rad_nodes_cdwrf = np.array([0.1, 0.17, 0.23, 0.35, 0.49, 0.58, 0.64])
-logg_nodes_cdwrf = np.array([5.3, 5.15, 5.0, 4.85, 4.75, 4.68, 4.62])
-L_nodes_cdwrf = np.array([0.001, 0.002, 0.006, 0.018, 0.035, 0.06, 0.11])
-Teff_all_cdwrf = np.linspace(2800, 4000, (4000-2800) + 1)
-Rad_spline_cdwrf = InterpolatedUnivariateSpline(Teff_nodes_cdwrf, Rad_nodes_cdwrf)
-Mass_spline_cdwrf = InterpolatedUnivariateSpline(Teff_nodes_cdwrf, Mass_nodes_cdwrf)
-logg_spline_cdwrf = InterpolatedUnivariateSpline(Teff_nodes_cdwrf, logg_nodes_cdwrf)
-L_spline_cdwrf = InterpolatedUnivariateSpline(Teff_nodes_cdwrf, L_nodes_cdwrf)
-Rad_all_cdwrf = Rad_spline_cdwrf(Teff_all_cdwrf)
-Mass_all_cdwrf = Mass_spline_cdwrf(Teff_all_cdwrf)
-logg_all_cdwrf = logg_spline_cdwrf(Teff_all_cdwrf)
-L_all_cdwrf = L_spline_cdwrf(Teff_all_cdwrf)
+Mass_nodes_Torres = np.array([
+    0.26, 0.47, 0.59, 0.69, 0.87, 0.98, 1.085,
+    1.4, 1.65, 2.0, 2.5, 3.0, 4.4, 15.0, 40.0
+    ])
+Teff_nodes_Torres = np.array([
+    3170, 3520, 3840, 4410, 5150, 5560, 5940, 6650,
+    7300, 8180, 9790, 11400, 15200, 30000, 42000
+    ])
+Rad_nodes_Torres = np.array([
+    0.28, 0.47, 0.60, 0.72, 0.9, 1.05, 1.2, 1.55,
+    1.8, 2.1, 2.4, 2.6, 3.0, 6.2, 11.0
+    ])
+Teff_spline_Torres = InterpolatedUnivariateSpline(
+    Mass_nodes_Torres, Teff_nodes_Torres
+    )
+Rad_spline_Torres = InterpolatedUnivariateSpline(
+    Mass_nodes_Torres, Rad_nodes_Torres
+    )
+Mass_nodes_cdwrf = np.array([
+    0.1, 0.135, 0.2, 0.35, 0.48, 0.58, 0.63
+    ])
+Teff_nodes_cdwrf = np.array([
+    2800, 3000, 3200, 3400, 3600, 3800, 4000
+    ])
+Rad_nodes_cdwrf = np.array([
+    0.12, 0.165, 0.23, 0.36, 0.48, 0.585, 0.6
+    ])
+Teff_spline_cdwrf = InterpolatedUnivariateSpline(
+    Mass_nodes_cdwrf, Teff_nodes_cdwrf
+    )
+Rad_spline_cdwrf = InterpolatedUnivariateSpline(
+    Mass_nodes_cdwrf, Rad_nodes_cdwrf
+    )
 
-def stellar_relations(Mass:float = 0.0, Rad:float = 0.0, Teff:float = 0.0, lum:float = 0.0):
-	"""
-	Estimates mass, radius, effective temperature, logg, and luminosity of a star given on of the quantities.
-	Args:
-		Mass (float): Star mass [Solar masses].
-		Rad (float): Star radius [Solar radii].
-		Teff (float): Star effective temperature [K].
-		lum (float): Star luminosity [Solar luminosities].
-	Returns:
-		Mass (float): Star mass [Solar masses].
-		Rad (float): Star radius [Solar radii].
-		Teff (float): Star effective temperature [K].
-		logg (float): Star logg.
-		lum (float): Star luminosity [Solar luminosities].
-	"""
 
-	if (lum != 0.0 and lum > 0.095) or (Teff != 0.0 and Teff > 4000) or (Rad != 0.0 and Rad > 0.626) or (Mass != 0.0 and Mass > 0.63):
-		Mass_all, Rad_all, Teff_all, logg_all, L_all = Mass_all_Torres, Rad_all_Torres, Teff_all_Torres, logg_all_Torres, L_all_Torres
-	else:
-		Mass_all, Rad_all, Teff_all, logg_all, L_all = Mass_all_cdwrf, Rad_all_cdwrf, Teff_all_cdwrf, logg_all_cdwrf, L_all_cdwrf
+def stellar_relations(Masses: np.array,
+                      max_Radii: np.array,
+                      max_Teffs: np.array):
+    """
+    Estimates radii and effective temperatures of stars given masses.
+    Args:
+        Masses (numpy array): Star masses [Solar masses].
+    Returns:
+        Rad (numpy array): Star radii [Solar radii].
+        Teff (numpy array): Star effective temperatures [K].
+    """
+    Radii = np.zeros(len(Masses))
+    Teffs = np.zeros(len(Masses))
+    mask_hot = Masses > 0.63
+    mask_cool = Masses <= 0.63
 
-	if Mass != 0.0:
-		idx = np.argmin(abs(Mass_all - Mass))
-		return Mass_all[idx], Rad_all[idx], Teff_all[idx], logg_all[idx], L_all[idx]
-	elif Rad != 0.0:
-		idx = np.argmin(abs(Rad_all - Rad))
-		return Mass_all[idx], Rad_all[idx], Teff_all[idx], logg_all[idx], L_all[idx]
-	elif Teff != 0.0:
-		idx = np.argmin(abs(Teff_all - Teff))
-		return Mass_all[idx], Rad_all[idx], Teff_all[idx], logg_all[idx], L_all[idx]
-	elif lum != 0.0:
-		idx = np.argmin(abs(L_all - lum))
-		return Mass_all[idx], Rad_all[idx], Teff_all[idx], logg_all[idx], L_all[idx]
+    Radii[mask_hot] = Rad_spline_Torres(Masses[mask_hot])
+    Teffs[mask_hot] = Teff_spline_Torres(Masses[mask_hot])
+    Radii[mask_cool] = Rad_spline_cdwrf(Masses[mask_cool])
+    Teffs[mask_cool] = Teff_spline_cdwrf(Masses[mask_cool])
+    # don't allow estimated radii/Teffs to be above/below max/min value
+    Radii[Radii > max_Radii] = max_Radii[Radii > max_Radii]
+    Teffs[Teffs > max_Teffs] = max_Teffs[Teffs > max_Teffs]
+    Radii[Radii < 0.1] = 0.1
+    Teffs[Teffs < 2800] = 2800
+    return Radii, Teffs
+
+
+Mass_nodes = np.array([
+    0.1, 0.15, 0.23, 0.4, 0.58, 0.7, 0.9, 1.15, 1.45, 2.2, 2.8
+    ])
+flux_nodes = np.array([
+    -3, -2.5, -2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2
+    ])
+flux_spline = InterpolatedUnivariateSpline(Mass_nodes, flux_nodes)
+
+
+def flux_relation(Masses: np.array):
+    """
+    Estimates fluxes of stars given masses.
+    Args:
+        Masses (numpy array): Star masses [Solar masses].
+    Returns:
+        fluxes (numpy array): Flux ratio between star and
+                              a 0.9 Solar mass star.
+    """
+    fluxes = 10**flux_spline(Masses)
+    return fluxes
+
 
 def color_Teff_relations(V, Ks):
-	"""
-	Estimates stellar effective temperature based on photometry.
-	Args:
-		V (float): V magnitude of star
-		Ks (float): Ks magnitude of star.
-	Returns:
-		Teff (float): Star effective temperature [K].
-	"""
+    """
+    Estimates stellar effective temperature based on photometry.
+    Args:
+        V (float): V magnitude of star
+        Ks (float): Ks magnitude of star.
+    Returns:
+        Teff (float): Star effective temperature [K].
+    """
+    if V-Ks < 5.05:
+        theta = (0.54042 + 0.23676*(V-Ks) - 0.00796*(V-Ks)**2)
+        Teff = 5040/theta
+    elif V-Ks > 5.05:
+        theta = (
+            -0.4809 + 0.8009*(V-Ks)
+            - 0.1039*(V-Ks)**2 + 0.0056*(V-Ks)**3
+            )
+        Teff = 5040/theta + 205.26
+    return Teff
 
-	if V-Ks < 5.05:
-		theta = 0.54042 + 0.23676*(V-Ks) - 0.00796*(V-Ks)**2
-		Teff = 5040/theta
-	elif V-Ks > 5.05:
-		theta = -0.4809 + 0.8009*(V-Ks) - 0.1039*(V-Ks)**2 + 0.0056*(V-Ks)**3
-		Teff = 5040/theta + 205.26
-	return Teff
 
-def nearby_star_luminosity(T1:float, T2:float, p1:float, p2:float, L1:float):
-	"""
-	Estimates luminosity of a nearby star using the TESS magnitude (T) and parallax (p)
-	of the target star and the nearby star along with the the luminosity (L) of the target star.
-	Args:
-		T1 (float): TESS magnitude of target star.
-		T2 (float): TESS magnitude of nearby star.
-		p1 (float): Parallax of target star.
-		p2 (float): Parallax of nearby star.
-		L1 (float): Luminosity of target star.
-	Returns:
-		L2 (float): Luminosity of nearby star.
-	"""
-	L2 = L1 * 10**( (T1-T2)/2.5 + 2*np.log10(p1/p2) )
-	return L2
+def renorm_flux(flux, flux_err, star_fluxratio: float):
+    """
+    Renormalizes light curve flux to account for flux contribution
+    due to nearby stars.
+    Args:
+        flux (numpy array): Normalized flux of each data point.
+        star_fluxratio (float): Proportion of flux that comes
+                                from the star.
+    Returns:
+        renormed_flux (nump array): Remormalized flux of each point.
+    """
+    renormed_flux = (flux - (1 - star_fluxratio)) / star_fluxratio
+    renormed_flux_err = flux_err / star_fluxratio
+    return renormed_flux, renormed_flux_err
 
-# load ld coefficients 
-LDC_FILE = resource_filename('triceratops','data/ldc.tsv')
-ldc = read_csv(LDC_FILE, sep='\t', skiprows=48, usecols=[0,1,2,3,4,5])[2:]
-ldc = DataFrame(ldc, dtype=float)
-Zs = np.array(list(dict.fromkeys(ldc['Z'])))
-
-def quad_coeffs(Teff:float, logg:float, Z:float):
-	"""
-	Returns quadratic limb darkening coefficients given stellar properties.
-	Args:
-		Teff (float): Star effective temperature [K].
-		logg (float): Star logg.
-		z (float): Star metallicity.
-	Returns:
-		u1 (float): 1st coefficient in quadratic limb darkening law.
-		u2 (float): 2nd coefficient in quadratic limb darkening law.
-	"""
-
-	df_at_Z = ldc[ldc['Z'] == Zs[np.argmin(np.abs(Zs-Z))]]
-	Teffs = np.array(list(dict.fromkeys(df_at_Z['Teff'])))
-	loggs = np.array(list(dict.fromkeys(df_at_Z['logg'])))
-	df = ldc[(ldc['Teff'] == Teffs[np.argmin(np.abs(Teffs-Teff))]) & (ldc['logg'] == loggs[np.argmin(np.abs(loggs-logg))])]
-	# find corresponding coefficients 
-	u1s, u2s = df["aLSM"], df["bLSM"]
-	u1, u2 = np.mean(df["aLSM"].values), np.mean(df["bLSM"].values)
-	return u1, u2
-
-def renorm_flux(flux, companion_fluxratio:float, compaion:bool):
-	"""
-	Renormalizes light curve flux to account for the existence of an unresolved companion.
-	Args:
-		flux (numpy array): Normalized flux of each data point.
-		companion_fluxratio (float): Proportion of flux that comes from the unresolved companion.
-		companion (bool): True if the transit is around the unresolved companion and False if it is not. 
-	Returns:
-		renormed_flux (nump array): Remormalized flux of each data point.
-	"""
-
-	if compaion == True:
-		renormed_flux = (flux - (1 - companion_fluxratio)) / companion_fluxratio
-	elif compaion == False:
-		renormed_flux = (flux - companion_fluxratio) / (1 - companion_fluxratio)
-	return renormed_flux
-
-def renorm_flux_err(flux_err, companion_fluxratio:float, compaion:bool):
-	"""
-	Renormalizes light curve flux error to account for the existence of an unresolved companion.
-	Args:
-		flux_err (numpy array): Normalized flux error of each data point.
-		companion_fluxratio (float): Proportion of flux that comes from the unresolved companion.
-		companion (bool): True if the transit is around the unresolved companion and False if it is not. 
-	Returns:
-		renormed_flux_err (nump array): Remormalized flux error of each data point.
-	"""
-
-	if compaion == True:
-		renormed_flux_err = flux_err / companion_fluxratio
-	elif compaion == False:
-		renormed_flux_err = flux_err / (1 - companion_fluxratio)
-	return renormed_flux_err
-
-def adjust_flux_for_EB(flux, EB_fluxratio):
-	"""
-	Adjusts light curve to account for the existence of an EB.
-	Args:
-		flux (numpy array): Normalized flux of each data point.
-		EB_fluxratio (float): Proportion of flux that comes from the EB.
-	Returns:
-		Adjusted flux (numpy array).
-	"""
-
-	return (flux - 1)*(1 - EB_fluxratio) + 1
-
-def contrast_curve(path:str, Delta_mag:float):
-	"""
-	Determines separation at which a companion with a given Delta_mag can be ruled out. If no file provided, returns 2.2 arcseconds.
-	Args:
-		path (str): Path to contrast curve text file. File should contain column with separations (in arcsec)
-					followed by column with Delta_mags.
-		Delta_mag (float): Delta_mag at which we want to find a separation.
-	Returns:
-		sep (float): Separation (in arcseconds) that a companion can be ruled out at Delta_mag.
-	"""
-	if path is not None:
-		data = np.loadtxt(path, delimiter=',')
-		seps = data.T[0]
-		Delta_mags = data.T[1]
-		# don't let the smallest separation be 0 arcseconds
-		if seps[0] == 0.0:
-			seps[0] = seps[1]/10
-		sep = np.interp(Delta_mag, Delta_mags, seps)
-		if sep < 2.2:
-			return sep
-		else:
-			return 2.2
-	else:
-		return 2.2
 
 def Gauss2D(x, y, mu_x, mu_y, sigma, A):
-	"""
-	Calculates a circular Gaussian at specified grid points.
-	Args: 
-		x, y (1D numpy arrays): Grid that you would like to calculate Gaussian over.
-		mu_x, mu_y (floats): Locations of star / Gaussian peak.
-		sigma (float): Standard deviation of Gaussian
-		A (float): Area under Gaussian.
-	Returns:
-	"""
-	xgrid, ygrid = np.meshgrid(x, y)
-	return A/(2*np.pi*sigma**2) * np.exp(- ( ((xgrid-mu_x)**2 + (ygrid-mu_y)**2) ) / (2*sigma**2))
+    """
+    Calculates a circular Gaussian at specified grid points.
+    Args:
+        x, y (1D numpy arrays): Grid that you would like to calculate
+                                Gaussian over.
+        mu_x, mu_y (floats): Locations of star / Gaussian peak.
+        sigma (float): Standard deviation of Gaussian
+        A (float): Area under Gaussian.
+    Returns:
+    """
+    xgrid, ygrid = np.meshgrid(x, y)
+    exponent = ((xgrid-mu_x)**2 + (ygrid-mu_y)**2)/(2*sigma**2)
+    GaussExp = np.exp(-exponent)
+    return A/(2*np.pi*sigma**2)*GaussExp
+
+
+def file_to_contrast_curve(contrast_curve_file: str):
+    """
+    Obtains arrays of contrast and separation from a
+    contrast curve file.
+    Args:
+        contrast_curve_file (str): Path to contrast curve text file.
+                                   File should contain column with
+                                   separations (in arcsec)
+                                   followed by column with Delta_mags.
+    Returns:
+        separations (numpy array): Separation at contrast (arcsec).
+        contrasts (numpy array): Contrast at separation (delta_mag).
+    """
+    data = np.loadtxt(contrast_curve_file, delimiter=',')
+    separations = data.T[0]
+    contrasts = np.abs(data.T[1])
+    return separations, contrasts
+
+
+def separation_at_contrast(delta_mags: np.array,
+                           separations: np.array,
+                           contrasts: np.array):
+    """
+    Calculates the limiting separation (in arcsecs)
+    at a given delta_mag.
+    Args:
+        delta_mag (numpy array): Contrasts of simulated
+                                 companions (delta_mag).
+        separations (numpy array): Separation at contrast (arcsec).
+        contrasts (numpy array): Contrast at separation (delta_mag).
+    Returns:
+        sep (numpy array): Separation beyond which we can rule out
+                           the simulated companion (arcsec).
+    """
+    sep = np.interp(delta_mags, contrasts, separations)
+    return sep
+
+
+def query_TRILEGAL(RA: float, Dec: float):
+    """
+    Begins TRILEGAL query.
+    Args:
+        RA, Dec: Coordinates of the target.
+    Returns:
+        output_url (str): URL of page with query results.
+    """
+    # fill out and submit online TRILEGAL form
+    browser = StatefulBrowser()
+    browser.open("http://stev.oapd.inaf.it/cgi-bin/trilegal_1.6")
+    browser.select_form(nr=0)
+    browser["gal_coord"] = "2"
+    browser["eq_alpha"] = str(RA)
+    browser["eq_delta"] = str(Dec)
+    browser["field"] = "0.1"
+    browser["photsys_file"] = "tab_mag_odfnew/tab_mag_TESS_2mass.dat"
+    browser["icm_lim"] = "1"
+    browser["mag_lim"] = "21"
+    browser["binary_kind"] = "0"
+    browser.submit_selected()
+    print("TRILEGAL form submitted.")
+    sleep(5)
+    if len(browser.get_current_page().select("a")) == 0:
+        browser = StatefulBrowser()
+        browser.open("http://stev.oapd.inaf.it/cgi-bin/trilegal_1.5")
+        browser.select_form(nr=0)
+        browser["gal_coord"] = "2"
+        browser["eq_alpha"] = str(RA)
+        browser["eq_delta"] = str(Dec)
+        browser["field"] = "0.1"
+        browser["photsys_file"] = "tab_mag_odfnew/tab_mag_2mass.dat"
+        browser["icm_lim"] = "1"
+        browser["mag_lim"] = "21"
+        browser["binary_kind"] = "0"
+        browser.submit_selected()
+        # print("TRILEGAL form submitted.")
+        sleep(5)
+        if len(browser.get_current_page().select("a")) == 0:
+            print(
+                "TRILEGAL too busy, \
+                using saved stellar populations instead."
+                )
+            return None
+        else:
+            this_page = browser.get_current_page()
+            data_link = this_page.select("a")[0].get("href")
+            output_url = "http://stev.oapd.inaf.it/"+data_link[3:]
+            return output_url
+    else:
+        this_page = browser.get_current_page()
+        data_link = this_page.select("a")[0].get("href")
+        output_url = "http://stev.oapd.inaf.it/"+data_link[3:]
+        return output_url
+
+
+def trilegal_results(output_url, Tmag: float):
+    """
+    Retrieves arrays of stars from trilegal query.
+    Args:
+        output_url (str): URL of page with query results.
+        Tmag (float): TESS magnitude of the star.
+    Returns:
+        Tmags (numpy array): TESS magnitude of all stars
+                             fainter than the target.
+        Masses (numpy array): Masses of all stars fainter than the
+                              target [Solar masses].
+        loggs (numpy array): loggs of all stars fainter than the
+                             target [log10(cm/s^2)].
+        Teffs (numpy array): Teffs of all stars fainter than the
+                             target [K].
+        Zs (numpy array): Metallicities of all stars fainter than the
+                          target [dex].
+    """
+    if output_url is None:
+        print(
+            "Could not access TRILEGAL. \
+            Ignoring BTP, BEB, BEBx2P, DTP, DEB, and DEBx2P scenarios."
+            )
+        return 0.0
+    else:
+        for i in range(1000):
+            last = read_csv(output_url, header=None)[-1:]
+            if last.values[0, 0] != "#TRILEGAL normally terminated":
+                print("...")
+                sleep(10)
+            elif last.values[0, 0] == "#TRILEGAL normally terminated":
+                break
+        # find number of stars fainter than target
+        df = read_csv(output_url, delim_whitespace=True)[:-2]
+        Masses = df["Mact"].values
+        loggs = df["logg"].values
+        Teffs = 10**df["logTe"].values
+        Zs = np.array(df["[M/H]"], dtype=float)
+        Tmags = df["TESS"].values
+        headers = np.array(list(df))
+        # if able to use TRILEGAL v1.6 and get TESS mags, use them
+        if "TESS" in headers:
+            mask = (Tmags >= Tmag)
+            Masses = Masses[mask]
+            loggs = loggs[mask]
+            Teffs = Teffs[mask]
+            Zs = Zs[mask]
+            Tmags = Tmags[mask]
+        # otherwise, use 2mass mags from TRILEGAL v1.5 and convert
+        # to T mags using the relations from section 2.2.1.1 of
+        # Stassun et al. 2018
+        else:
+            Tmags = np.zeros(df.shape[0])
+            Jmags = df["J"].values
+            Kmags = df["Ks"].values
+            for i, (J, Ks) in enumerate(zip(Jmags, Kmags)):
+                if (-0.1 <= J-Ks <= 0.70):
+                    Tmags[i] = (
+                        J + 1.22163*(J-Ks)**3
+                        - 1.74299*(J-Ks)**2 + 1.89115*(J-Ks) + 0.0563
+                        )
+                elif (0.7 < J-Ks <= 1.0):
+                    Tmags[i] = (
+                        J - 269.372*(J-Ks)**3
+                        + 668.453*(J-Ks)**2 - 545.64*(J-Ks) + 147.811
+                        )
+                elif (J-Ks < -0.1):
+                    Tmags[i] = J + 0.5
+                elif (J-Ks > 1.0):
+                    Tmags[i] = J + 1.75
+            mask = (Tmags >= Tmag)
+            Masses = Masses[mask]
+            loggs = loggs[mask]
+            Teffs = Teffs[mask]
+            Zs = Zs[mask]
+            Tmags = Tmags[mask]
+        return Tmags, Masses, loggs, Teffs, Zs
