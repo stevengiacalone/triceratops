@@ -1,6 +1,6 @@
 import numpy as np
 from astropy import constants
-import batman
+from pytransit import QuadraticModel
 
 Msun = constants.M_sun.cgs.value
 Rsun = constants.R_sun.cgs.value
@@ -9,13 +9,14 @@ G = constants.G.cgs.value
 au = constants.au.cgs.value
 pi = np.pi
 
+tm = QuadraticModel(interpolate=False)
 
 def simulate_TP_transit(time: np.ndarray, R_p: float, P_orb: float,
                         inc: float, a: float, R_s: float, u1: float,
                         u2: float, companion_fluxratio: float = 0.0,
                         companion_is_host: bool = False):
     """
-    Simulates a transiting planet light curve using BATMAN.
+    Simulates a transiting planet light curve using PyTransit.
     Args:
         time (numpy array): Time of each data point
                             [days from transit midpoint].
@@ -37,17 +38,8 @@ def simulate_TP_transit(time: np.ndarray, R_p: float, P_orb: float,
     F_target = 1
     F_comp = companion_fluxratio/(1-companion_fluxratio)
     # step 1: simulate light curve assuming only the host star exists
-    params = batman.TransitParams()
-    params.t0 = 0.0
-    params.per = P_orb
-    params.rp = R_p*Rearth/(R_s*Rsun)
-    params.a = a/(R_s*Rsun)
-    params.inc = inc
-    params.ecc = 0.0
-    params.w = 0.0
-    params.u = [u1, u2]
-    params.limb_dark = "quadratic"
-    flux = batman.TransitModel(params, time).light_curve(params)
+    tm.set_data(time)
+    flux = tm.evaluate_ps(R_p*Rearth/(R_s*Rsun), [float(u1), float(u2)], t0=0.0, p=P_orb, a=a/(R_s*Rsun), i=inc*(pi/180.), e=0.0, w=0.0)
     # step 2: adjust the light curve to account for flux dilution
     # from non-host star
     if companion_is_host:
@@ -65,7 +57,7 @@ def simulate_EB_transit(time: np.ndarray, R_EB: float,
                         companion_fluxratio: float = 0.0,
                         companion_is_host: bool = False):
     """
-    Simulates a eclipsing binary light curve using BATMAN.
+    Simulates an eclipsing binary light curve using PyTransit.
     Args:
         time (numpy array): Time of each data point
                             [days from transit midpoint].
@@ -85,41 +77,32 @@ def simulate_EB_transit(time: np.ndarray, R_EB: float,
         m.light_curve (numpy array): Normalized flux at eat time given.
     """
     F_target = 1
-    F_comp = companion_fluxratio/(1-companion_fluxratio)
-    F_EB = EB_fluxratio/(1-EB_fluxratio)
+    F_comp = companion_fluxratio/(1 - companion_fluxratio)
+    F_EB = EB_fluxratio/(1 - EB_fluxratio)
+
+    tm.set_data(time)
+
     # step 1: simulate light curve assuming only the host star exists
-    params = batman.TransitParams()
     # calculate primary eclipse
-    params.t0 = 0.0
-    params.per = P_orb
-    if R_EB/R_s == 1.0:
-        params.rp = R_EB/R_s * 0.999
-    else:
-        params.rp = R_EB/R_s
-    params.a = a/(R_s*Rsun)
-    params.inc = inc
-    params.ecc = 0.0
-    params.w = 0.0
-    params.u = [u1, u2]
-    params.limb_dark = "quadratic"
-    flux = batman.TransitModel(params, time).light_curve(params)
+    k = R_EB/R_s
+    if abs(k - 1.0) < 1e-6:
+        k *= 0.999
+    flux = tm.evaluate_ps(k, [float(u1), float(u2)], t0=0.0, p=P_orb, a=a/(R_s*Rsun), i=inc*(pi/180.), e=0.0, w=0.0)
+
     # calculate secondary eclipse depth
-    params.fp = (EB_fluxratio)/(1-EB_fluxratio)
-    params.t_secondary = 0.5
-    sec = batman.TransitModel(
-        params, np.array([0.5, 0.75]), transittype="secondary"
-        )
-    sec_flux = sec.light_curve(params)[0]/max(sec.light_curve(params))
+    fr = (EB_fluxratio)/(1 - EB_fluxratio)
+    sec_flux = 1.0/(1. + fr)
+
     # step 2: adjust the light curve to account for flux dilution
     # from EB and non-host star
     if companion_is_host:
-        flux = (flux + F_EB/F_comp) / (1 + F_EB/F_comp)
-        F_dilute = F_target / (F_comp + F_EB)
+        flux = (flux + F_EB/F_comp)/(1 + F_EB/F_comp)
+        F_dilute = F_target/(F_comp + F_EB)
         flux = (flux + F_dilute)/(1 + F_dilute)
         secdepth = 1 - (sec_flux + F_dilute)/(1 + F_dilute)
     else:
-        flux = (flux + F_EB/F_target) / (1 + F_EB/F_target)
-        F_dilute = F_comp / (F_target + F_EB)
+        flux = (flux + F_EB/F_target)/(1 + F_EB/F_target)
+        F_dilute = F_comp/(F_target + F_EB)
         flux = (flux + F_dilute)/(1 + F_dilute)
         secdepth = 1 - (sec_flux + F_dilute)/(1 + F_dilute)
     return flux, secdepth
