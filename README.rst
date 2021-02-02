@@ -19,11 +19,6 @@ You can install the most recently released version of this tool via PyPI::
 
     $ pip install triceratops
 
-Or you can clone the repository::
-
-    $ git clone https://github.com/stevengiacalone/triceratops.git
-    $ cd triceratops
-    $ python setup.py install
 
 Usage
 -------------
