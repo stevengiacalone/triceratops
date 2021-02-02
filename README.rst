@@ -34,7 +34,7 @@ Attribution
 -------------
 If you use ``triceratops``, please cite both the paper and the code.
 
-Paper citation:
+Paper citation::
 
     @ARTICLE{2021AJ....161...24G,
            author = {{Giacalone}, Steven and {Dressing}, Courtney D. and {Jensen}, Eric L.~N. and {Collins}, Karen A. and {Ricker}, George R. and {Vanderspek}, Roland and {Seager}, S. and {Winn}, Joshua N. and {Jenkins}, Jon M. and {Barclay}, Thomas and {Barkaoui}, Khalid and {Cadieux}, Charles and {Charbonneau}, David and {Collins}, Kevin I. and {Conti}, Dennis M. and {Doyon}, Ren{\'e} and {Evans}, Phil and {Ghachoui}, Mourad and {Gillon}, Micha{\"e}l and {Guerrero}, Natalia M. and {Hart}, Rhodes and {Jehin}, Emmanu{\"e}l and {Kielkopf}, John F. and {McLean}, Brian and {Murgas}, Felipe and {Palle}, Enric and {Parviainen}, Hannu and {Pozuelos}, Francisco J. and {Relles}, Howard M. and {Shporer}, Avi and {Socia}, Quentin and {Stockdale}, Chris and {Tan}, Thiam-Guan and {Torres}, Guillermo and {Twicken}, Joseph D. and {Waalkes}, William C. and {Waite}, Ian A.},
@@ -55,7 +55,7 @@ Paper citation:
           adsnote = {Provided by the SAO/NASA Astrophysics Data System}
     }
 
-Code citation:
+Code citation::
 
     @MISC{2020ascl.soft02004G,
            author = {{Giacalone}, Steven and {Dressing}, Courtney D.},
