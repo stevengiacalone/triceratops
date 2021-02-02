@@ -177,8 +177,8 @@ class target:
             ap_pixels (numpy array): Aperture used to
                                      extract light curve.
             ap_color (str): Color of aperture outline.
-            save (bool): Whether or not to save plot as png.
-            fname (str): File name of png.
+            save (bool): Whether or not to save plot as pdf.
+            fname (str): File name of pdf.
         """
         if len(self.sectors) > 1:
             idx = np.argwhere(self.sectors == sector)[0, 0]
@@ -270,7 +270,8 @@ class target:
             cmap=cm.viridis_r,
             vmin=floor(min(self.stars["Tmag"])),
             vmax=ceil(max(self.stars["Tmag"])),
-            zorder=2
+            zorder=2,
+            rasterized=True
             )
         ax[0].scatter(
             [self.pix_coords[idx][0, 0]],
@@ -354,13 +355,13 @@ class target:
         if save is False:
             plt.tight_layout()
             plt.show()
-        elif (save is True) & (name is None):
+        elif (save is True) & (fname is None):
             plt.tight_layout()
             target_star = self.stars.ID.values[0]
-            plt.savefig("TIC"+str(target_star)+"_sector"+str(sector)+".png")
+            plt.savefig("TIC"+str(target_star)+"_sector"+str(sector)+".pdf")
         else:
             plt.tight_layout()
-            plt.savefig(fname+".png")
+            plt.savefig(fname+".pdf")
         return
 
     def calc_depths(self, tdepth: float, all_ap_pixels):
@@ -1135,8 +1136,8 @@ class target:
                                 [days from transit midpoint].
             flux_0 (numpy array): Normalized flux of each data point.
             sigma_0 (numpy array): Uncertainty of flux.
-            save (bool): Whether or not to save plot as png.
-            fname (str): File name of png.
+            save (bool): Whether or not to save plot as pdf.
+            fname (str): File name of pdf.
         """
         scenario_idx = self.probs[self.probs["ID"] != 0].index.values
         df = self.probs[self.probs["ID"] != 0]
@@ -1228,7 +1229,8 @@ class target:
                 ax[i, j].yaxis.set_major_formatter(y_formatter)
                 ax[i, j].errorbar(
                     time, flux, sigma, fmt=".",
-                    color="blue", alpha=0.1, zorder=0
+                    color="blue", alpha=0.1, zorder=0,
+                    rasterized=True
                     )
                 ax[i, j].plot(
                     model_time, best_model, "k-", lw=5, zorder=2
@@ -1257,8 +1259,8 @@ class target:
         elif (save is True) & (fname is None):
             plt.tight_layout()
             target_star = self.stars.ID.values[0]
-            plt.savefig("TIC"+str(target_star)+"_fits.png")
+            plt.savefig("TIC"+str(target_star)+"_fits.pdf")
         else:
-        	plt.tight_layout()
-            plt.savefig(fname+".png")
+            plt.tight_layout()
+            plt.savefig(fname+".pdf")
         return
