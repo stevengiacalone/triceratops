@@ -168,7 +168,8 @@ class target:
         return
 
     def plot_field(self, sector: int = None, ap_pixels=None,
-                   ap_color: str = "red", save_plot: str = False):
+                   ap_color: str = "red", save: bool = False,
+                   fname: str = None):
         """
         Plots the field of stars and pixels around the target.
         Args:
@@ -176,7 +177,8 @@ class target:
             ap_pixels (numpy array): Aperture used to
                                      extract light curve.
             ap_color (str): Color of aperture outline.
-            save_plot (str): Whether or not to save plot as png.
+            save (bool): Whether or not to save plot as png.
+            fname (str): File name of png.
         """
         if len(self.sectors) > 1:
             idx = np.argwhere(self.sectors == sector)[0, 0]
@@ -349,13 +351,16 @@ class target:
                     [ap_pixels[i][1]-0.5, ap_pixels[i][1]+0.5],
                     color=ap_color, zorder=2
                     )
-        if save_plot is False:
+        if save is False:
             plt.tight_layout()
             plt.show()
-        else:
+        elif (save is True) & (name is None):
             plt.tight_layout()
             target_star = self.stars.ID.values[0]
-            plt.savefig("TIC"+str(target_star)+"_field.png")
+            plt.savefig("TIC"+str(target_star)+"_sector"+str(sector)+".png")
+        else:
+            plt.tight_layout()
+            plt.savefig(fname+".png")
         return
 
     def calc_depths(self, tdepth: float, all_ap_pixels):
@@ -1122,7 +1127,7 @@ class target:
 
     def plot_fits(self, time: np.ndarray,
                   flux_0: np.ndarray, sigma_0: float,
-                  save_plot: str = False):
+                  save: bool = False, fname: str = None):
         """
         Plots light curve for best fit instance of each scenario.
         Args:
@@ -1130,7 +1135,8 @@ class target:
                                 [days from transit midpoint].
             flux_0 (numpy array): Normalized flux of each data point.
             sigma_0 (numpy array): Uncertainty of flux.
-            save_plot (str): Whether or not to save plot as png.
+            save (bool): Whether or not to save plot as png.
+            fname (str): File name of png.
         """
         scenario_idx = self.probs[self.probs["ID"] != 0].index.values
         df = self.probs[self.probs["ID"] != 0]
@@ -1245,11 +1251,14 @@ class target:
         ax[len(df)//3-1, 2].set_xlabel(
             "days from transit center", fontsize=12
             )
-        if save_plot == False:
+        if save is False:
             plt.tight_layout()
             plt.show()
-        else:
+        elif (save is True) & (fname is None):
             plt.tight_layout()
             target_star = self.stars.ID.values[0]
             plt.savefig("TIC"+str(target_star)+"_fits.png")
+        else:
+        	plt.tight_layout()
+            plt.savefig(fname+".png")
         return
