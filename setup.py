@@ -22,7 +22,7 @@ setup(name = "triceratops",
         'Topic :: Scientific/Engineering :: Astronomy'
         ],
       install_requires=['numpy>=1.18.1','pandas>=0.23.4', 'scipy>=1.1.0', 'matplotlib>=3.0.3',
-                        'astropy>=3.1.2', 'astroquery>=0.4', 'pytransit>=2.2',
+                        'astropy>=3.1.2', 'astroquery>=0.4', 'pytransit>=2.2', 'extension-helpers>=0.1',
                         'mechanicalsoup>=0.12.0', 'emcee>=3.0.2'],
       zip_safe=False
 )
