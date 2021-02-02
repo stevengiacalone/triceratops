@@ -73,12 +73,18 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     # calculate orbital period prior
     lnprior_Porb = lnprior_Porb_planet(P_orb)
 
-    # sample from R_p and inc prior distributions
+    # sample from prior distributions
     rps = sample_rp(np.random.rand(N), np.full_like(N, M_s))
     incs = sample_inc(np.random.rand(N))
+    eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=P_orb)
+    argps = sample_w(np.random.rand(N))
 
     # calculate transit probability for each instance
-    Ptra = (rps*Rearth + R_s*Rsun)/a
+    e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
+    Ptra = (rps*Rearth + R_s*Rsun)/a * e_corr
+
+    # find instances with collisions
+    coll = ((rps*Rearth + R_s*Rsun) > a*(1-eccs))
 
     lnL = np.full(N, -np.inf)
     for i in range(N):
@@ -86,10 +92,11 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             inc_min = np.arccos(Ptra[i]) * 180/pi
         else:
             continue
-        if incs[i] >= inc_min:
+        if (incs[i] >= inc_min) & (coll[i] == False):
             lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
                 time, flux, sigma, rps[i],
-                P_orb, incs[i], a, R_s, u1, u2
+                P_orb, incs[i], a, R_s, u1, u2,
+                eccs[i], argps[i]
                 )
 
     idx = lnL.argmax()
@@ -98,6 +105,7 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     res = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,
         'P_orb': P_orb, 'inc': incs[idx], 'R_p': rps[idx],
+        'ecc': eccs[idx], 'argp': argps[idx],
         'M_EB': 0, 'R_EB': 0, 'fluxratio_EB': 0,
         'fluxratio_comp': 0, 'lnZ': lnZ
     }
@@ -137,9 +145,11 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         )
     u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
 
-    # sample from inc and q prior distributions
+    # sample from prior distributions
     incs = sample_inc(np.random.rand(N))
     qs = sample_q(np.random.rand(N))
+    eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=P_orb)
+    argps = sample_w(np.random.rand(N))
 
     # calculate properties of the drawn EBs
     masses = qs*M_s
@@ -159,10 +169,15 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     lnprior_Porb = lnprior_Porb_binary(P_orb)
 
     # calculate transit probability for each instance
+    e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
     a = ((G*(M_s+masses)*Msun)/(4*pi**2)*(P_orb*86400)**2)**(1/3)
-    Ptra = (radii*Rsun + R_s*Rsun)/a
+    Ptra = (radii*Rsun + R_s*Rsun)/a * e_corr
     a_twin = ((G*(M_s+masses)*Msun)/(4*pi**2)*(2*P_orb*86400)**2)**(1/3)
-    Ptra_twin = (radii*Rsun + R_s*Rsun)/a_twin
+    Ptra_twin = (radii*Rsun + R_s*Rsun)/a_twin * e_corr
+
+    # find instances with collisions
+    coll = ((radii*Rsun + R_s*Rsun) > a*(1-eccs))
+    coll_twin = ((2*R_s*Rsun) > a_twin*(1-eccs))
 
     lnL = np.full(N, -np.inf)
     lnL_twin = np.full(N, -np.inf)
@@ -172,20 +187,22 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             inc_min = np.arccos(Ptra[i]) * 180/pi
         else:
             continue
-        if (incs[i] >= inc_min) & (qs[i] < 0.95):
+        if (incs[i] >= inc_min) & (qs[i] < 0.95) & (coll[i] == False):
             lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
                 time, flux, sigma, radii[i], fluxratios[i],
-                P_orb, incs[i], a[i], R_s, u1, u2
+                P_orb, incs[i], a[i], R_s, u1, u2,
+                eccs[i], argps[i]
                 )
         # q >= 0.95 and 2xP_orb
         if Ptra_twin[i] <= 1:
             inc_min = np.arccos(Ptra_twin[i]) * 180/pi
         else:
             continue
-        if (incs[i] >= inc_min) & (qs[i] >= 0.95):
+        if (incs[i] >= inc_min) & (qs[i] >= 0.95) & (coll_twin[i] == False):
             lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
                 time, flux, sigma, radii[i], fluxratios[i],
-                2*P_orb, incs[i], a_twin[i], R_s, u1, u2
+                2*P_orb, incs[i], a_twin[i], R_s, u1, u2,
+                eccs[i], argps[i]
                 )
 
     # results for q < 0.95
@@ -195,6 +212,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     res = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,
         'P_orb': P_orb, 'inc': incs[idx], 'R_p': 0,
+        'ecc': eccs[idx], 'argp': argps[idx],
         'M_EB': masses[idx], 'R_EB': radii[idx],
         'fluxratio_EB': fluxratios[idx],
         'fluxratio_comp': 0, 'lnZ': lnZ
@@ -206,6 +224,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     res_twin = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,
         'P_orb': 2*P_orb, 'inc': incs[idx], 'R_p': 0,
+        'ecc': eccs[idx], 'argp': argps[idx],
         'M_EB': masses[idx], 'R_EB': radii[idx],
         'fluxratio_EB': fluxratios[idx],
         'fluxratio_comp': 0, 'lnZ': lnZ
@@ -288,12 +307,18 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     # calculate orbital period prior
     lnprior_Porb = lnprior_Porb_planet(P_orb)
 
-    # sample from R_p and inc prior distributions
+    # sample from prior distributions
     rps = sample_rp(np.random.rand(N), np.full_like(N, M_s))
     incs = sample_inc(np.random.rand(N))
+    eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=P_orb)
+    argps = sample_w(np.random.rand(N))
 
     # calculate transit probability for each instance
-    Ptra = (rps*Rearth + R_s*Rsun)/a
+    e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
+    Ptra = (rps*Rearth + R_s*Rsun)/a * e_corr
+
+    # find instances with collisions
+    coll = ((rps*Rearth + R_s*Rsun) > a*(1-eccs))
 
     lnL = np.full(N, -np.inf)
     for i in range(N):
@@ -301,10 +326,11 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             inc_min = np.arccos(Ptra[i]) * 180/pi
         else:
             continue
-        if incs[i] >= inc_min:
+        if (incs[i] >= inc_min) & (coll[i] == False):
             lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
                 time, flux, sigma, rps[i],
                 P_orb, incs[i], a, R_s, u1, u2,
+                eccs[i], argps[i],
                 companion_fluxratio=fluxratios_comp[i],
                 companion_is_host=False
                 )
@@ -317,6 +343,7 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     res = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,
         'P_orb': P_orb, 'inc': incs[idx], 'R_p': rps[idx],
+        'ecc': eccs[idx], 'argp': argps[idx],
         'M_EB': 0, 'R_EB': 0, 'fluxratio_EB': 0,
         'fluxratio_comp': fluxratios_comp[idx], 'lnZ': lnZ
     }
@@ -359,10 +386,12 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         )
     u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
 
-    # sample from inc and q prior distributions
+    # sample from prior distributions
     incs = sample_inc(np.random.rand(N))
     qs = sample_q(np.random.rand(N))
     qs_comp = sample_q_companion(np.random.rand(N))
+    eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=P_orb)
+    argps = sample_w(np.random.rand(N))
 
     # calculate properties of the drawn EBs
     masses = qs*M_s
@@ -412,10 +441,15 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     lnprior_Porb = lnprior_Porb_binary(P_orb)
 
     # calculate transit probability for each instance
+    e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
     a = ((G*(M_s+masses)*Msun)/(4*pi**2)*(P_orb*86400)**2)**(1/3)
-    Ptra = (radii*Rsun + R_s*Rsun)/a
+    Ptra = (radii*Rsun + R_s*Rsun)/a * e_corr
     a_twin = ((G*(M_s+masses)*Msun)/(4*pi**2)*(2*P_orb*86400)**2)**(1/3)
-    Ptra_twin = (radii*Rsun + R_s*Rsun)/a_twin
+    Ptra_twin = (radii*Rsun + R_s*Rsun)/a_twin * e_corr
+
+    # find instances with collisions
+    coll = ((radii*Rsun + R_s*Rsun) > a*(1-eccs))
+    coll_twin = ((2*R_s*Rsun) > a_twin*(1-eccs))
 
     lnL = np.full(N, -np.inf)
     lnL_twin = np.full(N, -np.inf)
@@ -425,10 +459,11 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             inc_min = np.arccos(Ptra[i]) * 180/pi
         else:
             continue
-        if (incs[i] >= inc_min) & (qs[i] < 0.95):
+        if (incs[i] >= inc_min) & (qs[i] < 0.95) & (coll[i] == False):
             lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
                 time, flux, sigma, radii[i], fluxratios[i],
                 P_orb, incs[i], a[i], R_s, u1, u2,
+                eccs[i], argps[i],
                 companion_fluxratio=fluxratios_comp[i],
                 companion_is_host=False
                 )
@@ -437,10 +472,11 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             inc_min = np.arccos(Ptra_twin[i]) * 180/pi
         else:
             continue
-        if (incs[i] >= inc_min) & (qs[i] >= 0.95):
+        if (incs[i] >= inc_min) & (qs[i] >= 0.95) & (coll_twin[i] == False):
             lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
                 time, flux, sigma, radii[i], fluxratios[i],
                 2*P_orb, incs[i], a_twin[i], R_s, u1, u2,
+                eccs[i], argps[i],
                 companion_fluxratio=fluxratios_comp[i],
                 companion_is_host=False
                 )
@@ -454,6 +490,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     res = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,
         'P_orb': P_orb, 'inc': incs[idx], 'R_p': 0,
+        'ecc': eccs[idx], 'argp': argps[idx],
         'M_EB': masses[idx], 'R_EB': radii[idx],
         'fluxratio_EB': fluxratios[idx],
         'fluxratio_comp': fluxratios_comp[idx], 'lnZ': lnZ
@@ -467,6 +504,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     res_twin = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,
         'P_orb': 2*P_orb, 'inc': incs[idx], 'R_p': 0,
+        'ecc': eccs[idx], 'argp': argps[idx],
         'M_EB': masses[idx], 'R_EB': radii[idx],
         'fluxratio_EB': fluxratios[idx],
         'fluxratio_comp': fluxratios_comp[idx], 'lnZ': lnZ
@@ -559,13 +597,19 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
     # calculate orbital period prior
     lnprior_Porb = lnprior_Porb_planet(P_orb)
 
-    # sample from R_p and inc prior distributions
+    # sample from prior distributions
     rps = sample_rp(np.random.rand(N), masses_comp)
     incs = sample_inc(np.random.rand(N))
+    eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=P_orb)
+    argps = sample_w(np.random.rand(N))
 
     # calculate transit probability for each instance
+    e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
     a = ((G*masses_comp*Msun)/(4*pi**2)*(P_orb*86400)**2)**(1/3)
-    Ptra = (rps*Rearth + radii_comp*Rsun)/a
+    Ptra = (rps*Rearth + radii_comp*Rsun)/a * e_corr
+
+    # find instances with collisions
+    coll = ((rps*Rearth + radii_comp*Rsun) > a*(1-eccs))
 
     lnL = np.full(N, -np.inf)
     for i in range(N):
@@ -573,11 +617,12 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
             inc_min = np.arccos(Ptra[i]) * 180/pi
         else:
             continue
-        if incs[i] >= inc_min:
+        if (incs[i] >= inc_min) & (coll[i] == False):
             lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
                 time, flux, sigma, rps[i],
                 P_orb, incs[i], a[i], radii_comp[i],
                 u1s_comp[i], u2s_comp[i],
+                eccs[i], argps[i],
                 companion_fluxratio=fluxratios_comp[i],
                 companion_is_host=True
                 )
@@ -591,6 +636,7 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
      'M_s': masses_comp[idx], 'R_s': radii_comp[idx],
      'u1': u1s_comp[idx], 'u2': u2s_comp[idx],
      'P_orb': P_orb, 'inc': incs[idx], 'R_p': rps[idx],
+     'ecc': eccs[idx], 'argp': argps[idx],
      'M_EB': 0, 'R_EB': 0, 'fluxratio_EB': 0,
      'fluxratio_comp': fluxratios_comp[idx], 'lnZ': lnZ
     }
@@ -622,10 +668,12 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     """
     lnsigma = np.log(sigma)
 
-    # sample from inc and q prior distributions
+    # sample from prior distributions
     incs = sample_inc(np.random.rand(N))
     qs = sample_q(np.random.rand(N))
     qs_comp = sample_q_companion(np.random.rand(N))
+    eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=P_orb)
+    argps = sample_w(np.random.rand(N))
 
     # calculate properties of the drawn companions
     masses_comp = qs_comp*M_s
@@ -697,14 +745,19 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     lnprior_Porb = lnprior_Porb_binary(P_orb)
 
     # calculate transit probability for each instance
+    e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
     a = (
         (G*(masses_comp+masses)*Msun)/(4*pi**2)*(P_orb*86400)**2
         )**(1/3)
-    Ptra = (radii*Rsun + radii_comp*Rsun)/a
+    Ptra = (radii*Rsun + radii_comp*Rsun)/a * e_corr
     a_twin = (
         (G*(masses_comp+masses)*Msun)/(4*pi**2)*(2*P_orb*86400)**2
         )**(1/3)
-    Ptra_twin = (radii*Rsun + radii_comp*Rsun)/a_twin
+    Ptra_twin = (radii*Rsun + radii_comp*Rsun)/a_twin * e_corr
+
+    # find instances with collisions
+    coll = ((radii*Rsun + radii_comp*Rsun) > a*(1-eccs))
+    coll_twin = ((2*radii_comp*Rsun) > a_twin*(1-eccs))
 
     lnL = np.full(N, -np.inf)
     lnL_twin = np.full(N, -np.inf)
@@ -714,11 +767,12 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             inc_min = np.arccos(Ptra[i]) * 180/pi
         else:
             continue
-        if (incs[i] >= inc_min) & (qs[i] < 0.95):
+        if (incs[i] >= inc_min) & (qs[i] < 0.95) & (coll[i] == False):
             lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
                 time, flux, sigma, radii[i], fluxratios[i],
                 P_orb, incs[i], a[i], radii_comp[i],
                 u1s_comp[i], u2s_comp[i],
+                eccs[i], argps[i],
                 companion_fluxratio=fluxratios_comp[i],
                 companion_is_host=True
                 )
@@ -727,11 +781,12 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             inc_min = np.arccos(Ptra_twin[i]) * 180/pi
         else:
             continue
-        if (incs[i] >= inc_min) & (qs[i] >= 0.95):
+        if (incs[i] >= inc_min) & (qs[i] >= 0.95) & (coll_twin[i] == False):
             lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
                 time, flux, sigma, radii[i], fluxratios[i],
                 2*P_orb, incs[i], a_twin[i], radii_comp[i],
                 u1s_comp[i], u2s_comp[i],
+                eccs[i], argps[i],
                 companion_fluxratio=fluxratios_comp[i],
                 companion_is_host=True
                 )
@@ -746,6 +801,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
      'M_s': masses_comp[idx], 'R_s': radii_comp[idx],
      'u1': u1s_comp[idx], 'u2': u2s_comp[idx],
      'P_orb': P_orb, 'inc': incs[idx], 'R_p': 0,
+     'ecc': eccs[idx], 'argp': argps[idx],
      'M_EB': masses[idx], 'R_EB': radii[idx],
      'fluxratio_EB': fluxratios[idx],
      'fluxratio_comp': fluxratios_comp[idx], 'lnZ': lnZ
@@ -760,6 +816,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
      'M_s': masses_comp[idx], 'R_s': radii_comp[idx],
      'u1': u1s_comp[idx], 'u2': u2s_comp[idx],
      'P_orb': 2*P_orb, 'inc': incs[idx], 'R_p': 0,
+     'ecc': eccs[idx], 'argp': argps[idx],
      'M_EB': masses[idx], 'R_EB': radii[idx],
      'fluxratio_EB': fluxratios[idx],
      'fluxratio_comp': fluxratios_comp[idx], 'lnZ': lnZ
@@ -843,9 +900,15 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     # sample from R_p and inc prior distributions
     rps = sample_rp(np.random.rand(N), np.full_like(N, M_s))
     incs = sample_inc(np.random.rand(N))
+    eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=P_orb)
+    argps = sample_w(np.random.rand(N))
 
     # calculate transit probability for each instance
-    Ptra = (rps*Rearth + R_s*Rsun)/a
+    e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
+    Ptra = (rps*Rearth + R_s*Rsun)/a * e_corr
+
+    # find instances with collisions
+    coll = ((rps*Rearth + R_s*Rsun) > a*(1-eccs))
 
     lnL = np.full(N, -np.inf)
     for i in range(N):
@@ -853,10 +916,11 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             inc_min = np.arccos(Ptra[i]) * 180/pi
         else:
             continue
-        if incs[i] >= inc_min:
+        if (incs[i] >= inc_min) & (coll[i] == False):
             lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
                 time, flux, sigma, rps[i],
                 P_orb, incs[i], a, R_s, u1, u2,
+                eccs[i], argps[i],
                 companion_fluxratio=fluxratios_comp[idxs[i]],
                 companion_is_host=False
                 )
@@ -869,6 +933,7 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     res = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,
         'P_orb': P_orb, 'inc': incs[idx], 'R_p': rps[idx],
+        'ecc': eccs[idx], 'argp': argps[idx],
         'M_EB': 0, 'R_EB': 0, 'fluxratio_EB': 0,
         'fluxratio_comp': fluxratios_comp[idxs[idx]], 'lnZ': lnZ
     }
@@ -915,6 +980,8 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # sample from inc and q prior distributions
     incs = sample_inc(np.random.rand(N))
     qs = sample_q(np.random.rand(N))
+    eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=P_orb)
+    argps = sample_w(np.random.rand(N))
 
     # calculate properties of the drawn EBs
     masses = qs*M_s
@@ -964,10 +1031,15 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     lnprior_Porb = lnprior_Porb_binary(P_orb)
 
     # calculate transit probability for each instance
+    e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
     a = ((G*(M_s+masses)*Msun)/(4*pi**2)*(P_orb*86400)**2)**(1/3)
-    Ptra = (radii*Rsun + R_s*Rsun)/a
+    Ptra = (radii*Rsun + R_s*Rsun)/a * e_corr
     a_twin = ((G*(M_s+masses)*Msun)/(4*pi**2)*(2*P_orb*86400)**2)**(1/3)
-    Ptra_twin = (radii*Rsun + R_s*Rsun)/a_twin
+    Ptra_twin = (radii*Rsun + R_s*Rsun)/a_twin * e_corr
+
+    # find instances with collisions
+    coll = ((radii*Rsun + R_s*Rsun) > a*(1-eccs))
+    coll_twin = ((2*R_s*Rsun) > a_twin*(1-eccs))
 
     lnL = np.full(N, -np.inf)
     lnL_twin = np.full(N, -np.inf)
@@ -977,10 +1049,11 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             inc_min = np.arccos(Ptra[i]) * 180/pi
         else:
             continue
-        if (incs[i] >= inc_min) & (qs[i] < 0.95):
+        if (incs[i] >= inc_min) & (qs[i] < 0.95) & (coll[i] == False):
             lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
                 time, flux, sigma, radii[i], fluxratios[i],
                 P_orb, incs[i], a[i], R_s, u1, u2,
+                eccs[i], argps[i],
                 companion_fluxratio=fluxratios_comp[idxs[i]],
                 companion_is_host=False
                 )
@@ -989,10 +1062,11 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             inc_min = np.arccos(Ptra_twin[i]) * 180/pi
         else:
             continue
-        if (incs[i] >= inc_min) & (qs[i] >= 0.95):
+        if (incs[i] >= inc_min) & (qs[i] >= 0.95) & (coll_twin[i] == False):
             lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
                 time, flux, sigma, radii[i], fluxratios[i],
                 2*P_orb, incs[i], a_twin[i], R_s, u1, u2,
+                eccs[i], argps[i],
                 companion_fluxratio=fluxratios_comp[idxs[i]],
                 companion_is_host=False
                 )
@@ -1006,6 +1080,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     res = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,
         'P_orb': P_orb, 'inc': incs[idx], 'R_p': 0,
+        'ecc': eccs[idx], 'argp': argps[idx],
         'M_EB': masses[idx], 'R_EB': radii[idx],
         'fluxratio_EB': fluxratios[idx],
         'fluxratio_comp': fluxratios_comp[idxs[idx]], 'lnZ': lnZ
@@ -1019,6 +1094,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     res_twin = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,
         'P_orb': 2*P_orb, 'inc': incs[idx], 'R_p': 0,
+        'ecc': eccs[idx], 'argp': argps[idx],
         'M_EB': masses[idx], 'R_EB': radii[idx],
         'fluxratio_EB': fluxratios[idx],
         'fluxratio_comp': fluxratios_comp[idxs[idx]], 'lnZ': lnZ
@@ -1104,10 +1180,16 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     # sample from inc and R_p prior distributions
     rps = sample_rp(np.random.rand(N), masses_comp[idxs])
     incs = sample_inc(np.random.rand(N))
+    eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=P_orb)
+    argps = sample_w(np.random.rand(N))
 
     # calculate transit probability for each instance
+    e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
     a = ((G*masses_comp[idxs]*Msun)/(4*pi**2)*(P_orb*86400)**2)**(1/3)
-    Ptra = (rps*Rearth + radii_comp[idxs[i]]*Rsun)/a
+    Ptra = (rps*Rearth + radii_comp[idxs[i]]*Rsun)/a * e_corr
+
+    # find instances with collisions
+    coll = ((rps*Rearth + radii_comp[idxs[i]]*Rsun) > a*(1-eccs))
 
     lnL = np.full(N, -np.inf)
     for i in range(N):
@@ -1116,11 +1198,12 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         else:
             continue
         if ((incs[i] >= inc_min) & (loggs_comp[idxs[i]] >= 3.5)
-                & (Teffs_comp[idxs[i]] <= 10000)):
+                & (Teffs_comp[idxs[i]] <= 10000) & (coll[i] == False)):
             lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
                 time, flux, sigma, rps[i],
                 P_orb, incs[i], a[i], radii_comp[idxs[i]],
                 u1s_comp[idxs[i]], u2s_comp[idxs[i]],
+                eccs[i], argps[i],
                 companion_fluxratio=fluxratios_comp[idxs[i]],
                 companion_is_host=True
                 )
@@ -1134,6 +1217,7 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         'M_s': masses_comp[idxs[idx]], 'R_s': radii_comp[idxs[idx]],
         'u1': u1s_comp[idxs[idx]], 'u2': u2s_comp[idxs[idx]],
         'P_orb': P_orb, 'inc': incs[idx], 'R_p': rps[idx],
+        'ecc': eccs[idx], 'argp': argps[idx],
         'M_EB': 0, 'R_EB': 0, 'fluxratio_EB': 0,
         'fluxratio_comp': fluxratios_comp[idxs[idx]], 'lnZ': lnZ
     }
@@ -1165,10 +1249,12 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     """
     lnsigma = np.log(sigma)
 
-    # sample from inc and q prior distributions
+    # sample from prior distributions
     incs = sample_inc(np.random.rand(N))
     qs = sample_q(np.random.rand(N))
     qs_comp = sample_q_companion(np.random.rand(N))
+    eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=P_orb)
+    argps = sample_w(np.random.rand(N))
 
     # determine background star population properties
     Tmags_comp, masses_comp, loggs_comp, Teffs_comp, Zs_comp = (
@@ -1248,14 +1334,19 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     lnprior_Porb = lnprior_Porb_binary(P_orb)
 
     # calculate transit probability for each instance
+    e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
     a = (
         (G*(masses_comp[idxs]+masses)*Msun)/(4*pi**2)*(P_orb*86400)**2
         )**(1/3)
-    Ptra = (radii*Rsun + radii_comp[idxs]*Rsun)/a
+    Ptra = (radii*Rsun + radii_comp[idxs]*Rsun)/a * e_corr
     a_twin = (
         (G*(masses_comp[idxs]+masses)*Msun)/(4*pi**2)*(2*P_orb*86400)**2
         )**(1/3)
-    Ptra_twin = (radii*Rsun + radii_comp[idxs]*Rsun)/a_twin
+    Ptra_twin = (radii*Rsun + radii_comp[idxs]*Rsun)/a_twin * e_corr
+
+    # find instances with collisions
+    coll = ((radii*Rsun + radii_comp[idxs]*Rsun) > a*(1-eccs))
+    coll_twin = ((2*radii_comp[idxs]*Rsun) > a_twin*(1-eccs))
 
     lnL = np.full(N, -np.inf)
     lnL_twin = np.full(N, -np.inf)
@@ -1267,11 +1358,13 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             continue
         if ((incs[i] >= inc_min) & (qs[i] < 0.95)
                 & (loggs_comp[idxs[i]] >= 3.5)
-                & (Teffs_comp[idxs[i]] <= 10000)):
+                & (Teffs_comp[idxs[i]] <= 10000)
+                & (coll[i] == False)):
             lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
                 time, flux, sigma, radii[i], fluxratios[i],
                 P_orb, incs[i], a[i], radii_comp[idxs[i]],
                 u1s_comp[idxs[i]], u2s_comp[idxs[i]],
+                eccs[i], argps[i],
                 companion_fluxratio=fluxratios_comp[idxs[i]],
                 companion_is_host=True
                 )
@@ -1282,11 +1375,13 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             continue
         if ((incs[i] >= inc_min) & (qs[i] >= 0.95)
                 & (loggs_comp[idxs[i]] >= 3.5)
-                & (Teffs_comp[idxs[i]] <= 10000)):
+                & (Teffs_comp[idxs[i]] <= 10000)
+                & (coll_twin[i] == False)):
             lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
                 time, flux, sigma, radii[i], fluxratios[i],
                 2*P_orb, incs[i], a_twin[i], radii_comp[idxs[i]],
                 u1s_comp[idxs[i]], u2s_comp[idxs[i]],
+                eccs[i], argps[i],
                 companion_fluxratio=fluxratios_comp[idxs[i]],
                 companion_is_host=True
                 )
@@ -1301,6 +1396,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         'M_s': masses_comp[idxs[idx]], 'R_s': radii_comp[idxs[idx]],
         'u1': u1s_comp[idxs[idx]], 'u2': u2s_comp[idxs[idx]],
         'P_orb': P_orb, 'inc': incs[idx], 'R_p': 0,
+        'ecc': eccs[idx], 'argp': argps[idx],
         'M_EB': masses[idx], 'R_EB': radii[idx],
         'fluxratio_EB': fluxratios[idx],
         'fluxratio_comp': fluxratios_comp[idxs[idx]], 'lnZ': lnZ
@@ -1315,6 +1411,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         'M_s': masses_comp[idxs[idx]], 'R_s': radii_comp[idxs[idx]],
         'u1': u1s_comp[idxs[idx]], 'u2': u2s_comp[idxs[idx]],
         'P_orb': 2*P_orb, 'inc': incs[idx], 'R_p': 0,
+        'ecc': eccs[idx], 'argp': argps[idx],
         'M_EB': masses[idx], 'R_EB': radii[idx],
         'fluxratio_EB': fluxratios[idx],
         'fluxratio_comp': fluxratios_comp[idxs[idx]], 'lnZ': lnZ
@@ -1383,6 +1480,7 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         res = {
             'M_s': 0, 'R_s': 0, 'u1': 0, 'u2': 0,
             'P_orb': P_orb, 'inc': 0, 'R_p': 0,
+            'ecc': 0, 'argp': 0,
             'M_EB': 0, 'R_EB': 0, 'fluxratio_EB': 0,
             'fluxratio_comp': 0, 'lnZ': -np.inf
         }
@@ -1398,12 +1496,18 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
     # sample from inc and R_p prior distributions
     rps = sample_rp(np.random.rand(N), masses_possible[idxs])
     incs = sample_inc(np.random.rand(N))
+    eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=P_orb)
+    argps = sample_w(np.random.rand(N))
 
     # calculate transit probability for each instance
+    e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
     a = (
         (G*masses_possible[idxs]*Msun)/(4*pi**2)*(P_orb*86400)**2
         )**(1/3)
-    Ptra = (rps*Rearth + radii_possible[idxs]*Rsun)/a
+    Ptra = (rps*Rearth + radii_possible[idxs]*Rsun)/a * e_corr
+
+    # find instances with collisions
+    coll = ((rps*Rearth + radii_possible[idxs]*Rsun) > a*(1-eccs))
 
     lnL = np.full(N, -np.inf)
     for i in range(N):
@@ -1412,11 +1516,13 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         else:
             continue
         if ((incs[i] >= inc_min) & (loggs_possible[idxs[i]] >= 3.5)
-                & (Teffs_possible[idxs[i]] <= 10000)):
+                & (Teffs_possible[idxs[i]] <= 10000)
+                & (coll[i] == False)):
             lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
                 time, flux, sigma, rps[i],
                 P_orb, incs[i], a[i], radii_possible[idxs[i]],
-                u1s_possible[idxs[i]], u2s_possible[idxs[i]]
+                u1s_possible[idxs[i]], u2s_possible[idxs[i]],
+                eccs[i], argps[i]
                 )
 
     idx = lnL.argmax()
@@ -1426,6 +1532,7 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         'M_s': masses_possible[idxs[idx]], 'R_s': radii_possible[idxs[idx]],
         'u1': u1s_possible[idxs[idx]], 'u2': u2s_possible[idxs[idx]],
         'P_orb': P_orb, 'inc': incs[idx], 'R_p': rps[idx],
+        'ecc': eccs[idx], 'argp': argps[idx],
         'M_EB': 0, 'R_EB': 0, 'fluxratio_EB': 0,
         'fluxratio_comp': 0, 'lnZ': lnZ
     }
@@ -1453,9 +1560,11 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
     """
     lnsigma = np.log(sigma)
 
-    # sample from inc and q prior distributions
+    # sample from prior distributions
     incs = sample_inc(np.random.rand(N))
     qs = sample_q(np.random.rand(N))
+    eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=P_orb)
+    argps = sample_w(np.random.rand(N))
 
     # determine properties of possible stars
     Tmags_nearby, masses_nearby, loggs_nearby, Teffs_nearby, Zs_nearby = (
@@ -1498,6 +1607,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         res = {
             'M_s': 0, 'R_s': 0, 'u1': 0, 'u2': 0,
             'P_orb': P_orb, 'inc': 0, 'R_p': 0,
+            'ecc': 0, 'argp': 0,
             'M_EB': 0, 'R_EB': 0, 'fluxratio_EB': 0,
             'fluxratio_comp': 0, 'lnZ': -np.inf
         }
@@ -1522,16 +1632,21 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
     lnprior_Porb = lnprior_Porb_binary(P_orb)
 
     # calculate transit probability for each instance
+    e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
     a = (
         (G*(masses_possible[idxs]+masses)*Msun)/(4*pi**2)
         * (P_orb*86400)**2
         )**(1/3)
-    Ptra = (radii*Rsun + radii_possible[idxs]*Rsun)/a
+    Ptra = (radii*Rsun + radii_possible[idxs]*Rsun)/a * e_corr
     a_twin = (
         (G*(masses_possible[idxs]+masses)*Msun)/(4*pi**2)
         * (2*P_orb*86400)**2
         )**(1/3)
-    Ptra_twin = (radii*Rsun + radii_possible[idxs]*Rsun)/a_twin
+    Ptra_twin = (radii*Rsun + radii_possible[idxs]*Rsun)/a_twin * e_corr
+
+    # find instances with collisions
+    coll = ((radii*Rsun + radii_possible[idxs]*Rsun) > a*(1-eccs))
+    coll_twin = ((2*radii_possible[idxs]*Rsun) > a_twin*(1-eccs))
 
     lnL = np.full(N, -np.inf)
     lnL_twin = np.full(N, -np.inf)
@@ -1543,11 +1658,13 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
             continue
         if ((incs[i] >= inc_min) & (qs[i] < 0.95)
                 & (loggs_possible[idxs[i]] >= 3.5)
-                & (Teffs_possible[idxs[i]] <= 10000)):
+                & (Teffs_possible[idxs[i]] <= 10000)
+                & (coll[i] == False)):
             lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
                 time, flux, sigma, radii[i], fluxratios[i],
                 P_orb, incs[i], a[i], radii_possible[idxs[i]],
-                u1s_possible[idxs[i]], u2s_possible[idxs[i]]
+                u1s_possible[idxs[i]], u2s_possible[idxs[i]],
+                eccs[i], argps[i]
                 )
         # q >= 0.95 and 2xP_orb
         if Ptra_twin[i] <= 1:
@@ -1556,11 +1673,13 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
             continue
         if ((incs[i] >= inc_min) & (qs[i] >= 0.95)
                 & (loggs_possible[idxs[i]] >= 3.5)
-                & (Teffs_possible[idxs[i]] <= 10000)):
+                & (Teffs_possible[idxs[i]] <= 10000)
+                & (coll_twin[i] == False)):
             lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
                 time, flux, sigma, radii[i], fluxratios[i],
                 2*P_orb, incs[i], a_twin[i], radii_possible[idxs[i]],
-                u1s_possible[idxs[i]], u2s_possible[idxs[i]]
+                u1s_possible[idxs[i]], u2s_possible[idxs[i]],
+                eccs[i], argps[i]
                 )
 
     # results for q < 0.95
@@ -1572,6 +1691,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         'R_s': radii_possible[idxs[idx]],
         'u1': u1s_possible[idxs[idx]], 'u2': u2s_possible[idxs[idx]],
         'P_orb': P_orb, 'inc': incs[idx], 'R_p': 0,
+        'ecc': eccs[idx], 'argp': argps[idx],
         'M_EB': masses[idx], 'R_EB': radii[idx],
         'fluxratio_EB': fluxratios[idx],
         'fluxratio_comp': 0, 'lnZ': lnZ
@@ -1585,6 +1705,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         'R_s': radii_possible[idxs[idx]],
         'u1': u1s_possible[idxs[idx]], 'u2': u2s_possible[idxs[idx]],
         'P_orb': 2*P_orb, 'inc': incs[idx], 'R_p': 0,
+        'ecc': eccs[idx], 'argp': argps[idx],
         'M_EB': masses[idx], 'R_EB': radii[idx],
         'fluxratio_EB': fluxratios[idx],
         'fluxratio_comp': 0, 'lnZ': lnZ
@@ -1635,10 +1756,16 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     # sample from inc and R_p prior distributions
     rps = sample_rp(np.random.rand(N), np.full_like(N, M_s))
     incs = sample_inc(np.random.rand(N))
+    eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=P_orb)
+    argps = sample_w(np.random.rand(N))
 
     # calculate transit probability for each instance
+    e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
     a = ((G*M_s*Msun)/(4*pi**2)*(P_orb*86400)**2)**(1/3)
-    Ptra = (rps*Rearth + R_s*Rsun)/a
+    Ptra = (rps*Rearth + R_s*Rsun)/a * e_corr
+
+    # find instances with collisions
+    coll = ((rps*Rearth + R_s*Rsun) > a*(1-eccs))
 
     lnL = np.full(N, -np.inf)
     for i in range(N):
@@ -1646,10 +1773,11 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
             inc_min = np.arccos(Ptra[i]) * 180/pi
         else:
             continue
-        if (incs[i] >= inc_min) & (a > R_s):
+        if (incs[i] >= inc_min) & (a > R_s) & (coll[i] == False):
             lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
                 time, flux, sigma, rps[i],
-                P_orb, incs[i], a, R_s, u1, u2
+                P_orb, incs[i], a, R_s, u1, u2,
+                eccs[i], argps[i]
                 )
 
     idx = lnL.argmax()
@@ -1658,6 +1786,7 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     res = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,
         'P_orb': P_orb, 'inc': incs[idx], 'R_p': rps[idx],
+        'ecc': eccs[idx], 'argp': argps[idx],
         'M_EB': 0, 'R_EB': 0, 'fluxratio_EB': 0,
         'fluxratio_comp': 0, 'lnZ': lnZ
     }
@@ -1701,6 +1830,8 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     # sample from inc and q prior distributions
     incs = sample_inc(np.random.rand(N))
     qs = sample_q(np.random.rand(N))
+    eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=P_orb)
+    argps = sample_w(np.random.rand(N))
 
     # calculate properties of the drawn EBs
     masses = qs*M_s
@@ -1720,10 +1851,15 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     lnprior_Porb = lnprior_Porb_binary(P_orb)
 
     # calculate transit probability for each instance
+    e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
     a = ((G*(M_s+masses)*Msun)/(4*pi**2)*(P_orb*86400)**2)**(1/3)
-    Ptra = (radii*Rsun + R_s*Rsun)/a
+    Ptra = (radii*Rsun + R_s*Rsun)/a * e_corr
     a_twin = ((G*(M_s+masses)*Msun)/(4*pi**2)*(2*P_orb*86400)**2)**(1/3)
-    Ptra_twin = (R_s*Rsun + R_s*Rsun)/a_twin
+    Ptra_twin = (R_s*Rsun + R_s*Rsun)/a_twin * e_corr
+
+    # find instances with collisions
+    coll = ((radii*Rsun + R_s*Rsun) > a*(1-eccs))
+    coll_twin = ((2*R_s*Rsun) > a_twin*(1-eccs))
 
     lnL = np.full(N, -np.inf)
     lnL_twin = np.full(N, -np.inf)
@@ -1734,20 +1870,23 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
         else:
             continue
         if ((incs[i] >= inc_min) & (qs[i] < 0.95)
-                & (a[i] > R_s+radii[i])):
+                & (coll[i] == False)):
             lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
                 time, flux, sigma, radii[i], fluxratios[i],
-                P_orb, incs[i], a[i], R_s, u1, u2
+                P_orb, incs[i], a[i], R_s, u1, u2,
+                eccs[i], argps[i]
                 )
         # q >= 0.95 and 2xP_orb
         if Ptra_twin[i] <= 1:
             inc_min = np.arccos(Ptra_twin[i]) * 180/pi
         else:
             continue
-        if (incs[i] >= inc_min) & (qs[i] >= 0.95) & (a_twin[i] > 2*R_s):
+        if ((incs[i] >= inc_min) & (qs[i] >= 0.95)
+        	    & (coll_twin[i] == False)):
             lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
                 time, flux, sigma, R_s, fluxratios[i],
-                2*P_orb, incs[i], a_twin[i], R_s, u1, u2
+                2*P_orb, incs[i], a_twin[i], R_s, u1, u2,
+                eccs[i], argps[i]
                 )
 
     # results for q < 0.95
@@ -1757,6 +1896,7 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     res = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,
         'P_orb': P_orb, 'inc': incs[idx], 'R_p': 0,
+        'ecc': eccs[idx], 'argp': argps[idx],
         'M_EB': masses[idx], 'R_EB': radii[idx],
         'fluxratio_EB': fluxratios[idx],
         'fluxratio_comp': 0, 'lnZ': lnZ
@@ -1768,6 +1908,7 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     res_twin = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,
         'P_orb': 2*P_orb, 'inc': incs[idx], 'R_p': 0,
+        'ecc': eccs[idx], 'argp': argps[idx],
         'M_EB': masses[idx], 'R_EB': R_s,
         'fluxratio_EB': fluxratios[idx],
         'fluxratio_comp': 0, 'lnZ': lnZ

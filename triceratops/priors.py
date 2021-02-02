@@ -1,8 +1,9 @@
 import numpy as np
+from scipy.stats import beta, powerlaw
 from astropy import constants
 from .funcs import (file_to_contrast_curve,
-                    separation_at_contrast,
-                    trilegal_results)
+                   separation_at_contrast,
+                   trilegal_results)
 
 Msun = constants.M_sun.cgs.value
 Rsun = constants.R_sun.cgs.value
@@ -119,13 +120,45 @@ def sample_inc(x, lower=0, upper=90):
         Upper (float): Upper bound of inclinations [deg].
     Returns:
         x (numpy array): Sampled inclinations [deg].
-
     """
     # normalizing constant
     Norm = 1/(np.cos(lower*np.pi/180) - np.cos(upper*np.pi/180))
     x = np.arccos(np.cos(lower*np.pi/180) - x/Norm) * 180/np.pi
     return x
 
+def sample_ecc(x, planet, P_orb):
+    """
+    Samples eccentricities using a Beta distribution
+    for planets (see Kipping 2013) and a power law
+    distirbution for binaries (see Moe & Di Stefano 2017).
+    Args:
+        x (numpy array): Random numbers between 0 and 1.
+        planet (bool): True if planet and False if binary.
+        P_orb (float): Orbital period.
+    Returns:
+        x (numpy array): Sampled eccentricities.
+    """
+    size = len(x)
+    if planet == True:
+        x = beta.rvs(0.867, 3.030, size=size)
+    else:
+        if P_orb <= 10:
+            # note the variable is nu+1, not nu
+            x = powerlaw.rvs(0.2, size=size)
+        else:
+            x = powerlaw.rvs(0.6, size=size)
+    return x
+
+def sample_w(x):
+    """
+    Samples argument of periastron.
+    Args:
+        x (numpy array): Random numbers between 0 and 1.
+    Returns:
+        x (numpy array): Sampled args of periastron [deg].
+    """
+    x = x*360
+    return x
 
 def sample_q(x):
     """

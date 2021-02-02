@@ -10,13 +10,16 @@ from pandas import DataFrame, read_csv
 from math import floor, ceil
 import matplotlib.pyplot as plt
 from matplotlib import cm, ticker
+from mpl_toolkits.axes_grid1.anchored_artists import (
+    AnchoredDirectionArrows
+    )
 
 from .likelihoods import (simulate_TP_transit,
-                          simulate_EB_transit)
+                         simulate_EB_transit)
 from .funcs import (Gauss2D,
-                    query_TRILEGAL,
-                    renorm_flux,
-                    stellar_relations)
+                   query_TRILEGAL,
+                   renorm_flux,
+                   stellar_relations)
 from .marginal_likelihoods import *
 
 Msun = constants.M_sun.cgs.value
@@ -56,7 +59,7 @@ class target:
             "ID", "Tmag", "ra", "dec", "mass", "rad", "Teff", "plx"
             ]
         stars = new_df.to_pandas()
-        self.stars = stars
+
 
         TESS_images = []
         col0s, row0s = [], []
@@ -94,6 +97,37 @@ class target:
                 pix_coord[i, 1] = row0+Decpix
             pix_coords.append(pix_coord)
 
+        # for each star, get the separation and position angle
+        # from the targets star
+        sep = [0]
+        pa = [0]
+        c_target = SkyCoord(
+            stars["ra"].values[0],
+            stars["dec"].values[0],
+            unit="deg"
+            )
+        for i in range(1,len(stars)):
+            c_star = SkyCoord(
+                stars["ra"].values[i],
+                stars["dec"].values[i],
+                unit="deg"
+                )
+            sep.append(
+                np.round(
+                    c_star.separation(c_target).to(u.arcsec).value,
+                    3
+                    )
+                )
+            pa.append(
+                np.round(
+                    c_star.position_angle(c_target).to(u.deg).value,
+                    3
+                    )
+                )
+        stars["sep (arcsec)"] = sep
+        stars["PA (E of N)"] = pa
+
+        self.stars = stars
         self.TESS_images = TESS_images
         self.col0s = col0s
         self.row0s = row0s
@@ -133,13 +167,16 @@ class target:
                 )
         return
 
-    def plot_field(self, sector: int = None, ap_pixels=None):
+    def plot_field(self, sector: int = None, ap_pixels=None,
+                   ap_color: str = "red", save_plot: str = False):
         """
         Plots the field of stars and pixels around the target.
         Args:
             sector (int): Sector to plot.
             ap_pixels (numpy array): Aperture used to
                                      extract light curve.
+            ap_color (str): Color of aperture outline.
+            save_plot (str): Whether or not to save plot as png.
         """
         if len(self.sectors) > 1:
             idx = np.argwhere(self.sectors == sector)[0, 0]
@@ -148,26 +185,42 @@ class target:
 
         corners = np.arange(-0.5, self.N_pix+0.5, 1)
         centers = np.arange(0, self.N_pix, 1)
-        fig, ax = plt.subplots(1, 2, figsize=(15, 6))
-        plt.subplots_adjust(wspace=0.15)
+        fig, ax = plt.subplots(1, 2, figsize=(13, 5.5))
+        plt.subplots_adjust(right=0.9)
         # aperture
         if ap_pixels is not None:
             for i in range(len(ap_pixels)):
-                ax[0].fill_between(
+                ax[0].plot(
                     [ap_pixels[i][0]-0.5, ap_pixels[i][0]+0.5],
                     [ap_pixels[i][1]-0.5, ap_pixels[i][1]-0.5],
+                    color=ap_color, zorder=1
+                    )
+                ax[0].plot(
+                    [ap_pixels[i][0]-0.5, ap_pixels[i][0]+0.5],
                     [ap_pixels[i][1]+0.5, ap_pixels[i][1]+0.5],
-                    color="cyan", alpha=0.5
+                    color=ap_color, zorder=1
+                    )
+                ax[0].plot(
+                    [ap_pixels[i][0]-0.5, ap_pixels[i][0]-0.5],
+                    [ap_pixels[i][1]-0.5, ap_pixels[i][1]+0.5],
+                    color=ap_color, zorder=1
+                    )
+                ax[0].plot(
+                    [ap_pixels[i][0]+0.5, ap_pixels[i][0]+0.5],
+                    [ap_pixels[i][1]-0.5, ap_pixels[i][1]+0.5],
+                    color=ap_color, zorder=1
                     )
         # pixel grid
         for i in corners:
             ax[0].plot(
                 np.full_like(corners, self.col0s[idx]+i),
-                self.row0s[idx]+corners, "k-", lw=0.5
+                self.row0s[idx]+corners, "k-", lw=0.5,
+                zorder=0
                 )
             ax[0].plot(
                 self.col0s[idx]+corners,
-                np.full_like(corners, self.row0s[idx]+i), "k-", lw=0.5
+                np.full_like(corners, self.row0s[idx]+i), "k-", lw=0.5,
+                zorder=0
                 )
         # search radius
         ax[0].plot(
@@ -181,30 +234,57 @@ class target:
                 + self.search_radius
                 * np.sin(np.linspace(0, 2*pi, 100))
             ),
-            "k--", alpha=0.5)
+            "k--", alpha=0.5, zorder=0)
+        # N and E arrows
+        v1 = np.array([0, 1])
+        v2 = self.pix_coords[0][1] - self.pix_coords[0][0]
+        sign = np.sign(v2[0])
+        angle1 = sign * (
+            np.arccos(np.dot(v1, v2)
+            / np.sqrt((np.dot(v1, v1)) * np.dot(v2, v2))) * 180/np.pi
+            )
+        angle2 = self.stars["PA (E of N)"].values[1]
+        rot = angle1-angle2
+        roatated_arrow = AnchoredDirectionArrows(
+                            ax[0].transAxes,
+                            "E", "N",
+                            loc="upper left",
+                            color="k",
+                            angle=-rot,
+                            length=0.1,
+                            fontsize=0.05,
+                            back_length=0,
+                            head_length=5,
+                            head_width=5,
+                            tail_width=1
+                            )
+        ax[0].add_artist(roatated_arrow)
         # stars
         sc = ax[0].scatter(
-            self.pix_coords[idx][:, 0],
-            self.pix_coords[idx][:, 1],
-            c=self.stars["Tmag"], s=75,
+            self.pix_coords[idx][1:, 0],
+            self.pix_coords[idx][1:, 1],
+            c=self.stars["Tmag"].values[1:], s=75,
             edgecolors="k",
             cmap=cm.viridis_r,
             vmin=floor(min(self.stars["Tmag"])),
-            vmax=ceil(max(self.stars["Tmag"]))
+            vmax=ceil(max(self.stars["Tmag"])),
+            zorder=2
+            )
+        ax[0].scatter(
+            [self.pix_coords[idx][0, 0]],
+            [self.pix_coords[idx][0, 1]],
+            c=[self.stars["Tmag"].values[0]], s=250,
+            marker="*",
+            edgecolors="k",
+            cmap=cm.viridis_r,
+            vmin=floor(min(self.stars["Tmag"])),
+            vmax=ceil(max(self.stars["Tmag"])),
+            zorder=2
             )
         cb1 = fig.colorbar(sc, ax=ax[0], pad=0.02)
         cb1.ax.set_ylabel(
-            "T mag", rotation=270, fontsize=12, labelpad=18
+            "TESS mag", rotation=270, fontsize=12, labelpad=18
             )
-        for i in range(len(self.stars)):
-            ax[0].annotate(
-                str(i),
-                (
-                    self.pix_coords[idx][i, 0]-1,
-                    self.pix_coords[idx][i, 1]-1
-                ),
-                fontsize=12
-                )
         ax[0].set_ylim([
             min(self.row0s[idx]+corners),
             max(self.row0s[idx]+corners)
@@ -249,13 +329,33 @@ class target:
         # aperture
         if ap_pixels is not None:
             for i in range(len(ap_pixels)):
-                ax[1].fill_between(
+                ax[1].plot(
                     [ap_pixels[i][0]-0.5, ap_pixels[i][0]+0.5],
                     [ap_pixels[i][1]-0.5, ap_pixels[i][1]-0.5],
-                    [ap_pixels[i][1]+0.5, ap_pixels[i][1]+0.5],
-                    color="cyan", alpha=0.2
+                    color=ap_color, zorder=2
                     )
-        plt.show()
+                ax[1].plot(
+                    [ap_pixels[i][0]-0.5, ap_pixels[i][0]+0.5],
+                    [ap_pixels[i][1]+0.5, ap_pixels[i][1]+0.5],
+                    color=ap_color, zorder=2
+                    )
+                ax[1].plot(
+                    [ap_pixels[i][0]-0.5, ap_pixels[i][0]-0.5],
+                    [ap_pixels[i][1]-0.5, ap_pixels[i][1]+0.5],
+                    color=ap_color, zorder=2
+                    )
+                ax[1].plot(
+                    [ap_pixels[i][0]+0.5, ap_pixels[i][0]+0.5],
+                    [ap_pixels[i][1]-0.5, ap_pixels[i][1]+0.5],
+                    color=ap_color, zorder=2
+                    )
+        if save_plot is False:
+            plt.tight_layout()
+            plt.show()
+        else:
+            plt.tight_layout()
+            target_star = self.stars.ID.values[0]
+            plt.savefig("TIC"+str(target_star)+"_field.png")
         return
 
     def calc_depths(self, tdepth: float, all_ap_pixels):
@@ -350,6 +450,8 @@ class target:
         best_P_orb = np.zeros(N_scenarios)
         best_i = np.zeros(N_scenarios)
         best_R_p = np.zeros(N_scenarios)
+        best_ecc = np.zeros(N_scenarios)
+        best_argp = np.zeros(N_scenarios)
         best_M_EB = np.zeros(N_scenarios)
         best_R_EB = np.zeros(N_scenarios)
         best_fluxratio_EB = np.zeros(N_scenarios)
@@ -408,6 +510,8 @@ class target:
                     best_P_orb[j] = res["P_orb"]
                     best_i[j] = res["inc"]
                     best_R_p[j] = res["R_p"]
+                    best_ecc[j] = res["ecc"]
+                    best_argp[j] = res["argp"]
                     best_M_EB[j] = res["M_EB"]
                     best_R_EB[j] = res["R_EB"]
                     best_fluxratio_EB[j] = res["fluxratio_EB"]
@@ -429,6 +533,8 @@ class target:
                     best_P_orb[j] = res["P_orb"]
                     best_i[j] = res["inc"]
                     best_R_p[j] = res["R_p"]
+                    best_ecc[j] = res["ecc"]
+                    best_argp[j] = res["argp"]
                     best_M_EB[j] = res["M_EB"]
                     best_R_EB[j] = res["R_EB"]
                     best_fluxratio_EB[j] = res["fluxratio_EB"]
@@ -445,6 +551,8 @@ class target:
                     best_P_orb[j] = res_twin["P_orb"]
                     best_i[j] = res_twin["inc"]
                     best_R_p[j] = res_twin["R_p"]
+                    best_ecc[j] = res_twin["ecc"]
+                    best_argp[j] = res_twin["argp"]
                     best_M_EB[j] = res_twin["M_EB"]
                     best_R_EB[j] = res_twin["R_EB"]
                     best_fluxratio_EB[j] = res_twin["fluxratio_EB"]
@@ -472,6 +580,8 @@ class target:
                     best_P_orb[j] = res["P_orb"]
                     best_i[j] = res["inc"]
                     best_R_p[j] = res["R_p"]
+                    best_ecc[j] = res["ecc"]
+                    best_argp[j] = res["argp"]
                     best_M_EB[j] = res["M_EB"]
                     best_R_EB[j] = res["R_EB"]
                     best_fluxratio_EB[j] = res["fluxratio_EB"]
@@ -494,6 +604,8 @@ class target:
                     best_P_orb[j] = res["P_orb"]
                     best_i[j] = res["inc"]
                     best_R_p[j] = res["R_p"]
+                    best_ecc[j] = res["ecc"]
+                    best_argp[j] = res["argp"]
                     best_M_EB[j] = res["M_EB"]
                     best_R_EB[j] = res["R_EB"]
                     best_fluxratio_EB[j] = res["fluxratio_EB"]
@@ -510,6 +622,8 @@ class target:
                     best_P_orb[j] = res_twin["P_orb"]
                     best_i[j] = res_twin["inc"]
                     best_R_p[j] = res_twin["R_p"]
+                    best_ecc[j] = res_twin["ecc"]
+                    best_argp[j] = res_twin["argp"]
                     best_M_EB[j] = res_twin["M_EB"]
                     best_R_EB[j] = res_twin["R_EB"]
                     best_fluxratio_EB[j] = res_twin["fluxratio_EB"]
@@ -537,6 +651,8 @@ class target:
                     best_P_orb[j] = res["P_orb"]
                     best_i[j] = res["inc"]
                     best_R_p[j] = res["R_p"]
+                    best_ecc[j] = res["ecc"]
+                    best_argp[j] = res["argp"]
                     best_M_EB[j] = res["M_EB"]
                     best_R_EB[j] = res["R_EB"]
                     best_fluxratio_EB[j] = res["fluxratio_EB"]
@@ -559,6 +675,8 @@ class target:
                     best_P_orb[j] = res["P_orb"]
                     best_i[j] = res["inc"]
                     best_R_p[j] = res["R_p"]
+                    best_ecc[j] = res["ecc"]
+                    best_argp[j] = res["argp"]
                     best_M_EB[j] = res["M_EB"]
                     best_R_EB[j] = res["R_EB"]
                     best_fluxratio_EB[j] = res["fluxratio_EB"]
@@ -575,6 +693,8 @@ class target:
                     best_P_orb[j] = res_twin["P_orb"]
                     best_i[j] = res_twin["inc"]
                     best_R_p[j] = res_twin["R_p"]
+                    best_ecc[j] = res_twin["ecc"]
+                    best_argp[j] = res_twin["argp"]
                     best_M_EB[j] = res_twin["M_EB"]
                     best_R_EB[j] = res_twin["R_EB"]
                     best_fluxratio_EB[j] = res_twin["fluxratio_EB"]
@@ -602,6 +722,8 @@ class target:
                     best_P_orb[j] = res["P_orb"]
                     best_i[j] = res["inc"]
                     best_R_p[j] = res["R_p"]
+                    best_ecc[j] = res["ecc"]
+                    best_argp[j] = res["argp"]
                     best_M_EB[j] = res["M_EB"]
                     best_R_EB[j] = res["R_EB"]
                     best_fluxratio_EB[j] = res["fluxratio_EB"]
@@ -624,6 +746,8 @@ class target:
                     best_P_orb[j] = res["P_orb"]
                     best_i[j] = res["inc"]
                     best_R_p[j] = res["R_p"]
+                    best_ecc[j] = res["ecc"]
+                    best_argp[j] = res["argp"]
                     best_M_EB[j] = res["M_EB"]
                     best_R_EB[j] = res["R_EB"]
                     best_fluxratio_EB[j] = res["fluxratio_EB"]
@@ -640,6 +764,8 @@ class target:
                     best_P_orb[j] = res_twin["P_orb"]
                     best_i[j] = res_twin["inc"]
                     best_R_p[j] = res_twin["R_p"]
+                    best_ecc[j] = res_twin["ecc"]
+                    best_argp[j] = res_twin["argp"]
                     best_M_EB[j] = res_twin["M_EB"]
                     best_R_EB[j] = res_twin["R_EB"]
                     best_fluxratio_EB[j] = res_twin["fluxratio_EB"]
@@ -667,6 +793,8 @@ class target:
                     best_P_orb[j] = res["P_orb"]
                     best_i[j] = res["inc"]
                     best_R_p[j] = res["R_p"]
+                    best_ecc[j] = res["ecc"]
+                    best_argp[j] = res["argp"]
                     best_M_EB[j] = res["M_EB"]
                     best_R_EB[j] = res["R_EB"]
                     best_fluxratio_EB[j] = res["fluxratio_EB"]
@@ -689,6 +817,8 @@ class target:
                     best_P_orb[j] = res["P_orb"]
                     best_i[j] = res["inc"]
                     best_R_p[j] = res["R_p"]
+                    best_ecc[j] = res["ecc"]
+                    best_argp[j] = res["argp"]
                     best_M_EB[j] = res["M_EB"]
                     best_R_EB[j] = res["R_EB"]
                     best_fluxratio_EB[j] = res["fluxratio_EB"]
@@ -705,6 +835,8 @@ class target:
                     best_P_orb[j] = res_twin["P_orb"]
                     best_i[j] = res_twin["inc"]
                     best_R_p[j] = res_twin["R_p"]
+                    best_ecc[j] = res_twin["ecc"]
+                    best_argp[j] = res_twin["argp"]
                     best_M_EB[j] = res_twin["M_EB"]
                     best_R_EB[j] = res_twin["R_EB"]
                     best_fluxratio_EB[j] = res_twin["fluxratio_EB"]
@@ -736,6 +868,8 @@ class target:
                     best_P_orb[j] = res["P_orb"]
                     best_i[j] = res["inc"]
                     best_R_p[j] = res["R_p"]
+                    best_ecc[j] = res["ecc"]
+                    best_argp[j] = res["argp"]
                     best_M_EB[j] = res["M_EB"]
                     best_R_EB[j] = res["R_EB"]
                     best_fluxratio_EB[j] = res["fluxratio_EB"]
@@ -757,6 +891,8 @@ class target:
                     best_P_orb[j] = res["P_orb"]
                     best_i[j] = res["inc"]
                     best_R_p[j] = res["R_p"]
+                    best_ecc[j] = res["ecc"]
+                    best_argp[j] = res["argp"]
                     best_M_EB[j] = res["M_EB"]
                     best_R_EB[j] = res["R_EB"]
                     best_fluxratio_EB[j] = res["fluxratio_EB"]
@@ -773,6 +909,8 @@ class target:
                     best_P_orb[j] = res_twin["P_orb"]
                     best_i[j] = res_twin["inc"]
                     best_R_p[j] = res_twin["R_p"]
+                    best_ecc[j] = res_twin["ecc"]
+                    best_argp[j] = res_twin["argp"]
                     best_M_EB[j] = res_twin["M_EB"]
                     best_R_EB[j] = res_twin["R_EB"]
                     best_fluxratio_EB[j] = res_twin["fluxratio_EB"]
@@ -802,6 +940,8 @@ class target:
                     best_P_orb[j] = res["P_orb"]
                     best_i[j] = res["inc"]
                     best_R_p[j] = res["R_p"]
+                    best_ecc[j] = res["ecc"]
+                    best_argp[j] = res["argp"]
                     best_M_EB[j] = res["M_EB"]
                     best_R_EB[j] = res["R_EB"]
                     best_fluxratio_EB[j] = res["fluxratio_EB"]
@@ -823,6 +963,8 @@ class target:
                     best_P_orb[j] = res["P_orb"]
                     best_i[j] = res["inc"]
                     best_R_p[j] = res["R_p"]
+                    best_ecc[j] = res["ecc"]
+                    best_argp[j] = res["argp"]
                     best_M_EB[j] = res["M_EB"]
                     best_R_EB[j] = res["R_EB"]
                     best_fluxratio_EB[j] = res["fluxratio_EB"]
@@ -839,6 +981,8 @@ class target:
                     best_P_orb[j] = res_twin["P_orb"]
                     best_i[j] = res_twin["inc"]
                     best_R_p[j] = res_twin["R_p"]
+                    best_ecc[j] = res_twin["ecc"]
+                    best_argp[j] = res_twin["argp"]
                     best_M_EB[j] = res_twin["M_EB"]
                     best_R_EB[j] = res_twin["R_EB"]
                     best_fluxratio_EB[j] = res_twin["fluxratio_EB"]
@@ -874,6 +1018,8 @@ class target:
                     best_P_orb[j] = res["P_orb"]
                     best_i[j] = res["inc"]
                     best_R_p[j] = res["R_p"]
+                    best_ecc[j] = res["ecc"]
+                    best_argp[j] = res["argp"]
                     best_M_EB[j] = res["M_EB"]
                     best_R_EB[j] = res["R_EB"]
                     best_fluxratio_EB[j] = res["fluxratio_EB"]
@@ -895,6 +1041,8 @@ class target:
                     best_P_orb[j] = res["P_orb"]
                     best_i[j] = res["inc"]
                     best_R_p[j] = res["R_p"]
+                    best_ecc[j] = res["ecc"]
+                    best_argp[j] = res["argp"]
                     best_M_EB[j] = res["M_EB"]
                     best_R_EB[j] = res["R_EB"]
                     best_fluxratio_EB[j] = res["fluxratio_EB"]
@@ -911,6 +1059,8 @@ class target:
                     best_P_orb[j] = res_twin["P_orb"]
                     best_i[j] = res_twin["inc"]
                     best_R_p[j] = res_twin["R_p"]
+                    best_ecc[j] = res_twin["ecc"]
+                    best_argp[j] = res_twin["argp"]
                     best_M_EB[j] = res_twin["M_EB"]
                     best_R_EB[j] = res_twin["R_EB"]
                     best_fluxratio_EB[j] = res_twin["fluxratio_EB"]
@@ -952,6 +1102,7 @@ class target:
             "ID": targets, "scenario": scenarios,
             "M_s": best_M_host, "R_s": best_R_host,
             "P_orb": best_P_orb, "inc": best_i,
+            "ecc": best_ecc, "w": best_argp,
             "R_p": best_R_p,
             "M_EB": best_M_EB, "R_EB": best_R_EB,
             "prob": relative_probs
@@ -970,7 +1121,8 @@ class target:
         return
 
     def plot_fits(self, time: np.ndarray,
-                  flux_0: np.ndarray, sigma_0: float):
+                  flux_0: np.ndarray, sigma_0: float,
+                  save_plot: str = False):
         """
         Plots light curve for best fit instance of each scenario.
         Args:
@@ -978,6 +1130,7 @@ class target:
                                 [days from transit midpoint].
             flux_0 (numpy array): Normalized flux of each data point.
             sigma_0 (numpy array): Uncertainty of flux.
+            save_plot (str): Whether or not to save plot as png.
         """
         scenario_idx = self.probs[self.probs["ID"] != 0].index.values
         df = self.probs[self.probs["ID"] != 0]
@@ -1020,7 +1173,9 @@ class target:
                         model_time,
                         df['R_p'].values[k], df['P_orb'].values[k],
                         df['inc'].values[k], a, df["R_s"].values[k],
-                        u1, u2, fluxratios_comp[k], comp
+                        u1, u2,
+                        df["ecc"].values[k], df["w"].values[k],
+                        fluxratios_comp[k], comp
                         )
                 # all small EBs
                 elif j == 1:
@@ -1039,6 +1194,7 @@ class target:
                         df["R_EB"].values[k], fluxratios_EB[k],
                         df['P_orb'].values[k], df['inc'].values[k],
                         a, df["R_s"].values[k], u1, u2,
+                        df["ecc"].values[k], df["w"].values[k],
                         fluxratios_comp[k], comp
                         )[0]
                 # all twin EBs
@@ -1058,6 +1214,7 @@ class target:
                         df["R_EB"].values[k], fluxratios_EB[k],
                         df['P_orb'].values[k], df['inc'].values[k],
                         a, df["R_s"].values[k], u1, u2,
+                        df["ecc"].values[k], df["w"].values[k],
                         fluxratios_comp[k], comp
                         )[0]
 
@@ -1088,6 +1245,11 @@ class target:
         ax[len(df)//3-1, 2].set_xlabel(
             "days from transit center", fontsize=12
             )
-        plt.tight_layout()
-        plt.show()
+        if save_plot == False:
+            plt.tight_layout()
+            plt.show()
+        else:
+            plt.tight_layout()
+            target_star = self.stars.ID.values[0]
+            plt.savefig("TIC"+str(target_star)+"_fits.png")
         return
