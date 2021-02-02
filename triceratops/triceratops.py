@@ -239,7 +239,7 @@ class target:
             "k--", alpha=0.5, zorder=0)
         # N and E arrows
         v1 = np.array([0, 1])
-        v2 = self.pix_coords[0][1] - self.pix_coords[0][0]
+        v2 = self.pix_coords[idx][1] - self.pix_coords[idx][0]
         sign = np.sign(v2[0])
         angle1 = sign * (
             np.arccos(np.dot(v1, v2)
