@@ -371,7 +371,7 @@ class target:
         This is done by modeling the PSF of each source as a circular
         Gaussian with a standard deviation of 0.75 pixels.
         Args:
-            tdepth (float): Reported transit depth.
+            tdepth (float): Reported transit depth [ppm].
             all_ap_pixels (list of numpy arrays): Apertures used to
                                                   extract light curve.
         """

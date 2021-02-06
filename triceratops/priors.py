@@ -160,89 +160,223 @@ def sample_w(x):
     x = x*360
     return x
 
-def sample_q(x):
+def sample_q(x, M_s):
     """
     Samples mass ratios of short-period binaries.
     Args:
         x (numpy array): Random numbers between 0 and 1.
+        M_s (float): Primary star mass [Solar masses].
     Returns:
-        x (numpy array): Sampled mass ratios [deg].
+        x (numpy array): Sampled mass ratios.
     """
-    # power coefficients
-    p1 = 0.3
-    p2 = -0.5
-    # normalizing constants
-    # continuity between first two segments
-    A1 = (0.3**p1)/(0.3**p2)
-    # satisfy F_twin condition
-    F_twin = 0.30
-    A2 = (
-        1 + (F_twin)/(1-F_twin)
-        * ((1.0**(p2+1) - 0.3**(p2+1))/(p2+1))
-        / ((1.0**(p2+1) - 0.95**(p2+1))/(p2+1))
-        )
-    I1 = (0.3**(p1+1) - 0.1**(p1+1))/(p1+1)
-    I2 = A1*(0.95**(p2+1) - 0.3**(p2+1))/(p2+1)
-    I3 = A2*A1*(1.0**(p2+1) - 0.95**(p2+1))/(p2+1)
-    Norm = 1/(I1+I2+I3)
+    assert M_s >= 0.1
+    if M_s >= 1.0:
+        # power coefficients
+        p1 = 0.3
+        p2 = -0.5
+        # normalizing constants
+        # continuity between first two segments
+        A1 = (0.3**p1) / (0.3**p2)
+        # satisfy F_twin condition
+        F_twin = 0.30
+        A2 = (
+            1 + (F_twin)/(1-F_twin)
+            * ((1.0**(p2+1) - 0.3**(p2+1))/(p2+1))
+            / ((1.0**(p2+1) - 0.95**(p2+1))/(p2+1))
+            )
+        I1 = (0.3**(p1+1) - 0.1**(p1+1))/(p1+1)
+        I2 = A1*(0.95**(p2+1) - 0.3**(p2+1))/(p2+1)
+        I3 = A2*A1*(1.0**(p2+1) - 0.95**(p2+1))/(p2+1)
+        Norm = 1/(I1+I2+I3)
 
-    mask1 = x <= Norm*I1
-    mask2 = (x > Norm*I1) & (x <= Norm*(I1+I2))
-    mask3 = (x > Norm*(I1+I2)) & (x <= Norm*(I1+I2+I3))
-    x[mask1] = (
-        (x[mask1]/Norm*(p1+1) + 0.1**(p1+1))**(1/(p1+1))
-        )
-    x[mask2] = (
-        ((x[mask2]/Norm - I1)*(p2+1)/A1 + 0.3**(p2+1))**(1/(p2+1))
-        )
-    x[mask3] = (
-        (
-            (x[mask3]/Norm - I1 - I2)*(p2+1)/(A1*A2)
-            + 0.95**(p2+1))**(1/(p2+1))
-        )
+        mask1 = x <= Norm*I1
+        mask2 = (x > Norm*I1) & (x <= Norm*(I1+I2))
+        mask3 = (x > Norm*(I1+I2)) & (x <= Norm*(I1+I2+I3))
+        x[mask1] = (
+            (x[mask1]/Norm*(p1+1) + 0.1**(p1+1))**(1/(p1+1))
+            )
+        x[mask2] = (
+            ((x[mask2]/Norm - I1)*(p2+1)/A1 + 0.3**(p2+1))**(1/(p2+1))
+            )
+        x[mask3] = (
+            (
+                (x[mask3]/Norm - I1 - I2)*(p2+1)/(A1*A2)
+                + 0.95**(p2+1))**(1/(p2+1))
+            )
+    elif (M_s < 1.0) & (M_s >= 0.3):
+        # q lower limit (to prevent M_EB < 0.1 solar masses)
+        q_min = 0.1/M_s
+        # power coefficients
+        p1 = 0.3
+        p2 = -0.5
+        # normalizing constants
+        # continuity between first two segments
+        A1 = (0.3**p1) / (0.3**p2)
+        # satisfy F_twin condition
+        F_twin = 0.30
+        A2 = (
+            1 + (F_twin)/(1-F_twin)
+            * ((1.0**(p2+1) - 0.3**(p2+1))/(p2+1))
+            / ((1.0**(p2+1) - 0.95**(p2+1))/(p2+1))
+            )
+        I1 = (0.3**(p1+1) - q_min**(p1+1))/(p1+1)
+        I2 = A1*(0.95**(p2+1) - 0.3**(p2+1))/(p2+1)
+        I3 = A2*A1*(1.0**(p2+1) - 0.95**(p2+1))/(p2+1)
+        Norm = 1/(I1+I2+I3)
+
+        mask1 = x <= Norm*I1
+        mask2 = (x > Norm*I1) & (x <= Norm*(I1+I2))
+        mask3 = (x > Norm*(I1+I2)) & (x <= Norm*(I1+I2+I3))
+        x[mask1] = (
+            (x[mask1]/Norm*(p1+1) + q_min**(p1+1))**(1/(p1+1))
+            )
+        x[mask2] = (
+            ((x[mask2]/Norm - I1)*(p2+1)/A1 + 0.3**(p2+1))**(1/(p2+1))
+            )
+        x[mask3] = (
+            (
+                (x[mask3]/Norm - I1 - I2)*(p2+1)/(A1*A2)
+                + 0.95**(p2+1))**(1/(p2+1))
+            )
+    elif (M_s < 0.3) & (M_s > 0.1):
+        # q lower limit (to prevent M_EB < 0.1 solar masses)
+        q_min = 0.1/M_s
+        # power coefficients
+        p2 = -0.5
+        # normalizing constants
+        # satisfy F_twin condition
+        F_twin = 0.30
+        A2 = (
+            1 + (F_twin)/(1-F_twin)
+            * ((1.0**(p2+1) - q_min**(p2+1))/(p2+1))
+            / ((1.0**(p2+1) - 0.95**(p2+1))/(p2+1))
+            )
+        I2 = (0.95**(p2+1) - q_min**(p2+1))/(p2+1)
+        I3 = A2*(1.0**(p2+1) - 0.95**(p2+1))/(p2+1)
+        Norm = 1/(I2+I3)
+
+        mask2 = x <= Norm*(I2)
+        mask3 = (x > Norm*(I2)) & (x <= Norm*(I2+I3))
+        x[mask2] = (
+            (x[mask2]/Norm*(p2+1) + q_min**(p2+1))**(1/(p2+1))
+            )
+        x[mask3] = (
+            (
+                (x[mask3]/Norm - I2)*(p2+1)/(A2)
+                + 0.95**(p2+1))**(1/(p2+1))
+            )
+    elif M_s == 0.1:
+        x = np.full(len(x), 0.1)
     return x
 
 
-def sample_q_companion(x):
+def sample_q_companion(x, M_s):
     """
     Samples mass ratios of long-period companions.
     Args:
         x (numpy array): Random numbers between 0 and 1.
+        M_s (float): Primary star mass [Solar masses].
     Returns:
-        x (numpy array): Sampled mass ratios [deg].
+        x (numpy array): Sampled mass ratios.
     """
-    # power coefficients
-    p1 = 0.3
-    p2 = -0.95
-    # normalizing constants
-    # continuity between first two segments
-    A1 = (0.3**p1) / (0.3**p2)
-    # satisfy F_twin condition
-    F_twin = 0.05
-    A2 = (
-        1 + (F_twin)/(1-F_twin)
-        * ((1.0**(p2+1) - 0.3**(p2+1))/(p2+1))
-        / ((1.0**(p2+1) - 0.95**(p2+1))/(p2+1))
-        )
-    I1 = (0.3**(p1+1) - 0.1**(p1+1))/(p1+1)
-    I2 = A1*(0.95**(p2+1) - 0.3**(p2+1))/(p2+1)
-    I3 = A2*A1*(1.0**(p2+1) - 0.95**(p2+1))/(p2+1)
-    Norm = 1/(I1+I2+I3)
+    assert M_s >= 0.1
+    if M_s >= 1.0:
+        # power coefficients
+        p1 = 0.3
+        p2 = -0.95
+        # normalizing constants
+        # continuity between first two segments
+        A1 = (0.3**p1) / (0.3**p2)
+        # satisfy F_twin condition
+        F_twin = 0.05
+        A2 = (
+            1 + (F_twin)/(1-F_twin)
+            * ((1.0**(p2+1) - 0.3**(p2+1))/(p2+1))
+            / ((1.0**(p2+1) - 0.95**(p2+1))/(p2+1))
+            )
+        I1 = (0.3**(p1+1) - 0.1**(p1+1))/(p1+1)
+        I2 = A1*(0.95**(p2+1) - 0.3**(p2+1))/(p2+1)
+        I3 = A2*A1*(1.0**(p2+1) - 0.95**(p2+1))/(p2+1)
+        Norm = 1/(I1+I2+I3)
 
-    mask1 = x <= Norm*I1
-    mask2 = (x > Norm*I1) & (x <= Norm*(I1+I2))
-    mask3 = (x > Norm*(I1+I2)) & (x <= Norm*(I1+I2+I3))
-    x[mask1] = (
-        (x[mask1]/Norm*(p1+1) + 0.1**(p1+1))**(1/(p1+1))
-        )
-    x[mask2] = (
-        ((x[mask2]/Norm - I1)*(p2+1)/A1 + 0.3**(p2+1))**(1/(p2+1))
-        )
-    x[mask3] = (
-        (
-            (x[mask3]/Norm - I1 - I2)*(p2+1)/(A1*A2)
-            + 0.95**(p2+1))**(1/(p2+1))
-        )
+        mask1 = x <= Norm*I1
+        mask2 = (x > Norm*I1) & (x <= Norm*(I1+I2))
+        mask3 = (x > Norm*(I1+I2)) & (x <= Norm*(I1+I2+I3))
+        x[mask1] = (
+            (x[mask1]/Norm*(p1+1) + 0.1**(p1+1))**(1/(p1+1))
+            )
+        x[mask2] = (
+            ((x[mask2]/Norm - I1)*(p2+1)/A1 + 0.3**(p2+1))**(1/(p2+1))
+            )
+        x[mask3] = (
+            (
+                (x[mask3]/Norm - I1 - I2)*(p2+1)/(A1*A2)
+                + 0.95**(p2+1))**(1/(p2+1))
+            )
+    elif (M_s < 1.0) & (M_s >= 0.3):
+        # q lower limit (to prevent M_comp < 0.1 solar masses)
+        q_min = 0.1/M_s
+        # power coefficients
+        p1 = 0.3
+        p2 = -0.95
+        # normalizing constants
+        # continuity between first two segments
+        A1 = (0.3**p1) / (0.3**p2)
+        # satisfy F_twin condition
+        F_twin = 0.05
+        A2 = (
+            1 + (F_twin)/(1-F_twin)
+            * ((1.0**(p2+1) - 0.3**(p2+1))/(p2+1))
+            / ((1.0**(p2+1) - 0.95**(p2+1))/(p2+1))
+            )
+        I1 = (0.3**(p1+1) - q_min**(p1+1))/(p1+1)
+        I2 = A1*(0.95**(p2+1) - 0.3**(p2+1))/(p2+1)
+        I3 = A2*A1*(1.0**(p2+1) - 0.95**(p2+1))/(p2+1)
+        Norm = 1/(I1+I2+I3)
+
+        mask1 = x <= Norm*I1
+        mask2 = (x > Norm*I1) & (x <= Norm*(I1+I2))
+        mask3 = (x > Norm*(I1+I2)) & (x <= Norm*(I1+I2+I3))
+        x[mask1] = (
+            (x[mask1]/Norm*(p1+1) + q_min**(p1+1))**(1/(p1+1))
+            )
+        x[mask2] = (
+            ((x[mask2]/Norm - I1)*(p2+1)/A1 + 0.3**(p2+1))**(1/(p2+1))
+            )
+        x[mask3] = (
+            (
+                (x[mask3]/Norm - I1 - I2)*(p2+1)/(A1*A2)
+                + 0.95**(p2+1))**(1/(p2+1))
+            )
+    elif (M_s < 0.3) & (M_s > 0.1):
+        # q lower limit (to prevent M_comp < 0.1 solar masses)
+        q_min = 0.1/M_s
+        # power coefficients
+        p2 = -0.95
+        # normalizing constants
+        # satisfy F_twin condition
+        F_twin = 0.05
+        A2 = (
+            1 + (F_twin)/(1-F_twin)
+            * ((1.0**(p2+1) - q_min**(p2+1))/(p2+1))
+            / ((1.0**(p2+1) - 0.95**(p2+1))/(p2+1))
+            )
+        I2 = (0.95**(p2+1) - q_min**(p2+1))/(p2+1)
+        I3 = A2*(1.0**(p2+1) - 0.95**(p2+1))/(p2+1)
+        Norm = 1/(I2+I3)
+
+        mask2 = x <= Norm*(I2)
+        mask3 = (x > Norm*(I2)) & (x <= Norm*(I2+I3))
+        x[mask2] = (
+            (x[mask2]/Norm*(p2+1) + q_min**(p2+1))**(1/(p2+1))
+            )
+        x[mask3] = (
+            (
+                (x[mask3]/Norm - I2)*(p2+1)/(A2)
+                + 0.95**(p2+1))**(1/(p2+1))
+            )
+    elif M_s == 0.1:
+        x = np.full(len(x), 0.1)
     return x
 
 
@@ -426,7 +560,8 @@ def lnprior_Porb_binary(P_orb: float):
 def lnprior_bound(M_s: float, plx: float, delta_mags: np.array,
                   separations: np.array, contrasts: np.array):
     """
-    Calculates the bound companion rate of the target star.
+    Calculates the bound companion rate of the target star,
+    assuming the orbital period of the companion is > 100 days.
     Args:
         M_s (float): Target star mass [solar masses].
         plx (float): Parallax of the target star [mas].
@@ -500,27 +635,32 @@ def lnprior_bound(M_s: float, plx: float, delta_mags: np.array,
 
         f_comp = np.zeros(len(seps))
         mask = (np.log10(max_Porbs) < 1.0)
-        f_comp[mask] = t1
+        # f_comp[mask] = t1
+        f_comp[mask] = 0.0
         mask = (
             (np.log10(max_Porbs) >= 1.0)
             & (np.log10(max_Porbs) < 2.0)
             )
-        f_comp[mask] = t1 + t2_partial[mask]
+        # f_comp[mask] = t1 + t2_partial[mask]
+        f_comp[mask] = 0.0
         mask = (
             (np.log10(max_Porbs) >= 2.0)
             & (np.log10(max_Porbs) < 3.4)
             )
-        f_comp[mask] = t1 + t2 + t3_partial[mask]
+        # f_comp[mask] = t1 + t2 + t3_partial[mask]
+        f_comp[mask] = t3_partial[mask]
         mask = (
             (np.log10(max_Porbs) >= 3.4)
             & (np.log10(max_Porbs) < 5.5)
             )
-        f_comp[mask] = t1 + t2 + t3 + t4_partial[mask]
+        # f_comp[mask] = t1 + t2 + t3 + t4_partial[mask]
+        f_comp[mask] = t3 + t4_partial[mask]
         mask = (
             (np.log10(max_Porbs) >= 5.5)
             & (np.log10(max_Porbs) < 8.0)
             )
-        f_comp[mask] = t1 + t2 + t3 + t4 + t5_partial[mask]
+        # f_comp[mask] = t1 + t2 + t3 + t4 + t5_partial[mask]
+        f_comp[mask] = t3 + t4 + t5_partial[mask]
         mask = (np.log10(max_Porbs) >= 8.0)
         f_comp[mask] = t1 + t2 + t3 + t4 + t5
         lnprior_bound = np.log(f_comp)
@@ -582,27 +722,32 @@ def lnprior_bound(M_s: float, plx: float, delta_mags: np.array,
 
         f_comp = np.zeros(len(seps))
         mask = (np.log10(max_Porbs) < 1.0)
-        f_comp[mask] = t1
+        # f_comp[mask] = t1
+        f_comp[mask] = 0.0
         mask = (
             (np.log10(max_Porbs) >= 1.0)
             & (np.log10(max_Porbs) < 2.0)
             )
-        f_comp[mask] = t1 + t2_partial[mask]
+        # f_comp[mask] = t1 + t2_partial[mask]
+        f_comp[mask] = 0.0
         mask = (
             (np.log10(max_Porbs) >= 2.0)
             & (np.log10(max_Porbs) < 3.4)
             )
-        f_comp[mask] = t1 + t2 + t3_partial[mask]
+        # f_comp[mask] = t1 + t2 + t3_partial[mask]
+        f_comp[mask] = t3_partial[mask]
         mask = (
             (np.log10(max_Porbs) >= 3.4)
             & (np.log10(max_Porbs) < 5.5)
             )
-        f_comp[mask] = t1 + t2 + t3 + t4_partial[mask]
+        # f_comp[mask] = t1 + t2 + t3 + t4_partial[mask]
+        f_comp[mask] = t3 + t4_partial[mask]
         mask = (
             (np.log10(max_Porbs) >= 5.5)
             & (np.log10(max_Porbs) < 8.0)
             )
-        f_comp[mask] = t1 + t2 + t3 + t4 + t5_partial[mask]
+        # f_comp[mask] = t1 + t2 + t3 + t4 + t5_partial[mask]
+        f_comp[mask] = t3 + t4 + t5_partial[mask]
         mask = (np.log10(max_Porbs) >= 8.0)
         f_comp[mask] = t1 + t2 + t3 + t4 + t5
         f_act = 0.65*f_comp+0.35*f_comp*M_act

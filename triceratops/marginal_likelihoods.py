@@ -147,7 +147,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     # sample from prior distributions
     incs = sample_inc(np.random.rand(N))
-    qs = sample_q(np.random.rand(N))
+    qs = sample_q(np.random.rand(N), M_s)
     eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=P_orb)
     argps = sample_w(np.random.rand(N))
 
@@ -269,7 +269,7 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
 
     # sample from q prior distributions
-    qs_comp = sample_q_companion(np.random.rand(N))
+    qs_comp = sample_q_companion(np.random.rand(N), M_s)
 
     # calculate properties of the drawn companions
     masses_comp = qs_comp*M_s
@@ -388,8 +388,8 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     # sample from prior distributions
     incs = sample_inc(np.random.rand(N))
-    qs = sample_q(np.random.rand(N))
-    qs_comp = sample_q_companion(np.random.rand(N))
+    qs = sample_q(np.random.rand(N), M_s)
+    qs_comp = sample_q_companion(np.random.rand(N), M_s)
     eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=P_orb)
     argps = sample_w(np.random.rand(N))
 
@@ -538,7 +538,7 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
     lnsigma = np.log(sigma)
 
     # sample from q prior distribution
-    qs_comp = sample_q_companion(np.random.rand(N))
+    qs_comp = sample_q_companion(np.random.rand(N), M_s)
 
     # calculate properties of the drawn companions
     masses_comp = qs_comp*M_s
@@ -670,8 +670,8 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     # sample from prior distributions
     incs = sample_inc(np.random.rand(N))
-    qs = sample_q(np.random.rand(N))
-    qs_comp = sample_q_companion(np.random.rand(N))
+    qs = sample_q(np.random.rand(N), M_s)
+    qs_comp = sample_q_companion(np.random.rand(N), M_s)
     eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=P_orb)
     argps = sample_w(np.random.rand(N))
 
@@ -979,7 +979,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     # sample from inc and q prior distributions
     incs = sample_inc(np.random.rand(N))
-    qs = sample_q(np.random.rand(N))
+    qs = sample_q(np.random.rand(N), M_s)
     eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=P_orb)
     argps = sample_w(np.random.rand(N))
 
@@ -1251,8 +1251,8 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     # sample from prior distributions
     incs = sample_inc(np.random.rand(N))
-    qs = sample_q(np.random.rand(N))
-    qs_comp = sample_q_companion(np.random.rand(N))
+    qs = sample_q(np.random.rand(N), M_s)
+    qs_comp = sample_q_companion(np.random.rand(N), M_s)
     eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=P_orb)
     argps = sample_w(np.random.rand(N))
 
@@ -1562,7 +1562,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     # sample from prior distributions
     incs = sample_inc(np.random.rand(N))
-    qs = sample_q(np.random.rand(N))
+    qs = sample_q(np.random.rand(N), 1.0)
     eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=P_orb)
     argps = sample_w(np.random.rand(N))
 
@@ -1829,7 +1829,7 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     # sample from inc and q prior distributions
     incs = sample_inc(np.random.rand(N))
-    qs = sample_q(np.random.rand(N))
+    qs = sample_q(np.random.rand(N), 1.0)
     eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=P_orb)
     argps = sample_w(np.random.rand(N))
 
