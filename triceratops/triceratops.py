@@ -114,13 +114,13 @@ class target:
                 )
             sep.append(
                 np.round(
-                    c_star.separation(c_target).to(u.arcsec).value,
+                    c_target.separation(c_star).to(u.arcsec).value,
                     3
                     )
                 )
             pa.append(
                 np.round(
-                    c_star.position_angle(c_target).to(u.deg).value,
+                    c_target.position_angle(c_star).to(u.deg).value,
                     3
                     )
                 )
