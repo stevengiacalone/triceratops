@@ -189,11 +189,12 @@ def separation_at_contrast(delta_mags: np.array,
     return sep
 
 
-def query_TRILEGAL(RA: float, Dec: float):
+def query_TRILEGAL(RA: float, Dec: float, verbose: int = 1):
     """
     Begins TRILEGAL query.
     Args:
         RA, Dec: Coordinates of the target.
+        verbose: 1 to print progress, 0 to print nothing.
     Returns:
         output_url (str): URL of page with query results.
     """
@@ -210,7 +211,8 @@ def query_TRILEGAL(RA: float, Dec: float):
     browser["mag_lim"] = "21"
     browser["binary_kind"] = "0"
     browser.submit_selected()
-    print("TRILEGAL form submitted.")
+    if verbose == 1:
+        print("TRILEGAL form submitted.")
     sleep(5)
     if len(browser.get_current_page().select("a")) == 0:
         browser = StatefulBrowser()

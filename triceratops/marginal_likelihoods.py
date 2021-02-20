@@ -3,7 +3,7 @@ from pandas import read_csv
 from astropy import constants
 from pkg_resources import resource_filename
 
-from .likelihoods import lnL_TP, lnL_EB, lnL_EB_twin
+from .likelihoods import *
 from .priors import *
 from .funcs import stellar_relations, flux_relation
 
@@ -36,7 +36,7 @@ ldc_u2s = np.array(ldc.bLSM, dtype=float)
 
 def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
-            Z: float, N: int = 1000000):
+            Z: float, N: int = 1000000, parallel: bool = False):
     """
     Calculates the marginal likelihood of the TTP scenario.
     Args:
@@ -50,6 +50,8 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         Teff (float): Target star effective temperature [K].
         Z (float): Target star metallicity [dex].
         N (int): Number of draws for MC.
+        parallel (bool): Whether or not to simulate light curves
+                         in parallel.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
@@ -87,17 +89,37 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     coll = ((rps*Rearth + R_s*Rsun) > a*(1-eccs))
 
     lnL = np.full(N, -np.inf)
-    for i in range(N):
-        if Ptra[i] <= 1:
-            inc_min = np.arccos(Ptra[i]) * 180/pi
-        else:
-            continue
-        if (incs[i] >= inc_min) & (coll[i] == False):
-            lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
-                time, flux, sigma, rps[i],
-                P_orb, incs[i], a, R_s, u1, u2,
-                eccs[i], argps[i]
-                )
+    if parallel:
+        # find minimum inclination each planet can have while transiting
+        inc_min = np.full(N, 90.)
+        inc_min[Ptra <= 1.] = np.arccos(Ptra[Ptra <= 1.]) * 180./pi
+        # filter out systems that do not transit or have a collision
+        mask = (incs >= inc_min) & (coll == False)
+        # calculate lnL for transiting systems
+        a_arr = np.full(N, a)
+        R_s_arr = np.full(N, R_s)
+        u1_arr = np.full(N, u1)
+        u2_arr = np.full(N, u2)
+        companion_fluxratio = np.zeros(N)
+        lnL[mask] = -0.5*ln2pi - lnsigma - lnL_TP_p(
+                    time, flux, sigma, rps[mask],
+                    P_orb, incs[mask], a_arr[mask], R_s_arr[mask],
+                    u1_arr[mask], u2_arr[mask],
+                    eccs[mask], argps[mask],
+                    companion_fluxratio=companion_fluxratio[mask]
+                    )
+    else:
+        for i in range(N):
+            if Ptra[i] <= 1.:
+                inc_min = np.arccos(Ptra[i]) * 180./pi
+            else:
+                continue
+            if (incs[i] >= inc_min) & (coll[i] == False):
+                lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
+                    time, flux, sigma, rps[i],
+                    P_orb, incs[i], a, R_s, u1, u2,
+                    eccs[i], argps[i]
+                    )
 
     idx = lnL.argmax()
     Z = np.mean(np.exp(lnL + lnprior_Mstar + lnprior_Porb))
@@ -114,7 +136,7 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
 def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
-            Z: float, N: int = 1000000):
+            Z: float, N: int = 1000000, parallel: bool = False):
     """
     Calculates the marginal likelihood of the TEB scenario.
     Args:
@@ -128,6 +150,8 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         Teff (float): Target star effective temperature [K].
         Z (float): Target star metallicity [dex].
         N (int): Number of draws for MC.
+        parallel (bool): Whether or not to simulate light curves
+                         in parallel.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -181,29 +205,70 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     lnL = np.full(N, -np.inf)
     lnL_twin = np.full(N, -np.inf)
-    for i in range(N):
+    if parallel:
         # q < 0.95
-        if Ptra[i] <= 1:
-            inc_min = np.arccos(Ptra[i]) * 180/pi
-        else:
-            continue
-        if (incs[i] >= inc_min) & (qs[i] < 0.95) & (coll[i] == False):
-            lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
-                time, flux, sigma, radii[i], fluxratios[i],
-                P_orb, incs[i], a[i], R_s, u1, u2,
-                eccs[i], argps[i]
-                )
-        # q >= 0.95 and 2xP_orb
-        if Ptra_twin[i] <= 1:
-            inc_min = np.arccos(Ptra_twin[i]) * 180/pi
-        else:
-            continue
-        if (incs[i] >= inc_min) & (qs[i] >= 0.95) & (coll_twin[i] == False):
-            lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
-                time, flux, sigma, radii[i], fluxratios[i],
-                2*P_orb, incs[i], a_twin[i], R_s, u1, u2,
-                eccs[i], argps[i]
-                )
+        # find minimum inclination each planet can have while transiting
+        inc_min = np.full(N, 90.)
+        inc_min[Ptra <= 1.] = np.arccos(Ptra[Ptra <= 1.]) * 180./pi
+        # filter out systems that do not transit or have a collision
+        mask = (incs >= inc_min) & (coll == False) & (qs < 0.95)
+        # calculate lnL for transiting systems
+        R_s_arr = np.full(N, R_s)
+        u1_arr = np.full(N, u1)
+        u2_arr = np.full(N, u2)
+        companion_fluxratio = np.zeros(N)
+        lnL[mask] = -0.5*ln2pi - lnsigma - lnL_EB_p(
+                    time, flux, sigma, radii[mask], fluxratios[mask],
+                    P_orb, incs[mask], a[mask], R_s_arr[mask],
+                    u1_arr[mask], u2_arr[mask],
+                    eccs[mask], argps[mask],
+                    companion_fluxratio=companion_fluxratio[mask]
+                    )
+        # q >= 0.95
+        # find minimum inclination each planet can have while transiting
+        inc_min = np.full(N, 90.)
+        inc_min[Ptra_twin <= 1.] = np.arccos(
+            Ptra_twin[Ptra_twin <= 1.]
+            ) * 180./pi
+        # filter out systems that do not transit or have a collision
+        mask = (incs >= inc_min) & (coll_twin == False) & (qs >= 0.95)
+        # calculate lnL for transiting systems
+        R_s_arr = np.full(N, R_s)
+        u1_arr = np.full(N, u1)
+        u2_arr = np.full(N, u2)
+        companion_fluxratio = np.zeros(N)
+        lnL_twin[mask] = -0.5*ln2pi - lnsigma - lnL_EB_twin_p(
+                    time, flux, sigma, radii[mask], fluxratios[mask],
+                    2*P_orb, incs[mask], a_twin[mask], R_s_arr[mask],
+                    u1_arr[mask], u2_arr[mask],
+                    eccs[mask], argps[mask],
+                    companion_fluxratio=companion_fluxratio[mask]
+                    )
+    else:
+        for i in range(N):
+            # q < 0.95
+            if Ptra[i] <= 1:
+                inc_min = np.arccos(Ptra[i]) * 180/pi
+            else:
+                continue
+            if (incs[i] >= inc_min) & (qs[i] < 0.95) & (coll[i] == False):
+                lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
+                    time, flux, sigma, radii[i], fluxratios[i],
+                    P_orb, incs[i], a[i], R_s, u1, u2,
+                    eccs[i], argps[i]
+                    )
+            # q >= 0.95 and 2xP_orb
+            if Ptra_twin[i] <= 1:
+                inc_min = np.arccos(Ptra_twin[i]) * 180/pi
+            else:
+                continue
+            if ((incs[i] >= inc_min) & (qs[i] >= 0.95)
+                & (coll_twin[i] == False)):
+                lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
+                    time, flux, sigma, radii[i], fluxratios[i],
+                    2*P_orb, incs[i], a_twin[i], R_s, u1, u2,
+                    eccs[i], argps[i]
+                    )
 
     # results for q < 0.95
     idx = lnL.argmax()
@@ -235,7 +300,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Z: float, plx: float, contrast_curve_file: str = None,
-            N: int = 1000000):
+            N: int = 1000000, parallel: bool = False):
     """
     Calculates the marginal likelihood of the PTP scenario.
     Args:
@@ -251,6 +316,8 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         plx (float): Target star parallax [mas].
         contrast_curve_file (string): Path to contrast curve file.
         N (int): Number of draws for MC.
+        parallel (bool): Whether or not to simulate light curves
+                         in parallel.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
@@ -321,19 +388,39 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     coll = ((rps*Rearth + R_s*Rsun) > a*(1-eccs))
 
     lnL = np.full(N, -np.inf)
-    for i in range(N):
-        if Ptra[i] <= 1:
-            inc_min = np.arccos(Ptra[i]) * 180/pi
-        else:
-            continue
-        if (incs[i] >= inc_min) & (coll[i] == False):
-            lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
-                time, flux, sigma, rps[i],
-                P_orb, incs[i], a, R_s, u1, u2,
-                eccs[i], argps[i],
-                companion_fluxratio=fluxratios_comp[i],
-                companion_is_host=False
-                )
+    if parallel:
+        # find minimum inclination each planet can have while transiting
+        inc_min = np.full(N, 90.)
+        inc_min[Ptra <= 1.] = np.arccos(Ptra[Ptra <= 1.]) * 180./pi
+        # filter out systems that do not transit or have a collision
+        mask = (incs >= inc_min) & (coll == False)
+        # calculate lnL for transiting systems
+        a_arr = np.full(N, a)
+        R_s_arr = np.full(N, R_s)
+        u1_arr = np.full(N, u1)
+        u2_arr = np.full(N, u2)
+        lnL[mask] = -0.5*ln2pi - lnsigma - lnL_TP_p(
+                    time, flux, sigma, rps[mask],
+                    P_orb, incs[mask], a_arr[mask], R_s_arr[mask],
+                    u1_arr[mask], u2_arr[mask],
+                    eccs[mask], argps[mask],
+                    companion_fluxratio=fluxratios_comp[mask],
+                    companion_is_host=False
+                    )
+    else:
+        for i in range(N):
+            if Ptra[i] <= 1:
+                inc_min = np.arccos(Ptra[i]) * 180/pi
+            else:
+                continue
+            if (incs[i] >= inc_min) & (coll[i] == False):
+                lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
+                    time, flux, sigma, rps[i],
+                    P_orb, incs[i], a, R_s, u1, u2,
+                    eccs[i], argps[i],
+                    companion_fluxratio=fluxratios_comp[i],
+                    companion_is_host=False
+                    )
 
     idx = lnL.argmax()
     Z = np.mean(
@@ -353,7 +440,7 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Z: float, plx: float, contrast_curve_file: str = None,
-            N: int = 1000000):
+            N: int = 1000000, parallel: bool = False):
     """
     Calculates the marginal likelihood of the PEB scenario.
     Args:
@@ -369,6 +456,8 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         plx (float): Target star parallax [mas].
         contrast_curve_file (string): Path to contrast curve file.
         N (int): Number of draws for MC.
+        parallel (bool): Whether or not to simulate light curves
+                         in parallel.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -453,33 +542,73 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     lnL = np.full(N, -np.inf)
     lnL_twin = np.full(N, -np.inf)
-    for i in range(N):
+    if parallel:
         # q < 0.95
-        if Ptra[i] <= 1:
-            inc_min = np.arccos(Ptra[i]) * 180/pi
-        else:
-            continue
-        if (incs[i] >= inc_min) & (qs[i] < 0.95) & (coll[i] == False):
-            lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
-                time, flux, sigma, radii[i], fluxratios[i],
-                P_orb, incs[i], a[i], R_s, u1, u2,
-                eccs[i], argps[i],
-                companion_fluxratio=fluxratios_comp[i],
-                companion_is_host=False
-                )
-        # q >= 0.95 and 2xP_orb
-        if Ptra_twin[i] <= 1:
-            inc_min = np.arccos(Ptra_twin[i]) * 180/pi
-        else:
-            continue
-        if (incs[i] >= inc_min) & (qs[i] >= 0.95) & (coll_twin[i] == False):
-            lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
-                time, flux, sigma, radii[i], fluxratios[i],
-                2*P_orb, incs[i], a_twin[i], R_s, u1, u2,
-                eccs[i], argps[i],
-                companion_fluxratio=fluxratios_comp[i],
-                companion_is_host=False
-                )
+        # find minimum inclination each planet can have while transiting
+        inc_min = np.full(N, 90.)
+        inc_min[Ptra <= 1.] = np.arccos(Ptra[Ptra <= 1.]) * 180./pi
+        # filter out systems that do not transit or have a collision
+        mask = (incs >= inc_min) & (coll == False) & (qs < 0.95)
+        # calculate lnL for transiting systems
+        R_s_arr = np.full(N, R_s)
+        u1_arr = np.full(N, u1)
+        u2_arr = np.full(N, u2)
+        lnL[mask] = -0.5*ln2pi - lnsigma - lnL_EB_p(
+                    time, flux, sigma, radii[mask], fluxratios[mask],
+                    P_orb, incs[mask], a[mask], R_s_arr[mask],
+                    u1_arr[mask], u2_arr[mask],
+                    eccs[mask], argps[mask],
+                    companion_fluxratio=fluxratios_comp[mask],
+                    companion_is_host=False
+                    )
+        # q >= 0.95
+        # find minimum inclination each planet can have while transiting
+        inc_min = np.full(N, 90.)
+        inc_min[Ptra_twin <= 1.] = np.arccos(
+            Ptra_twin[Ptra_twin <= 1.]
+            ) * 180./pi
+        # filter out systems that do not transit or have a collision
+        mask = (incs >= inc_min) & (coll_twin == False) & (qs >= 0.95)
+        # calculate lnL for transiting systems
+        R_s_arr = np.full(N, R_s)
+        u1_arr = np.full(N, u1)
+        u2_arr = np.full(N, u2)
+        lnL_twin[mask] = -0.5*ln2pi - lnsigma - lnL_EB_twin_p(
+                    time, flux, sigma, radii[mask], fluxratios[mask],
+                    2*P_orb, incs[mask], a_twin[mask], R_s_arr[mask],
+                    u1_arr[mask], u2_arr[mask],
+                    eccs[mask], argps[mask],
+                    companion_fluxratio=fluxratios_comp[mask],
+                    companion_is_host=False
+                    )
+    else:
+        for i in range(N):
+            # q < 0.95
+            if Ptra[i] <= 1:
+                inc_min = np.arccos(Ptra[i]) * 180/pi
+            else:
+                continue
+            if (incs[i] >= inc_min) & (qs[i] < 0.95) & (coll[i] == False):
+                lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
+                    time, flux, sigma, radii[i], fluxratios[i],
+                    P_orb, incs[i], a[i], R_s, u1, u2,
+                    eccs[i], argps[i],
+                    companion_fluxratio=fluxratios_comp[i],
+                    companion_is_host=False
+                    )
+            # q >= 0.95 and 2xP_orb
+            if Ptra_twin[i] <= 1:
+                inc_min = np.arccos(Ptra_twin[i]) * 180/pi
+            else:
+                continue
+            if (incs[i] >= inc_min) & (qs[i] >= 0.95) & (coll_twin[i] == False):
+                lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
+                    time, flux, sigma, radii[i], fluxratios[i],
+                    2*P_orb, incs[i], a_twin[i], R_s, u1, u2,
+                    eccs[i], argps[i],
+                    companion_fluxratio=fluxratios_comp[i],
+                    companion_is_host=False
+                    )
 
     # results for q < 0.95
     idx = lnL.argmax()
@@ -515,7 +644,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float, Z: float,
             plx: float, contrast_curve_file: str = None,
-            N: int = 1000000):
+            N: int = 1000000, parallel: bool = False):
     """
     Calculates the marginal likelihood of the STP scenario.
     Args:
@@ -531,6 +660,8 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
         plx (float): Target star parallax [mas].
         contrast_curve_file (string): contrast curve file.
         N (int): Number of draws for MC.
+        parallel (bool): Whether or not to simulate light curves
+                         in parallel.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -612,20 +743,36 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
     coll = ((rps*Rearth + radii_comp*Rsun) > a*(1-eccs))
 
     lnL = np.full(N, -np.inf)
-    for i in range(N):
-        if Ptra[i] <= 1:
-            inc_min = np.arccos(Ptra[i]) * 180/pi
-        else:
-            continue
-        if (incs[i] >= inc_min) & (coll[i] == False):
-            lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
-                time, flux, sigma, rps[i],
-                P_orb, incs[i], a[i], radii_comp[i],
-                u1s_comp[i], u2s_comp[i],
-                eccs[i], argps[i],
-                companion_fluxratio=fluxratios_comp[i],
-                companion_is_host=True
-                )
+    if parallel:
+        # find minimum inclination each planet can have while transiting
+        inc_min = np.full(N, 90.)
+        inc_min[Ptra <= 1.] = np.arccos(Ptra[Ptra <= 1.]) * 180./pi
+        # filter out systems that do not transit or have a collision
+        mask = (incs >= inc_min) & (coll == False)
+        # calculate lnL for transiting systems
+        lnL[mask] = -0.5*ln2pi - lnsigma - lnL_TP_p(
+                    time, flux, sigma, rps[mask],
+                    P_orb, incs[mask], a[mask], radii_comp[mask],
+                    u1s_comp[mask], u2s_comp[mask],
+                    eccs[mask], argps[mask],
+                    companion_fluxratio=fluxratios_comp[mask],
+                    companion_is_host=True
+                    )
+    else:
+        for i in range(N):
+            if Ptra[i] <= 1:
+                inc_min = np.arccos(Ptra[i]) * 180/pi
+            else:
+                continue
+            if (incs[i] >= inc_min) & (coll[i] == False):
+                lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
+                    time, flux, sigma, rps[i],
+                    P_orb, incs[i], a[i], radii_comp[i],
+                    u1s_comp[i], u2s_comp[i],
+                    eccs[i], argps[i],
+                    companion_fluxratio=fluxratios_comp[i],
+                    companion_is_host=True
+                    )
 
     idx = lnL.argmax()
     Z = np.mean(
@@ -646,7 +793,7 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Z: float, plx: float, contrast_curve_file: str = None,
-            N: int = 1000000):
+            N: int = 1000000, parallel: bool = False):
     """
     Calculates the marginal likelihood of the SEB scenario.
     Args:
@@ -662,6 +809,8 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         plx (float): Target star parallax [mas].
         contrast_curve_file (string): Path to contrast curve file.
         N (int): Number of draws for MC.
+        parallel (bool): Whether or not to simulate light curves
+                         in parallel.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -761,35 +910,70 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     lnL = np.full(N, -np.inf)
     lnL_twin = np.full(N, -np.inf)
-    for i in range(N):
+    if parallel:
         # q < 0.95
-        if Ptra[i] <= 1:
-            inc_min = np.arccos(Ptra[i]) * 180/pi
-        else:
-            continue
-        if (incs[i] >= inc_min) & (qs[i] < 0.95) & (coll[i] == False):
-            lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
-                time, flux, sigma, radii[i], fluxratios[i],
-                P_orb, incs[i], a[i], radii_comp[i],
-                u1s_comp[i], u2s_comp[i],
-                eccs[i], argps[i],
-                companion_fluxratio=fluxratios_comp[i],
-                companion_is_host=True
-                )
-        # q >= 0.95 and 2xP_orb
-        if Ptra_twin[i] <= 1:
-            inc_min = np.arccos(Ptra_twin[i]) * 180/pi
-        else:
-            continue
-        if (incs[i] >= inc_min) & (qs[i] >= 0.95) & (coll_twin[i] == False):
-            lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
-                time, flux, sigma, radii[i], fluxratios[i],
-                2*P_orb, incs[i], a_twin[i], radii_comp[i],
-                u1s_comp[i], u2s_comp[i],
-                eccs[i], argps[i],
-                companion_fluxratio=fluxratios_comp[i],
-                companion_is_host=True
-                )
+        # find minimum inclination each planet can have while transiting
+        inc_min = np.full(N, 90.)
+        inc_min[Ptra <= 1.] = np.arccos(Ptra[Ptra <= 1.]) * 180./pi
+        # filter out systems that do not transit or have a collision
+        mask = (incs >= inc_min) & (coll == False) & (qs < 0.95)
+        # calculate lnL for transiting systems
+        lnL[mask] = -0.5*ln2pi - lnsigma - lnL_EB_p(
+                    time, flux, sigma, radii[mask], fluxratios[mask],
+                    P_orb, incs[mask], a[mask], radii_comp[mask],
+                    u1s_comp[mask], u2s_comp[mask],
+                    eccs[mask], argps[mask],
+                    companion_fluxratio=fluxratios_comp[mask],
+                    companion_is_host=True
+                    )
+        # q >= 0.95
+        # find minimum inclination each planet can have while transiting
+        inc_min = np.full(N, 90.)
+        inc_min[Ptra_twin <= 1.] = np.arccos(
+            Ptra_twin[Ptra_twin <= 1.]
+            ) * 180./pi
+        # filter out systems that do not transit or have a collision
+        mask = (incs >= inc_min) & (coll_twin == False) & (qs >= 0.95)
+        # calculate lnL for transiting systems
+        lnL_twin[mask] = -0.5*ln2pi - lnsigma - lnL_EB_twin_p(
+                    time, flux, sigma, radii[mask], fluxratios[mask],
+                    2*P_orb, incs[mask], a_twin[mask], radii_comp[mask],
+                    u1s_comp[mask], u2s_comp[mask],
+                    eccs[mask], argps[mask],
+                    companion_fluxratio=fluxratios_comp[mask],
+                    companion_is_host=True
+                    )
+    else:
+        for i in range(N):
+            # q < 0.95
+            if Ptra[i] <= 1:
+                inc_min = np.arccos(Ptra[i]) * 180/pi
+            else:
+                continue
+            if (incs[i] >= inc_min) & (qs[i] < 0.95) & (coll[i] == False):
+                lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
+                    time, flux, sigma, radii[i], fluxratios[i],
+                    P_orb, incs[i], a[i], radii_comp[i],
+                    u1s_comp[i], u2s_comp[i],
+                    eccs[i], argps[i],
+                    companion_fluxratio=fluxratios_comp[i],
+                    companion_is_host=True
+                    )
+            # q >= 0.95 and 2xP_orb
+            if Ptra_twin[i] <= 1:
+                inc_min = np.arccos(Ptra_twin[i]) * 180/pi
+            else:
+                continue
+            if ((incs[i] >= inc_min) & (qs[i] >= 0.95)
+                & (coll_twin[i] == False)):
+                lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
+                    time, flux, sigma, radii[i], fluxratios[i],
+                    2*P_orb, incs[i], a_twin[i], radii_comp[i],
+                    u1s_comp[i], u2s_comp[i],
+                    eccs[i], argps[i],
+                    companion_fluxratio=fluxratios_comp[i],
+                    companion_is_host=True
+                    )
 
     # results for q < 0.95
     idx = lnL.argmax()
@@ -827,7 +1011,8 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Z: float, Tmag: float, output_url: str,
-            contrast_curve_file: str = None, N: int = 1000000):
+            contrast_curve_file: str = None, N: int = 1000000,
+            parallel: bool = False):
     """
     Calculates the marginal likelihood of the DTP scenario.
     Args:
@@ -844,6 +1029,8 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         output_url (string): Link to trilegal query results.
         contrast_curve_file (string): Contrast curve file.
         N (int): Number of draws for MC.
+        parallel (bool): Whether or not to simulate light curves
+                         in parallel.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
@@ -911,19 +1098,39 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     coll = ((rps*Rearth + R_s*Rsun) > a*(1-eccs))
 
     lnL = np.full(N, -np.inf)
-    for i in range(N):
-        if Ptra[i] <= 1:
-            inc_min = np.arccos(Ptra[i]) * 180/pi
-        else:
-            continue
-        if (incs[i] >= inc_min) & (coll[i] == False):
-            lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
-                time, flux, sigma, rps[i],
-                P_orb, incs[i], a, R_s, u1, u2,
-                eccs[i], argps[i],
-                companion_fluxratio=fluxratios_comp[idxs[i]],
-                companion_is_host=False
-                )
+    if parallel:
+        # find minimum inclination each planet can have while transiting
+        inc_min = np.full(N, 90.)
+        inc_min[Ptra <= 1.] = np.arccos(Ptra[Ptra <= 1.]) * 180./pi
+        # filter out systems that do not transit or have a collision
+        mask = (incs >= inc_min) & (coll == False)
+        # calculate lnL for transiting systems
+        a_arr = np.full(N, a)
+        R_s_arr = np.full(N, R_s)
+        u1_arr = np.full(N, u1)
+        u2_arr = np.full(N, u2)
+        lnL[mask] = -0.5*ln2pi - lnsigma - lnL_TP_p(
+                    time, flux, sigma, rps[mask],
+                    P_orb, incs[mask], a_arr[mask], R_s_arr[mask],
+                    u1_arr[mask], u2_arr[mask],
+                    eccs[mask], argps[mask],
+                    companion_fluxratio=fluxratios_comp[idxs[mask]],
+                    companion_is_host=False
+                    )
+    else:
+        for i in range(N):
+            if Ptra[i] <= 1:
+                inc_min = np.arccos(Ptra[i]) * 180/pi
+            else:
+                continue
+            if (incs[i] >= inc_min) & (coll[i] == False):
+                lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
+                    time, flux, sigma, rps[i],
+                    P_orb, incs[i], a, R_s, u1, u2,
+                    eccs[i], argps[i],
+                    companion_fluxratio=fluxratios_comp[idxs[i]],
+                    companion_is_host=False
+                    )
 
     idx = lnL.argmax()
     Z = np.mean(
@@ -943,7 +1150,8 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Z: float, Tmag: float, output_url: str,
-            contrast_curve_file: str = None, N: int = 1000000):
+            contrast_curve_file: str = None, N: int = 1000000,
+            parallel: bool = False):
     """
     Calculates the marginal likelihood of the DEB scenario.
     Args:
@@ -960,6 +1168,8 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         output_url (string): Link to trilegal query results.
         contrast_curve_file (string): Path to contrast curve file.
         N (int): Number of draws for MC.
+        parallel (bool): Whether or not to simulate light curves
+                         in parallel.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -1043,33 +1253,74 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     lnL = np.full(N, -np.inf)
     lnL_twin = np.full(N, -np.inf)
-    for i in range(N):
+    if parallel:
         # q < 0.95
-        if Ptra[i] <= 1:
-            inc_min = np.arccos(Ptra[i]) * 180/pi
-        else:
-            continue
-        if (incs[i] >= inc_min) & (qs[i] < 0.95) & (coll[i] == False):
-            lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
-                time, flux, sigma, radii[i], fluxratios[i],
-                P_orb, incs[i], a[i], R_s, u1, u2,
-                eccs[i], argps[i],
-                companion_fluxratio=fluxratios_comp[idxs[i]],
-                companion_is_host=False
-                )
-        # q >= 0.95 and 2xP_orb
-        if Ptra_twin[i] <= 1:
-            inc_min = np.arccos(Ptra_twin[i]) * 180/pi
-        else:
-            continue
-        if (incs[i] >= inc_min) & (qs[i] >= 0.95) & (coll_twin[i] == False):
-            lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
-                time, flux, sigma, radii[i], fluxratios[i],
-                2*P_orb, incs[i], a_twin[i], R_s, u1, u2,
-                eccs[i], argps[i],
-                companion_fluxratio=fluxratios_comp[idxs[i]],
-                companion_is_host=False
-                )
+        # find minimum inclination each planet can have while transiting
+        inc_min = np.full(N, 90.)
+        inc_min[Ptra <= 1.] = np.arccos(Ptra[Ptra <= 1.]) * 180./pi
+        # filter out systems that do not transit or have a collision
+        mask = (incs >= inc_min) & (coll == False) & (qs < 0.95)
+        # calculate lnL for transiting systems
+        R_s_arr = np.full(N, R_s)
+        u1_arr = np.full(N, u1)
+        u2_arr = np.full(N, u2)
+        lnL[mask] = -0.5*ln2pi - lnsigma - lnL_EB_p(
+                    time, flux, sigma, radii[mask], fluxratios[mask],
+                    P_orb, incs[mask], a[mask], R_s_arr[mask],
+                    u1_arr[mask], u2_arr[mask],
+                    eccs[mask], argps[mask],
+                    companion_fluxratio=fluxratios_comp[idxs[mask]],
+                    companion_is_host=False
+                    )
+        # q >= 0.95
+        # find minimum inclination each planet can have while transiting
+        inc_min = np.full(N, 90.)
+        inc_min[Ptra_twin <= 1.] = np.arccos(
+            Ptra_twin[Ptra_twin <= 1.]
+            ) * 180./pi
+        # filter out systems that do not transit or have a collision
+        mask = (incs >= inc_min) & (coll_twin == False) & (qs >= 0.95)
+        # calculate lnL for transiting systems
+        R_s_arr = np.full(N, R_s)
+        u1_arr = np.full(N, u1)
+        u2_arr = np.full(N, u2)
+        lnL_twin[mask] = -0.5*ln2pi - lnsigma - lnL_EB_twin_p(
+                    time, flux, sigma, radii[mask], fluxratios[mask],
+                    2*P_orb, incs[mask], a_twin[mask], R_s_arr[mask],
+                    u1_arr[mask], u2_arr[mask],
+                    eccs[mask], argps[mask],
+                    companion_fluxratio=fluxratios_comp[idxs[mask]],
+                    companion_is_host=False
+                    )
+    else:
+        for i in range(N):
+            # q < 0.95
+            if Ptra[i] <= 1:
+                inc_min = np.arccos(Ptra[i]) * 180/pi
+            else:
+                continue
+            if (incs[i] >= inc_min) & (qs[i] < 0.95) & (coll[i] == False):
+                lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
+                    time, flux, sigma, radii[i], fluxratios[i],
+                    P_orb, incs[i], a[i], R_s, u1, u2,
+                    eccs[i], argps[i],
+                    companion_fluxratio=fluxratios_comp[idxs[i]],
+                    companion_is_host=False
+                    )
+            # q >= 0.95 and 2xP_orb
+            if Ptra_twin[i] <= 1:
+                inc_min = np.arccos(Ptra_twin[i]) * 180/pi
+            else:
+                continue
+            if ((incs[i] >= inc_min) & (qs[i] >= 0.95)
+                & (coll_twin[i] == False)):
+                lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
+                    time, flux, sigma, radii[i], fluxratios[i],
+                    2*P_orb, incs[i], a_twin[i], R_s, u1, u2,
+                    eccs[i], argps[i],
+                    companion_fluxratio=fluxratios_comp[idxs[i]],
+                    companion_is_host=False
+                    )
 
     # results for q < 0.95
     idx = lnL.argmax()
@@ -1105,7 +1356,8 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Tmag: float, output_url: str,
-            contrast_curve_file: str = None, N: int = 1000000):
+            contrast_curve_file: str = None, N: int = 1000000,
+            parallel: bool = False):
     """
     Calculates the marginal likelihood of the BTP scenario.
     Args:
@@ -1121,6 +1373,8 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         output_url (string): Link to trilegal query results.
         contrast_curve_file (string): Path to contrast curve file.
         N (int): Number of draws for MC.
+        parallel (bool): Whether or not to simulate light curves
+                         in parallel.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
@@ -1192,21 +1446,42 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     coll = ((rps*Rearth + radii_comp[idxs[i]]*Rsun) > a*(1-eccs))
 
     lnL = np.full(N, -np.inf)
-    for i in range(N):
-        if Ptra[i] <= 1:
-            inc_min = np.arccos(Ptra[i]) * 180/pi
-        else:
-            continue
-        if ((incs[i] >= inc_min) & (loggs_comp[idxs[i]] >= 3.5)
-                & (Teffs_comp[idxs[i]] <= 10000) & (coll[i] == False)):
-            lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
-                time, flux, sigma, rps[i],
-                P_orb, incs[i], a[i], radii_comp[idxs[i]],
-                u1s_comp[idxs[i]], u2s_comp[idxs[i]],
-                eccs[i], argps[i],
-                companion_fluxratio=fluxratios_comp[idxs[i]],
-                companion_is_host=True
-                )
+    if parallel:
+        # find minimum inclination each planet can have while transiting
+        inc_min = np.full(N, 90.)
+        inc_min[Ptra <= 1.] = np.arccos(Ptra[Ptra <= 1.]) * 180./pi
+        # filter out systems that do not transit or have a collision
+        mask = (
+            (incs >= inc_min)
+            & (coll == False)
+            & (loggs_comp[idxs] >= 3.5)
+            & (Teffs_comp[idxs] <= 10000)
+            )
+        # calculate lnL for transiting systems
+        lnL[mask] = -0.5*ln2pi - lnsigma - lnL_TP_p(
+                    time, flux, sigma, rps[mask],
+                    P_orb, incs[mask], a[mask], radii_comp[idxs[mask]],
+                    u1s_comp[idxs[mask]], u2s_comp[idxs[mask]],
+                    eccs[mask], argps[mask],
+                    companion_fluxratio=fluxratios_comp[idxs[mask]],
+                    companion_is_host=True
+                    )
+    else:
+        for i in range(N):
+            if Ptra[i] <= 1:
+                inc_min = np.arccos(Ptra[i]) * 180/pi
+            else:
+                continue
+            if ((incs[i] >= inc_min) & (loggs_comp[idxs[i]] >= 3.5)
+                    & (Teffs_comp[idxs[i]] <= 10000) & (coll[i] == False)):
+                lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
+                    time, flux, sigma, rps[i],
+                    P_orb, incs[i], a[i], radii_comp[idxs[i]],
+                    u1s_comp[idxs[i]], u2s_comp[idxs[i]],
+                    eccs[i], argps[i],
+                    companion_fluxratio=fluxratios_comp[idxs[i]],
+                    companion_is_host=True
+                    )
 
     idx = lnL.argmax()
     Z = np.mean(
@@ -1227,7 +1502,8 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Tmag: float, output_url: str,
-            contrast_curve_file: str = None, N: int = 1000000):
+            contrast_curve_file: str = None, N: int = 1000000,
+            parallel: bool = False):
     """
     Calculates the marginal likelihood of the BEB scenario.
     Args:
@@ -1243,6 +1519,8 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         output_url (string): Link to trilegal query results.
         contrast_curve_file (string): Path to contrast curve file.
         N (int): Number of draws for MC.
+        parallel (bool): Whether or not to simulate light curves
+                         in parallel.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -1350,41 +1628,87 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     lnL = np.full(N, -np.inf)
     lnL_twin = np.full(N, -np.inf)
-    for i in range(N):
+    if parallel:
         # q < 0.95
-        if Ptra[i] <= 1:
-            inc_min = np.arccos(Ptra[i]) * 180/pi
-        else:
-            continue
-        if ((incs[i] >= inc_min) & (qs[i] < 0.95)
-                & (loggs_comp[idxs[i]] >= 3.5)
-                & (Teffs_comp[idxs[i]] <= 10000)
-                & (coll[i] == False)):
-            lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
-                time, flux, sigma, radii[i], fluxratios[i],
-                P_orb, incs[i], a[i], radii_comp[idxs[i]],
-                u1s_comp[idxs[i]], u2s_comp[idxs[i]],
-                eccs[i], argps[i],
-                companion_fluxratio=fluxratios_comp[idxs[i]],
-                companion_is_host=True
-                )
-        # q >= 0.95 and 2xP_orb
-        if Ptra_twin[i] <= 1:
-            inc_min = np.arccos(Ptra_twin[i]) * 180/pi
-        else:
-            continue
-        if ((incs[i] >= inc_min) & (qs[i] >= 0.95)
-                & (loggs_comp[idxs[i]] >= 3.5)
-                & (Teffs_comp[idxs[i]] <= 10000)
-                & (coll_twin[i] == False)):
-            lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
-                time, flux, sigma, radii[i], fluxratios[i],
-                2*P_orb, incs[i], a_twin[i], radii_comp[idxs[i]],
-                u1s_comp[idxs[i]], u2s_comp[idxs[i]],
-                eccs[i], argps[i],
-                companion_fluxratio=fluxratios_comp[idxs[i]],
-                companion_is_host=True
-                )
+        # find minimum inclination each planet can have while transiting
+        inc_min = np.full(N, 90.)
+        inc_min[Ptra <= 1.] = np.arccos(Ptra[Ptra <= 1.]) * 180./pi
+        # filter out systems that do not transit or have a collision
+        mask = (
+            (incs >= inc_min)
+            & (coll_twin == False)
+            & (qs < 0.95)
+            & (loggs_comp[idxs] >= 3.5)
+            & (Teffs_comp[idxs] <= 10000)
+            )
+        # calculate lnL for transiting systems
+        lnL[mask] = -0.5*ln2pi - lnsigma - lnL_EB_p(
+                    time, flux, sigma, radii[mask], fluxratios[mask],
+                    P_orb, incs[mask], a[mask], radii_comp[idxs[mask]],
+                    u1s_comp[idxs[mask]], u2s_comp[idxs[mask]],
+                    eccs[mask], argps[mask],
+                    companion_fluxratio=fluxratios_comp[idxs[mask]],
+                    companion_is_host=True
+                    )
+        # q >= 0.95
+        # find minimum inclination each planet can have while transiting
+        inc_min = np.full(N, 90.)
+        inc_min[Ptra_twin <= 1.] = np.arccos(
+            Ptra_twin[Ptra_twin <= 1.]
+            ) * 180./pi
+        # filter out systems that do not transit or have a collision
+        mask = (
+            (incs >= inc_min)
+            & (coll_twin == False)
+            & (qs >= 0.95)
+            & (loggs_comp[idxs] >= 3.5)
+            & (Teffs_comp[idxs] <= 10000)
+            )
+        # calculate lnL for transiting systems
+        lnL_twin[mask] = -0.5*ln2pi - lnsigma - lnL_EB_twin_p(
+                    time, flux, sigma, radii[mask], fluxratios[mask],
+                    2*P_orb, incs[mask], a_twin[mask], radii_comp[idxs[mask]],
+                    u1s_comp[idxs[mask]], u2s_comp[idxs[mask]],
+                    eccs[mask], argps[mask],
+                    companion_fluxratio=fluxratios_comp[idxs[mask]],
+                    companion_is_host=True
+                    )
+    else:
+        for i in range(N):
+            # q < 0.95
+            if Ptra[i] <= 1:
+                inc_min = np.arccos(Ptra[i]) * 180/pi
+            else:
+                continue
+            if ((incs[i] >= inc_min) & (qs[i] < 0.95)
+                    & (loggs_comp[idxs[i]] >= 3.5)
+                    & (Teffs_comp[idxs[i]] <= 10000)
+                    & (coll[i] == False)):
+                lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
+                    time, flux, sigma, radii[i], fluxratios[i],
+                    P_orb, incs[i], a[i], radii_comp[idxs[i]],
+                    u1s_comp[idxs[i]], u2s_comp[idxs[i]],
+                    eccs[i], argps[i],
+                    companion_fluxratio=fluxratios_comp[idxs[i]],
+                    companion_is_host=True
+                    )
+            # q >= 0.95 and 2xP_orb
+            if Ptra_twin[i] <= 1:
+                inc_min = np.arccos(Ptra_twin[i]) * 180/pi
+            else:
+                continue
+            if ((incs[i] >= inc_min) & (qs[i] >= 0.95)
+                    & (loggs_comp[idxs[i]] >= 3.5)
+                    & (Teffs_comp[idxs[i]] <= 10000)
+                    & (coll_twin[i] == False)):
+                lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
+                    time, flux, sigma, radii[i], fluxratios[i],
+                    2*P_orb, incs[i], a_twin[i], radii_comp[idxs[i]],
+                    u1s_comp[idxs[i]], u2s_comp[idxs[i]],
+                    eccs[i], argps[i],
+                    companion_fluxratio=fluxratios_comp[idxs[i]],
+                    companion_is_host=True
+                    )
 
     # results for q < 0.95
     idx = lnL.argmax()
@@ -1421,7 +1745,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 
 def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb: float, Tmag: float, output_url: str,
-                    N: int = 1000000):
+                    N: int = 1000000, parallel: bool = False):
     """
     Calculates the marginal likelihood of the NTP scenario for
     a star of unknown properties.
@@ -1434,6 +1758,8 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         Tmag (float): Target star TESS magnitude.
         output_url (string): Link to trilegal query results.
         N (int): Number of draws for MC.
+        parallel (bool): Whether or not to simulate light curves
+                         in parallel.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
@@ -1510,20 +1836,43 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
     coll = ((rps*Rearth + radii_possible[idxs]*Rsun) > a*(1-eccs))
 
     lnL = np.full(N, -np.inf)
-    for i in range(N):
-        if Ptra[i] <= 1:
-            inc_min = np.arccos(Ptra[i]) * 180/pi
-        else:
-            continue
-        if ((incs[i] >= inc_min) & (loggs_possible[idxs[i]] >= 3.5)
-                & (Teffs_possible[idxs[i]] <= 10000)
-                & (coll[i] == False)):
-            lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
-                time, flux, sigma, rps[i],
-                P_orb, incs[i], a[i], radii_possible[idxs[i]],
-                u1s_possible[idxs[i]], u2s_possible[idxs[i]],
-                eccs[i], argps[i]
-                )
+    if parallel:
+        # find minimum inclination each planet can have while transiting
+        inc_min = np.full(N, 90.)
+        inc_min[Ptra <= 1.] = np.arccos(Ptra[Ptra <= 1.]) * 180./pi
+        # filter out systems that do not transit or have a collision
+        mask = (
+            (incs >= inc_min)
+            & (coll == False)
+            & (loggs_possible[idxs] >= 3.5)
+            & (Teffs_possible[idxs] <= 10000)
+            )
+        # calculate lnL for transiting systems
+        companion_fluxratio = np.zeros(N)
+        lnL[mask] = -0.5*ln2pi - lnsigma - lnL_TP_p(
+                    time, flux, sigma, rps[mask],
+                    P_orb, incs[mask], a[mask],
+                    radii_possible[idxs[mask]],
+                    u1s_possible[idxs[mask]],
+                    u2s_possible[idxs[mask]],
+                    eccs[mask], argps[mask],
+                    companion_fluxratio=companion_fluxratio[mask]
+                    )
+    else:
+        for i in range(N):
+            if Ptra[i] <= 1:
+                inc_min = np.arccos(Ptra[i]) * 180/pi
+            else:
+                continue
+            if ((incs[i] >= inc_min) & (loggs_possible[idxs[i]] >= 3.5)
+                    & (Teffs_possible[idxs[i]] <= 10000)
+                    & (coll[i] == False)):
+                lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
+                    time, flux, sigma, rps[i],
+                    P_orb, incs[i], a[i], radii_possible[idxs[i]],
+                    u1s_possible[idxs[i]], u2s_possible[idxs[i]],
+                    eccs[i], argps[i]
+                    )
 
     idx = lnL.argmax()
     Z = np.mean(np.exp(lnL + lnprior_Mstar + lnprior_Porb))
@@ -1541,7 +1890,7 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
 
 def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb: float, Tmag: float, output_url: str,
-                    N: int = 1000000):
+                    N: int = 1000000, parallel: bool = False):
     """
     Calculates the marginal likelihood of the NEB scenario for a star
     of unknown properties.
@@ -1554,6 +1903,8 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         Tmag (float): Target star TESS magnitude.
         output_url (string): Link to trilegal query results.
         N (int): Number of draws for MC.
+        parallel (bool): Whether or not to simulate light curves
+                         in parallel.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -1650,37 +2001,85 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     lnL = np.full(N, -np.inf)
     lnL_twin = np.full(N, -np.inf)
-    for i in range(N):
+    if parallel:
         # q < 0.95
-        if Ptra[i] <= 1:
-            inc_min = np.arccos(Ptra[i]) * 180/pi
-        else:
-            continue
-        if ((incs[i] >= inc_min) & (qs[i] < 0.95)
-                & (loggs_possible[idxs[i]] >= 3.5)
-                & (Teffs_possible[idxs[i]] <= 10000)
-                & (coll[i] == False)):
-            lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
-                time, flux, sigma, radii[i], fluxratios[i],
-                P_orb, incs[i], a[i], radii_possible[idxs[i]],
-                u1s_possible[idxs[i]], u2s_possible[idxs[i]],
-                eccs[i], argps[i]
-                )
-        # q >= 0.95 and 2xP_orb
-        if Ptra_twin[i] <= 1:
-            inc_min = np.arccos(Ptra_twin[i]) * 180/pi
-        else:
-            continue
-        if ((incs[i] >= inc_min) & (qs[i] >= 0.95)
-                & (loggs_possible[idxs[i]] >= 3.5)
-                & (Teffs_possible[idxs[i]] <= 10000)
-                & (coll_twin[i] == False)):
-            lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
-                time, flux, sigma, radii[i], fluxratios[i],
-                2*P_orb, incs[i], a_twin[i], radii_possible[idxs[i]],
-                u1s_possible[idxs[i]], u2s_possible[idxs[i]],
-                eccs[i], argps[i]
-                )
+        # find minimum inclination each planet can have while transiting
+        inc_min = np.full(N, 90.)
+        inc_min[Ptra <= 1.] = np.arccos(Ptra[Ptra <= 1.]) * 180./pi
+        # filter out systems that do not transit or have a collision
+        mask = (
+            (incs >= inc_min)
+            & (coll == False)
+            & (qs < 0.95)
+            & (loggs_possible[idxs] >= 3.5)
+            & (Teffs_possible[idxs] <= 10000)
+            )
+        # calculate lnL for transiting systems
+        companion_fluxratio = np.zeros(N)
+        lnL[mask] = -0.5*ln2pi - lnsigma - lnL_EB_p(
+                    time, flux, sigma, radii[mask], fluxratios[mask],
+                    P_orb, incs[mask], a[mask],
+                    radii_possible[idxs[mask]],
+                    u1s_possible[idxs[mask]], u2s_possible[idxs[mask]],
+                    eccs[mask], argps[mask],
+                    companion_fluxratio=companion_fluxratio[mask]
+                    )
+        # q >= 0.95
+        # find minimum inclination each planet can have while transiting
+        inc_min = np.full(N, 90.)
+        inc_min[Ptra_twin <= 1.] = np.arccos(
+            Ptra_twin[Ptra_twin <= 1.]
+            ) * 180./pi
+        # filter out systems that do not transit or have a collision
+        mask = (
+            (incs >= inc_min)
+            & (coll == False)
+            & (qs >= 0.95)
+            & (loggs_possible[idxs] >= 3.5)
+            & (Teffs_possible[idxs] <= 10000)
+            )
+        # calculate lnL for transiting systems
+        companion_fluxratio = np.zeros(N)
+        lnL_twin[mask] = -0.5*ln2pi - lnsigma - lnL_EB_twin_p(
+                    time, flux, sigma, radii[mask], fluxratios[mask],
+                    2*P_orb, incs[mask], a_twin[mask],
+                    radii_possible[idxs[mask]],
+                    u1s_possible[idxs[mask]], u2s_possible[idxs[mask]],
+                    eccs[mask], argps[mask],
+                    companion_fluxratio=companion_fluxratio[mask]
+                    )
+    else:
+        for i in range(N):
+            # q < 0.95
+            if Ptra[i] <= 1:
+                inc_min = np.arccos(Ptra[i]) * 180/pi
+            else:
+                continue
+            if ((incs[i] >= inc_min) & (qs[i] < 0.95)
+                    & (loggs_possible[idxs[i]] >= 3.5)
+                    & (Teffs_possible[idxs[i]] <= 10000)
+                    & (coll[i] == False)):
+                lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
+                    time, flux, sigma, radii[i], fluxratios[i],
+                    P_orb, incs[i], a[i], radii_possible[idxs[i]],
+                    u1s_possible[idxs[i]], u2s_possible[idxs[i]],
+                    eccs[i], argps[i]
+                    )
+            # q >= 0.95 and 2xP_orb
+            if Ptra_twin[i] <= 1:
+                inc_min = np.arccos(Ptra_twin[i]) * 180/pi
+            else:
+                continue
+            if ((incs[i] >= inc_min) & (qs[i] >= 0.95)
+                    & (loggs_possible[idxs[i]] >= 3.5)
+                    & (Teffs_possible[idxs[i]] <= 10000)
+                    & (coll_twin[i] == False)):
+                lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
+                    time, flux, sigma, radii[i], fluxratios[i],
+                    2*P_orb, incs[i], a_twin[i], radii_possible[idxs[i]],
+                    u1s_possible[idxs[i]], u2s_possible[idxs[i]],
+                    eccs[i], argps[i]
+                    )
 
     # results for q < 0.95
     idx = lnL.argmax()
@@ -1715,7 +2114,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
 
 def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb: float, R_s: float, Teff: float, Z: float,
-                    N: int = 1000000):
+                    N: int = 1000000, parallel: bool = False):
     """
     Calculates the marginal likelihood of the NTP scenario for
     subgiant stars.
@@ -1729,6 +2128,8 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
         Teff (float): Target star effective temperature [K].
         Z (float): Target star metallicity [dex].
         N (int): Number of draws for MC.
+        parallel (bool): Whether or not to simulate light curves
+                         in parallel.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
@@ -1768,17 +2169,37 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     coll = ((rps*Rearth + R_s*Rsun) > a*(1-eccs))
 
     lnL = np.full(N, -np.inf)
-    for i in range(N):
-        if Ptra[i] <= 1:
-            inc_min = np.arccos(Ptra[i]) * 180/pi
-        else:
-            continue
-        if (incs[i] >= inc_min) & (a > R_s) & (coll[i] == False):
-            lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
-                time, flux, sigma, rps[i],
-                P_orb, incs[i], a, R_s, u1, u2,
-                eccs[i], argps[i]
-                )
+    if parallel:
+        # find minimum inclination each planet can have while transiting
+        inc_min = np.full(N, 90.)
+        inc_min[Ptra <= 1.] = np.arccos(Ptra[Ptra <= 1.]) * 180./pi
+        # filter out systems that do not transit or have a collision
+        mask = (incs >= inc_min) & (coll == False)
+        # calculate lnL for transiting systems
+        a_arr = np.full(N, a)
+        R_s_arr = np.full(N, R_s)
+        u1_arr = np.full(N, u1)
+        u2_arr = np.full(N, u2)
+        companion_fluxratio = np.zeros(N)
+        lnL[mask] = -0.5*ln2pi - lnsigma - lnL_TP_p(
+                    time, flux, sigma, rps[mask],
+                    P_orb, incs[mask], a_arr[mask], R_s_arr[mask],
+                    u1_arr[mask], u2_arr[mask],
+                    eccs[mask], argps[mask],
+                    companion_fluxratio=companion_fluxratio[mask]
+                    )
+    else:
+        for i in range(N):
+            if Ptra[i] <= 1:
+                inc_min = np.arccos(Ptra[i]) * 180/pi
+            else:
+                continue
+            if (incs[i] >= inc_min) & (coll[i] == False):
+                lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
+                    time, flux, sigma, rps[i],
+                    P_orb, incs[i], a, R_s, u1, u2,
+                    eccs[i], argps[i]
+                    )
 
     idx = lnL.argmax()
     Z = np.mean(np.exp(lnL + lnprior_Mstar + lnprior_Porb))
@@ -1795,7 +2216,7 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
 
 def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb: float, R_s: float, Teff: float, Z: float,
-                    N: int = 1000000):
+                    N: int = 1000000, parallel: bool = False):
     """
     Calculates the marginal likelihood of the NEB scenario
     for subgiant stars.
@@ -1809,6 +2230,8 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
         Teff (float): Target star effective temperature [K].
         Z (float): Target star metallicity [dex].
         N (int): Number of draws for MC.
+        parallel (bool): Whether or not to simulate light curves
+                         in parallel.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -1863,31 +2286,71 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     lnL = np.full(N, -np.inf)
     lnL_twin = np.full(N, -np.inf)
-    for i in range(N):
+    if parallel:
         # q < 0.95
-        if Ptra[i] <= 1:
-            inc_min = np.arccos(Ptra[i]) * 180/pi
-        else:
-            continue
-        if ((incs[i] >= inc_min) & (qs[i] < 0.95)
-                & (coll[i] == False)):
-            lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
-                time, flux, sigma, radii[i], fluxratios[i],
-                P_orb, incs[i], a[i], R_s, u1, u2,
-                eccs[i], argps[i]
-                )
-        # q >= 0.95 and 2xP_orb
-        if Ptra_twin[i] <= 1:
-            inc_min = np.arccos(Ptra_twin[i]) * 180/pi
-        else:
-            continue
-        if ((incs[i] >= inc_min) & (qs[i] >= 0.95)
-        	    & (coll_twin[i] == False)):
-            lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
-                time, flux, sigma, R_s, fluxratios[i],
-                2*P_orb, incs[i], a_twin[i], R_s, u1, u2,
-                eccs[i], argps[i]
-                )
+        # find minimum inclination each planet can have while transiting
+        inc_min = np.full(N, 90.)
+        inc_min[Ptra <= 1.] = np.arccos(Ptra[Ptra <= 1.]) * 180./pi
+        # filter out systems that do not transit or have a collision
+        mask = (incs >= inc_min) & (coll == False) & (qs < 0.95)
+        # calculate lnL for transiting systems
+        R_s_arr = np.full(N, R_s)
+        u1_arr = np.full(N, u1)
+        u2_arr = np.full(N, u2)
+        companion_fluxratio = np.zeros(N)
+        lnL[mask] = -0.5*ln2pi - lnsigma - lnL_EB_p(
+                    time, flux, sigma, radii[mask], fluxratios[mask],
+                    P_orb, incs[mask], a[mask], R_s_arr[mask],
+                    u1_arr[mask], u2_arr[mask],
+                    eccs[mask], argps[mask],
+                    companion_fluxratio=companion_fluxratio[mask]
+                    )
+        # q >= 0.95
+        # find minimum inclination each planet can have while transiting
+        inc_min = np.full(N, 90.)
+        inc_min[Ptra_twin <= 1.] = np.arccos(
+            Ptra_twin[Ptra_twin <= 1.]
+            ) * 180./pi
+        # filter out systems that do not transit or have a collision
+        mask = (incs >= inc_min) & (coll_twin == False) & (qs >= 0.95)
+        # calculate lnL for transiting systems
+        R_s_arr = np.full(N, R_s)
+        u1_arr = np.full(N, u1)
+        u2_arr = np.full(N, u2)
+        companion_fluxratio = np.zeros(N)
+        lnL_twin[mask] = -0.5*ln2pi - lnsigma - lnL_EB_twin_p(
+                    time, flux, sigma, R_s, fluxratios[mask],
+                    2*P_orb, incs[mask], a_twin[mask], R_s_arr[mask],
+                    u1_arr[mask], u2_arr[mask],
+                    eccs[mask], argps[mask],
+                    companion_fluxratio=companion_fluxratio[mask]
+                    )
+    else:
+        for i in range(N):
+            # q < 0.95
+            if Ptra[i] <= 1:
+                inc_min = np.arccos(Ptra[i]) * 180/pi
+            else:
+                continue
+            if ((incs[i] >= inc_min) & (qs[i] < 0.95)
+                    & (coll[i] == False)):
+                lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
+                    time, flux, sigma, radii[i], fluxratios[i],
+                    P_orb, incs[i], a[i], R_s, u1, u2,
+                    eccs[i], argps[i]
+                    )
+            # q >= 0.95 and 2xP_orb
+            if Ptra_twin[i] <= 1:
+                inc_min = np.arccos(Ptra_twin[i]) * 180/pi
+            else:
+                continue
+            if ((incs[i] >= inc_min) & (qs[i] >= 0.95)
+                    & (coll_twin[i] == False)):
+                lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
+                    time, flux, sigma, R_s, fluxratios[i],
+                    2*P_orb, incs[i], a_twin[i], R_s, u1, u2,
+                    eccs[i], argps[i]
+                    )
 
     # results for q < 0.95
     idx = lnL.argmax()

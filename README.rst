@@ -73,7 +73,7 @@ If you are having trouble getting ``triceratops`` working on your machine, I rec
 
     $ conda create -n myenv python=3.6
     $ conda activate myenv
-    (myenv) $ pip install triceratops notebook
+    (myenv) $ pip install triceratops jupyterlab
 
 You can replace ``myenv`` with an environment name of your choice. To exit this environment, run::
 

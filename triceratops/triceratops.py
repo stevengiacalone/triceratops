@@ -426,20 +426,26 @@ class target:
         return
 
     def calc_probs(self, time: np.ndarray, flux_0: np.ndarray,
-                   sigma_0: float, P_orb: float,
-                   contrast_curve_file: str = None):
+                   flux_err_0: float, P_orb: float,
+                   contrast_curve_file: str = None,
+                   N: int = 1000000, parallel: bool = False,
+                   verbose: int = 1):
         """
         Calculates the relative probability of each scenario.
         Args:
             time (numpy array): Time of each data point
                                 [days from transit midpoint].
             flux_0 (numpy array): Normalized flux of each data point.
-            sigma_0 (float): Uncertainty of flux.
+            flux_err_0 (float): Uncertainty of flux.
             P_orb (float): Orbital period [days].
             contrast_curve_file (str): Path to contrast curve text file.
                                        File should contain column with
                                        separations (in arcsec) followed
                                        by column with Delta_mags.
+            N (int): Number of draws for MC.
+            parallel (bool): Whether or not to simulate light curves
+                             in parallel.
+            verbose (int): 1 to print progress, 0 to print nothing.
         """
         # construct a new dataframe that gives the values of lnL, best
         # fit parameters, lnprior, and relative probability of
@@ -466,8 +472,8 @@ class target:
 
         for i, ID in enumerate(filtered_stars["ID"].values):
             # subtract flux from other stars in the aperture
-            flux, sigma = renorm_flux(
-                flux_0, sigma_0, filtered_stars["fluxratio"].values[i]
+            flux, flux_err = renorm_flux(
+                flux_0, flux_err_0, filtered_stars["fluxratio"].values[i]
                 )
 
             M_s = filtered_stars["mass"].values[i]
@@ -482,7 +488,7 @@ class target:
             # target star
             if i == 0:
                 # start TRILEGAL query
-                output_url = query_TRILEGAL(ra, dec)
+                output_url = query_TRILEGAL(ra, dec, verbose)
 
                 # check to see if there are any missing stellar
                 # parameters and, if there are, ask for input
@@ -496,14 +502,16 @@ class target:
                     break
 
                 else:
-                    print(
-                        "Calculating TP, EB, and EBx2P scenario "
-                        + "probabilities for " + str(ID) + "."
-                        )
+                    if verbose == 1:
+                        print(
+                            "Calculating TP, EB, and EBx2P scenario "
+                            + "probabilities for " + str(ID) + "."
+                            )
 
                     res = lnZ_TTP(
-                        time, flux, sigma, P_orb,
-                        M_s, R_s, Teff, Z
+                        time, flux, flux_err, P_orb,
+                        M_s, R_s, Teff, Z,
+                        N, parallel
                         )
                     j = 0
                     targets[j] = ID
@@ -525,8 +533,9 @@ class target:
                     lnZ[j] = res["lnZ"]
 
                     res, res_twin = lnZ_TEB(
-                        time, flux, sigma, P_orb,
-                        M_s, R_s, Teff, Z
+                        time, flux, flux_err, P_orb,
+                        M_s, R_s, Teff, Z,
+                        N, parallel
                         )
                     j = 1
                     targets[j] = ID
@@ -565,15 +574,17 @@ class target:
                     best_fluxratio_comp[j] = res_twin["fluxratio_comp"]
                     lnZ[j] = res_twin["lnZ"]
 
-                    print(
-                        "Calculating PTP, PEB, and PEBx2P scenario "
-                        + "probabilities for " + str(ID) + "."
-                        )
+                    if verbose == 1:
+                        print(
+                            "Calculating PTP, PEB, and PEBx2P scenario "
+                            + "probabilities for " + str(ID) + "."
+                            )
 
                     res = lnZ_PTP(
-                        time, flux, sigma, P_orb,
+                        time, flux, flux_err, P_orb,
                         M_s, R_s, Teff, Z,
-                        plx, contrast_curve_file
+                        plx, contrast_curve_file,
+                        N, parallel
                         )
                     j = 3
                     targets[j] = ID
@@ -595,9 +606,10 @@ class target:
                     lnZ[j] = res["lnZ"]
 
                     res, res_twin = lnZ_PEB(
-                        time, flux, sigma, P_orb,
+                        time, flux, flux_err, P_orb,
                         M_s, R_s, Teff, Z,
-                        plx, contrast_curve_file
+                        plx, contrast_curve_file,
+                        N, parallel
                         )
                     j = 4
                     targets[j] = ID
@@ -636,15 +648,17 @@ class target:
                     best_fluxratio_comp[j] = res_twin["fluxratio_comp"]
                     lnZ[j] = res_twin["lnZ"]
 
-                    print(
-                        "Calculating STP, SEB, and SEBx2P scenario "
-                        + "probabilities for " + str(ID) + "."
-                        )
+                    if verbose == 1:
+                        print(
+                            "Calculating STP, SEB, and SEBx2P scenario "
+                            + "probabilities for " + str(ID) + "."
+                            )
 
                     res = lnZ_STP(
-                        time, flux, sigma, P_orb,
+                        time, flux, flux_err, P_orb,
                         M_s, R_s, Teff, Z,
-                        plx, contrast_curve_file
+                        plx, contrast_curve_file,
+                        N, parallel
                         )
                     j = 6
                     targets[j] = ID
@@ -666,9 +680,10 @@ class target:
                     lnZ[j] = res["lnZ"]
 
                     res, res_twin = lnZ_SEB(
-                        time, flux, sigma, P_orb,
+                        time, flux, flux_err, P_orb,
                         M_s, R_s, Teff, Z,
-                        plx, contrast_curve_file
+                        plx, contrast_curve_file,
+                        N, parallel
                         )
                     j = 7
                     targets[j] = ID
@@ -707,15 +722,17 @@ class target:
                     best_fluxratio_comp[j] = res_twin["fluxratio_comp"]
                     lnZ[j] = res_twin["lnZ"]
 
-                    print(
-                        "Calculating DTP, DEB, and DEBx2P scenario "
-                        + "probabilities for " + str(ID) + "."
-                        )
+                    if verbose == 1:
+                        print(
+                            "Calculating DTP, DEB, and DEBx2P scenario "
+                            + "probabilities for " + str(ID) + "."
+                            )
 
                     res = lnZ_DTP(
-                        time, flux, sigma, P_orb,
+                        time, flux, flux_err, P_orb,
                         M_s, R_s, Teff, Z,
-                        Tmag, output_url, contrast_curve_file
+                        Tmag, output_url, contrast_curve_file,
+                        N, parallel
                         )
                     j = 9
                     targets[j] = ID
@@ -737,9 +754,10 @@ class target:
                     lnZ[j] = res["lnZ"]
 
                     res, res_twin = lnZ_DEB(
-                        time, flux, sigma, P_orb,
+                        time, flux, flux_err, P_orb,
                         M_s, R_s, Teff, Z,
-                        Tmag, output_url, contrast_curve_file
+                        Tmag, output_url, contrast_curve_file,
+                        N, parallel
                         )
                     j = 10
                     targets[j] = ID
@@ -778,15 +796,17 @@ class target:
                     best_fluxratio_comp[j] = res_twin["fluxratio_comp"]
                     lnZ[j] = res_twin["lnZ"]
 
-                    print(
-                        "Calculating BTP, BEB, and BEBx2P scenario "
-                        + "probabilities for " + str(ID) + "."
-                        )
+                    if verbose == 1:
+                        print(
+                            "Calculating BTP, BEB, and BEBx2P scenario "
+                            + "probabilities for " + str(ID) + "."
+                            )
 
                     res = lnZ_BTP(
-                        time, flux, sigma, P_orb,
+                        time, flux, flux_err, P_orb,
                         M_s, R_s, Teff,
-                        Tmag, output_url, contrast_curve_file
+                        Tmag, output_url, contrast_curve_file,
+                        N, parallel
                         )
                     j = 12
                     targets[j] = ID
@@ -808,9 +828,10 @@ class target:
                     lnZ[j] = res["lnZ"]
 
                     res, res_twin = lnZ_BEB(
-                        time, flux, sigma, P_orb,
+                        time, flux, flux_err, P_orb,
                         M_s, R_s, Teff,
-                        Tmag, output_url, contrast_curve_file
+                        Tmag, output_url, contrast_curve_file,
+                        N, parallel
                         )
                     j = 13
                     targets[j] = ID
@@ -854,14 +875,16 @@ class target:
                 # if all properties are known, use them
                 if ~(np.isnan(R_s) and np.isnan(Teff)
                         and np.isnan(M_s)):
-                    print(
-                        "Calculating NTP, NEB, and NEB2xP scenario "
-                        + "probabilities for " + str(ID) + "."
-                        )
+                    if verbose == 1:
+                        print(
+                            "Calculating NTP, NEB, and NEB2xP scenario "
+                            + "probabilities for " + str(ID) + "."
+                            )
 
                     res = lnZ_TTP(
-                        time, flux, sigma, P_orb,
-                        M_s, R_s, Teff, Z
+                        time, flux, flux_err, P_orb,
+                        M_s, R_s, Teff, Z,
+                        N, parallel
                         )
                     j = 15 + 3*(i-1)
                     targets[j] = ID
@@ -883,8 +906,9 @@ class target:
                     lnZ[j] = res["lnZ"]
 
                     res, res_twin = lnZ_TEB(
-                        time, flux, sigma, P_orb,
-                        M_s, R_s, Teff, Z
+                        time, flux, flux_err, P_orb,
+                        M_s, R_s, Teff, Z,
+                        N, parallel
                         )
                     j = 16 + 3*(i-1)
                     targets[j] = ID
@@ -926,14 +950,16 @@ class target:
 
                 # if no properties are known, use trilegal query
                 elif np.isnan(R_s) and np.isnan(Teff) and np.isnan(M_s):
-                    print(
-                        "Calculating NTP, NEB, and NEBx2P scenario "
-                        + "probabilities for " + str(ID) + "."
-                        )
+                    if verbose == 1:
+                        print(
+                            "Calculating NTP, NEB, and NEBx2P scenario "
+                            + "probabilities for " + str(ID) + "."
+                            )
 
                     res = lnZ_NTP_unknown(
-                        time, flux, sigma, P_orb,
-                        Tmag, output_url
+                        time, flux, flux_err, P_orb,
+                        Tmag, output_url,
+                        N, parallel
                         )
                     j = 15 + 3*(i-1)
                     targets[j] = ID
@@ -955,8 +981,9 @@ class target:
                     lnZ[j] = res["lnZ"]
 
                     res, res_twin = lnZ_NEB_unknown(
-                        time, flux, sigma, P_orb,
-                        Tmag, output_url
+                        time, flux, flux_err, P_orb,
+                        Tmag, output_url,
+                        N, parallel
                         )
                     j = 16 + 3*(i-1)
                     targets[j] = ID
@@ -999,10 +1026,11 @@ class target:
                 # if only mass and radius are known, estimate Teff
                 elif (~(np.isnan(R_s) and np.isnan(M_s))
                         and np.isnan(Teff)):
-                    print(
-                        "Calculating NTP, NEB, and NEBx2P scenario "
-                        + "probabilities for " + str(ID) + "."
-                        )
+                    if verbose == 1:
+                        print(
+                            "Calculating NTP, NEB, and NEBx2P scenario "
+                            + "probabilities for " + str(ID) + "."
+                            )
 
                     Teff = stellar_relations(
                         np.array([M_s]),
@@ -1010,8 +1038,9 @@ class target:
                         )[1][0]
 
                     res = lnZ_TTP(
-                        time, flux, sigma, P_orb,
-                        M_s, R_s, Teff, Z
+                        time, flux, flux_err, P_orb,
+                        M_s, R_s, Teff, Z,
+                        N, parallel
                         )
                     j = 5 + 3*(i-1)
                     targets[j] = ID
@@ -1033,8 +1062,9 @@ class target:
                     lnZ[j] = res["lnZ"]
 
                     res, res_twin = lnZ_TEB(
-                        time, flux, sigma, P_orb,
-                        M_s, R_s, Teff, Z
+                        time, flux, flux_err, P_orb,
+                        M_s, R_s, Teff, Z,
+                        N, parallel
                         )
                     j = 16 + 3*(i-1)
                     targets[j] = ID
@@ -1077,7 +1107,8 @@ class target:
                 # if only radius and Teff are known, skip it
                 elif (~(np.isnan(R_s) and np.isnan(Teff))
                         and np.isnan(M_s)):
-                    print("Skipping " + str(ID) + ". Evolved star.")
+                    if verbose == 1:
+                        print("Skipping " + str(ID) + ". Evolved star.")
 
                     j = 15 + 3*(i-1)
                     lnZ[j] = -np.inf
@@ -1088,7 +1119,8 @@ class target:
                     continue
 
                 else:
-                    print("Insufficient information for " + str(ID))
+                    if verbose == 1:
+                        print("Insufficient information for " + str(ID))
 
                     j = 15 + 3*(i-1)
                     lnZ[j] = -np.inf
@@ -1122,12 +1154,15 @@ class target:
 
         # calculate the FPP and EBP
         self.FPP = 1-(prob_df.prob[0]+prob_df.prob[3]+prob_df.prob[9])
-        self.NFPP = np.sum(prob_df.prob[15:])
+        if len(prob_df.prob) > 15:
+            self.NFPP = np.sum(prob_df.prob[15:])
+        else:
+            self.NFPP = 0.0
 
         return
 
     def plot_fits(self, time: np.ndarray,
-                  flux_0: np.ndarray, sigma_0: float,
+                  flux_0: np.ndarray, flux_err_0: float,
                   save: bool = False, fname: str = None):
         """
         Plots light curve for best fit instance of each scenario.
@@ -1135,7 +1170,7 @@ class target:
             time (numpy array): Time of each data point
                                 [days from transit midpoint].
             flux_0 (numpy array): Normalized flux of each data point.
-            sigma_0 (numpy array): Uncertainty of flux.
+            flux_err_0 (float): Uncertainty of flux.
             save (bool): Whether or not to save plot as pdf.
             fname (str): File name of pdf.
         """
@@ -1162,8 +1197,8 @@ class target:
                 idx = np.argwhere(
                     self.stars["ID"].values == str(df["ID"].values[k])
                     )[0, 0]
-                flux, sigma = renorm_flux(
-                    flux_0, sigma_0, self.stars["fluxratio"].values[idx]
+                flux, flux_err = renorm_flux(
+                    flux_0, flux_err_0, self.stars["fluxratio"].values[idx]
                     )
                 # all TPs
                 if j == 0:
@@ -1228,7 +1263,7 @@ class target:
                 y_formatter = ticker.ScalarFormatter(useOffset=False)
                 ax[i, j].yaxis.set_major_formatter(y_formatter)
                 ax[i, j].errorbar(
-                    time, flux, sigma, fmt=".",
+                    time, flux, flux_err, fmt=".",
                     color="blue", alpha=0.1, zorder=0,
                     rasterized=True
                     )
