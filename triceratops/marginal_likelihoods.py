@@ -352,7 +352,7 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     # calculate priors for companions
     delta_mags = 2.5*np.log10(fluxratios_comp/(1-fluxratios_comp))
     if contrast_curve_file is None:
-        lnprior_companion = lnprior_bound(
+        lnprior_companion = lnprior_bound_TP(
             M_s, plx, np.abs(delta_mags),
             np.array([2.2]), np.array([1.0])
             )
@@ -362,7 +362,7 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         separations, contrasts = file_to_contrast_curve(
             contrast_curve_file
             )
-        lnprior_companion = lnprior_bound(
+        lnprior_companion = lnprior_bound_TP(
             M_s, plx, np.abs(delta_mags), separations, contrasts
             )
         lnprior_companion[lnprior_companion > 0.0] = 0.0
@@ -507,7 +507,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # calculate priors for companions
     delta_mags = 2.5*np.log10(fluxratios_comp/(1-fluxratios_comp))
     if contrast_curve_file is None:
-        lnprior_companion = lnprior_bound(
+        lnprior_companion = lnprior_bound_EB(
             M_s, plx, np.abs(delta_mags),
             np.array([2.2]), np.array([1.0])
             )
@@ -517,7 +517,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         separations, contrasts = file_to_contrast_curve(
             contrast_curve_file
             )
-        lnprior_companion = lnprior_bound(
+        lnprior_companion = lnprior_bound_EB(
             M_s, plx, np.abs(delta_mags), separations, contrasts
             )
         lnprior_companion[lnprior_companion > 0.0] = 0.0
@@ -705,7 +705,7 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
     # calculate priors for companions
     delta_mags = 2.5*np.log10(fluxratios_comp/(1-fluxratios_comp))
     if contrast_curve_file is None:
-        lnprior_companion = lnprior_bound(
+        lnprior_companion = lnprior_bound_TP(
             M_s, plx, np.abs(delta_mags),
             np.array([2.2]), np.array([1.0])
             )
@@ -715,7 +715,7 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
         separations, contrasts = file_to_contrast_curve(
             contrast_curve_file
             )
-        lnprior_companion = lnprior_bound(
+        lnprior_companion = lnprior_bound_TP(
             M_s, plx, np.abs(delta_mags), separations, contrasts
             )
         lnprior_companion[lnprior_companion > 0.0] = 0.0
@@ -870,7 +870,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         + (fluxratios/(1-fluxratios))
         )
     if contrast_curve_file is None:
-        lnprior_companion = lnprior_bound(
+        lnprior_companion = lnprior_bound_EB(
             M_s, plx, np.abs(delta_mags),
             np.array([2.2]), np.array([1.0])
             )
@@ -880,7 +880,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         separations, contrasts = file_to_contrast_curve(
             contrast_curve_file
             )
-        lnprior_companion = lnprior_bound(
+        lnprior_companion = lnprior_bound_EB(
             M_s, plx, np.abs(delta_mags), separations, contrasts
             )
         lnprior_companion[lnprior_companion > 0.0] = 0.0

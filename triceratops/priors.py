@@ -557,13 +557,14 @@ def lnprior_Porb_binary(P_orb: float):
     return lnprior_Porb
 
 
-def lnprior_bound(M_s: float, plx: float, delta_mags: np.array,
-                  separations: np.array, contrasts: np.array):
+def lnprior_bound_TP(M_s: float, plx: float, delta_mags: np.array,
+                     separations: np.array, contrasts: np.array):
     """
     Calculates the bound companion rate of the target star,
-    assuming the orbital period of the companion is > 10,000 days.
+    assuming the orbital period of the companion is > 2500 days.
     (Moe & Kratter 2020 show large planet suppression for S-type
     planets with short periods when the two stars have a < 10 au.)
+    Equations from Moe & DiStefano 2017.
     Args:
         M_s (float): Target star mass [solar masses].
         plx (float): Parallax of the target star [mas].
@@ -591,40 +592,30 @@ def lnprior_bound(M_s: float, plx: float, delta_mags: np.array,
         dlogP = 0.7
         max_Porbs = ((4*pi**2)/(G*M_s*Msun)*(seps*au)**3)**(1/2)/86400
 
-        # t1 = f1
-        # t2_partial = (
-        #     0.5*(np.log10(max_Porbs) - 1.0)
-        #     * (
-        #         2.0*f1 + (f2 - f1 - alpha*dlogP)
-        #         * (np.log10(max_Porbs) - 1.0)
-        #         )
-        #     )
-        # t2 = (
-        #     0.5*(2.0 - 1.0)
-        #     * (
-        #         2.0*f1 + (f2 - f1 - alpha*dlogP)
-        #         * (2.0 - 1.0)
-        #         )
-        #     )
-        # t3_partial = (
-        #     0.5*alpha
-        #     * (
-        #         np.log10(max_Porbs)**2-5.4
-        #         * np.log10(max_Porbs)+6.8
-        #         )
-        #     + f2*(np.log10(max_Porbs) - 2.0)
-        #     )
-        # t3 = 0.5*alpha*(3.4**2 - 5.4*3.4 + 6.8) + f2*(3.4 - 2.0)
-        t4_10000d = (
-            alpha*dlogP*(np.log10(1e4) - 3.4)
-            + f2*(np.log10(1e4) - 3.4)
-            + (f3 - f2 - alpha*dlogP)
+        t1 = f1
+        t2_partial = (
+            0.5*(np.log10(max_Porbs) - 1.0)
             * (
-                0.238095*np.log10(1e4)**2
-                - 0.952381*np.log10(1e4)
-                + 0.485714
+                2.0*f1 + (f2 - f1 - alpha*dlogP)
+                * (np.log10(max_Porbs) - 1.0)
                 )
             )
+        t2 = (
+            0.5*(2.0 - 1.0)
+            * (
+                2.0*f1 + (f2 - f1 - alpha*dlogP)
+                * (2.0 - 1.0)
+                )
+            )
+        t3_partial = (
+            0.5*alpha
+            * (
+                np.log10(max_Porbs)**2-5.4
+                * np.log10(max_Porbs)+6.8
+                )
+            + f2*(np.log10(max_Porbs) - 2.0)
+            )
+        t3 = 0.5*alpha*(3.4**2 - 5.4*3.4 + 6.8) + f2*(3.4 - 2.0)
         t4_partial = (
             alpha*dlogP*(np.log10(max_Porbs) - 3.4)
             + f2*(np.log10(max_Porbs) - 3.4)
@@ -655,35 +646,27 @@ def lnprior_bound(M_s: float, plx: float, delta_mags: np.array,
             )
         # f_comp[mask] = t1 + t2_partial[mask]
         f_comp[mask] = 0.0
-        # mask = (
-        #     (np.log10(max_Porbs) >= 2.0)
-        #     & (np.log10(max_Porbs) < 3.4)
-        #     )
-        # f_comp[mask] = t1 + t2 + t3_partial[mask]
         mask = (
             (np.log10(max_Porbs) >= 2.0)
-            & (np.log10(max_Porbs) < 4.0)
+            & (np.log10(max_Porbs) < 3.4)
             )
+        # f_comp[mask] = t1 + t2 + t3_partial[mask]
         f_comp[mask] = 0.0
-        # mask = (
-        #     (np.log10(max_Porbs) >= 3.4)
-        #     & (np.log10(max_Porbs) < 5.5)
-        #     )
-        # f_comp[mask] = t1 + t2 + t3 + t4_partial[mask]
         mask = (
-            (np.log10(max_Porbs) >= 4.0)
+            (np.log10(max_Porbs) >= 3.4)
             & (np.log10(max_Porbs) < 5.5)
             )
-        f_comp[mask] = (t4_partial[mask]-t4_10000d)
+        # f_comp[mask] = t1 + t2 + t3 + t4_partial[mask]
+        f_comp[mask] = t4_partial[mask]
         mask = (
             (np.log10(max_Porbs) >= 5.5)
             & (np.log10(max_Porbs) < 8.0)
             )
         # f_comp[mask] = t1 + t2 + t3 + t4 + t5_partial[mask]
-        f_comp[mask] = (t4-t4_10000d) + t5_partial[mask]
+        f_comp[mask] = t4 + t5_partial[mask]
         mask = (np.log10(max_Porbs) >= 8.0)
         # f_comp[mask] = t1 + t2 + t3 + t4 + t5
-        f_comp[mask] = (t4-t4_10000d) + t5
+        f_comp[mask] = t4 + t5
         lnprior_bound = np.log(f_comp)
 
     # calculate prior probability for M_s < 1.0 solar masses
@@ -697,40 +680,30 @@ def lnprior_bound(M_s: float, plx: float, delta_mags: np.array,
         dlogP = 0.7
         max_Porbs = ((4*pi**2)/(G*M_s*Msun)*(seps*au)**3)**(1/2)/86400
 
-        # t1 = f1
-        # t2_partial = (
-        #     0.5*(np.log10(max_Porbs) - 1.0)
-        #     * (
-        #         2.0*f1 + (f2 - f1 - alpha*dlogP)
-        #         * (np.log10(max_Porbs) - 1.0)
-        #         )
-        #     )
-        # t2 = (
-        #     0.5*(2.0 - 1.0)
-        #     * (
-        #         2.0*f1 + (f2 - f1 - alpha*dlogP)
-        #         * (2.0 - 1.0)
-        #         )
-        #     )
-        # t3_partial = (
-        #     0.5*alpha
-        #     * (
-        #         np.log10(max_Porbs)**2
-        #         - 5.4*np.log10(max_Porbs) + 6.8
-        #         )
-        #     + f2*(np.log10(max_Porbs) - 2.0)
-        #     )
-        # t3 = 0.5*alpha*(3.4**2 - 5.4*3.4 + 6.8) + f2*(3.4 - 2.0)
-        t4_10000d = (
-            alpha*dlogP*(np.log10(1e4) - 3.4)
-            + f2*(np.log10(1e4) - 3.4)
-            + (f3 - f2 - alpha*dlogP)
+        t1 = f1
+        t2_partial = (
+            0.5*(np.log10(max_Porbs) - 1.0)
             * (
-                0.238095*np.log10(1e4)**2
-                - 0.952381*np.log10(1e4)
-                + 0.485714
+                2.0*f1 + (f2 - f1 - alpha*dlogP)
+                * (np.log10(max_Porbs) - 1.0)
                 )
             )
+        t2 = (
+            0.5*(2.0 - 1.0)
+            * (
+                2.0*f1 + (f2 - f1 - alpha*dlogP)
+                * (2.0 - 1.0)
+                )
+            )
+        t3_partial = (
+            0.5*alpha
+            * (
+                np.log10(max_Porbs)**2
+                - 5.4*np.log10(max_Porbs) + 6.8
+                )
+            + f2*(np.log10(max_Porbs) - 2.0)
+            )
+        t3 = 0.5*alpha*(3.4**2 - 5.4*3.4 + 6.8) + f2*(3.4 - 2.0)
         t4_partial = (
             alpha*dlogP*(np.log10(max_Porbs) - 3.4)
             + f2*(np.log10(max_Porbs) - 3.4)
@@ -761,40 +734,232 @@ def lnprior_bound(M_s: float, plx: float, delta_mags: np.array,
             )
         # f_comp[mask] = t1 + t2_partial[mask]
         f_comp[mask] = 0.0
-        # mask = (
-        #     (np.log10(max_Porbs) >= 2.0)
-        #     & (np.log10(max_Porbs) < 3.4)
-        #     )
-        # f_comp[mask] = t1 + t2 + t3_partial[mask]
         mask = (
             (np.log10(max_Porbs) >= 2.0)
-            & (np.log10(max_Porbs) < 4.0)
+            & (np.log10(max_Porbs) < 3.4)
             )
+        # f_comp[mask] = t1 + t2 + t3_partial[mask]
         f_comp[mask] = 0.0
-        # mask = (
-        #     (np.log10(max_Porbs) >= 3.4)
-        #     & (np.log10(max_Porbs) < 5.5)
-        #     )
-        # f_comp[mask] = t1 + t2 + t3 + t4_partial[mask]
         mask = (
-            (np.log10(max_Porbs) >= 4.0)
+            (np.log10(max_Porbs) >= 3.4)
             & (np.log10(max_Porbs) < 5.5)
             )
-        f_comp[mask] = (t4_partial[mask]-t4_10000d)
+        # f_comp[mask] = t1 + t2 + t3 + t4_partial[mask]
+        f_comp[mask] = t4_partial[mask]
         mask = (
             (np.log10(max_Porbs) >= 5.5)
             & (np.log10(max_Porbs) < 8.0)
             )
         # f_comp[mask] = t1 + t2 + t3 + t4 + t5_partial[mask]
-        f_comp[mask] = (t4-t4_10000d) + t5_partial[mask]
+        f_comp[mask] = t4 + t5_partial[mask]
         mask = (np.log10(max_Porbs) >= 8.0)
         # f_comp[mask] = t1 + t2 + t3 + t4 + t5
-        f_comp[mask] = (t4-t4_10000d) + t5
+        f_comp[mask] = t4 + t5
         f_act = 0.65*f_comp+0.35*f_comp*M_act
         lnprior_bound = np.log(f_act)
 
     return lnprior_bound
 
+def lnprior_bound_EB(M_s: float, plx: float, delta_mags: np.array,
+                     separations: np.array, contrasts: np.array):
+    """
+    Calculates the bound companion rate of the target star for EB
+    scenarios. Assumes the period of the tertiary is > 10 days.
+    Equations from Moe and DiStefano 2017.
+    Args:
+        M_s (float): Target star mass [solar masses].
+        plx (float): Parallax of the target star [mas].
+        delta_mags (numpy array): Contrasts of simulated
+                                  companions (delta_mag).
+        separations (numpy array): Separation at contrast (arcsec).
+        contrasts (numpy array): Contrast at separation (delta_mag).
+    Returns:
+        lnprior_bound (float): The log probability of there being
+                               a bound companion.
+    """
+    # determine maximum physical separations based on angular
+    # separation constraints and parallax
+    if np.isnan(plx):
+        plx = 0.1
+    d = 1000/plx
+    seps = d*separation_at_contrast(delta_mags, separations, contrasts)
+
+    # calculate prior probability for M_s >= 1.0 solar masses
+    if M_s >= 1.0:
+        f1 = 0.020 + 0.04*np.log10(M_s) + 0.07*(np.log10(M_s))**2
+        f2 = 0.039 + 0.07*np.log10(M_s) + 0.01*(np.log10(M_s))**2
+        f3 = 0.078 - 0.05*np.log10(M_s) + 0.04*(np.log10(M_s))**2
+        alpha = 0.018
+        dlogP = 0.7
+        max_Porbs = ((4*pi**2)/(G*M_s*Msun)*(seps*au)**3)**(1/2)/86400
+
+        # t1 = f1
+        t2_partial = (
+            0.5*(np.log10(max_Porbs) - 1.0)
+            * (
+                2.0*f1 + (f2 - f1 - alpha*dlogP)
+                * (np.log10(max_Porbs) - 1.0)
+                )
+            )
+        t2 = (
+            0.5*(2.0 - 1.0)
+            * (
+                2.0*f1 + (f2 - f1 - alpha*dlogP)
+                * (2.0 - 1.0)
+                )
+            )
+        t3_partial = (
+            0.5*alpha
+            * (
+                np.log10(max_Porbs)**2-5.4
+                * np.log10(max_Porbs)+6.8
+                )
+            + f2*(np.log10(max_Porbs) - 2.0)
+            )
+        t3 = 0.5*alpha*(3.4**2 - 5.4*3.4 + 6.8) + f2*(3.4 - 2.0)
+        t4_partial = (
+            alpha*dlogP*(np.log10(max_Porbs) - 3.4)
+            + f2*(np.log10(max_Porbs) - 3.4)
+            + (f3 - f2 - alpha*dlogP)
+            * (
+                0.238095*np.log10(max_Porbs)**2
+                - 0.952381*np.log10(max_Porbs)
+                + 0.485714
+                )
+            )
+        t4 = (
+            alpha*dlogP*(5.5 - 3.4) + f2*(5.5 - 3.4)
+            + (f3 - f2 - alpha*dlogP)
+            * (0.238095*5.5**2 - 0.952381*5.5 + 0.485714)
+            )
+        t5_partial = (
+            f3*(3.33333 - 17.3566*np.exp(-0.3*np.log10(max_Porbs)))
+            )
+        t5 = f3*(3.33333 - 17.3566*np.exp(-0.3*8.0))
+
+        f_comp = np.zeros(len(seps))
+        mask = (np.log10(max_Porbs) < 1.0)
+        # f_comp[mask] = t1
+        f_comp[mask] = 0.0
+        mask = (
+            (np.log10(max_Porbs) >= 1.0)
+            & (np.log10(max_Porbs) < 2.0)
+            )
+        # f_comp[mask] = t1 + t2_partial[mask]
+        f_comp[mask] = t2_partial[mask]
+        mask = (
+            (np.log10(max_Porbs) >= 2.0)
+            & (np.log10(max_Porbs) < 3.4)
+            )
+        # f_comp[mask] = t1 + t2 + t3_partial[mask]
+        f_comp[mask] = t2 + t3_partial[mask]
+        mask = (
+            (np.log10(max_Porbs) >= 3.4)
+            & (np.log10(max_Porbs) < 5.5)
+            )
+        # f_comp[mask] = t1 + t2 + t3 + t4_partial[mask]
+        f_comp[mask] = t2 + t3 + t4_partial[mask]
+        mask = (
+            (np.log10(max_Porbs) >= 5.5)
+            & (np.log10(max_Porbs) < 8.0)
+            )
+        # f_comp[mask] = t1 + t2 + t3 + t4 + t5_partial[mask]
+        f_comp[mask] = t2 + t3 + t4 + t5_partial[mask]
+        mask = (np.log10(max_Porbs) >= 8.0)
+        # f_comp[mask] = t1 + t2 + t3 + t4 + t5
+        f_comp[mask] = t2 + t3 + t4 + t5
+        lnprior_bound = np.log(f_comp)
+
+    # calculate prior probability for M_s < 1.0 solar masses
+    else:
+        M_act = M_s
+        M_s = 1.0
+        f1 = 0.020 + 0.04*np.log10(M_s) + 0.07*(np.log10(M_s))**2
+        f2 = 0.039 + 0.07*np.log10(M_s) + 0.01*(np.log10(M_s))**2
+        f3 = 0.078 - 0.05*np.log10(M_s) + 0.04*(np.log10(M_s))**2
+        alpha = 0.018
+        dlogP = 0.7
+        max_Porbs = ((4*pi**2)/(G*M_s*Msun)*(seps*au)**3)**(1/2)/86400
+
+        t1 = f1
+        t2_partial = (
+            0.5*(np.log10(max_Porbs) - 1.0)
+            * (
+                2.0*f1 + (f2 - f1 - alpha*dlogP)
+                * (np.log10(max_Porbs) - 1.0)
+                )
+            )
+        t2 = (
+            0.5*(2.0 - 1.0)
+            * (
+                2.0*f1 + (f2 - f1 - alpha*dlogP)
+                * (2.0 - 1.0)
+                )
+            )
+        t3_partial = (
+            0.5*alpha
+            * (
+                np.log10(max_Porbs)**2
+                - 5.4*np.log10(max_Porbs) + 6.8
+                )
+            + f2*(np.log10(max_Porbs) - 2.0)
+            )
+        t3 = 0.5*alpha*(3.4**2 - 5.4*3.4 + 6.8) + f2*(3.4 - 2.0)
+        t4_partial = (
+            alpha*dlogP*(np.log10(max_Porbs) - 3.4)
+            + f2*(np.log10(max_Porbs) - 3.4)
+            + (f3 - f2 - alpha*dlogP)
+            * (
+                0.238095*np.log10(max_Porbs)**2
+                - 0.952381*np.log10(max_Porbs) + 0.485714
+                )
+            )
+        t4 = (
+            alpha*dlogP*(5.5 - 3.4)
+            + f2*(5.5 - 3.4)
+            + (f3 - f2 - alpha*dlogP)
+            * (0.238095*5.5**2 - 0.952381*5.5 + 0.485714)
+            )
+        t5_partial = (
+            f3*(3.33333 - 17.3566*np.exp(-0.3*np.log10(max_Porbs)))
+            )
+        t5 = f3*(3.33333 - 17.3566*np.exp(-0.3*8.0))
+
+        f_comp = np.zeros(len(seps))
+        mask = (np.log10(max_Porbs) < 1.0)
+        # f_comp[mask] = t1
+        f_comp[mask] = 0.0
+        mask = (
+            (np.log10(max_Porbs) >= 1.0)
+            & (np.log10(max_Porbs) < 2.0)
+            )
+        # f_comp[mask] = t1 + t2_partial[mask]
+        f_comp[mask] = t2_partial[mask]
+        mask = (
+            (np.log10(max_Porbs) >= 2.0)
+            & (np.log10(max_Porbs) < 3.4)
+            )
+        # f_comp[mask] = t1 + t2 + t3_partial[mask]
+        f_comp[mask] = t2 + t3_partial[mask]
+        mask = (
+            (np.log10(max_Porbs) >= 3.4)
+            & (np.log10(max_Porbs) < 5.5)
+            )
+        # f_comp[mask] = t1 + t2 + t3 + t4_partial[mask]
+        f_comp[mask] = t2 + t3 + t4_partial[mask]
+        mask = (
+            (np.log10(max_Porbs) >= 5.5)
+            & (np.log10(max_Porbs) < 8.0)
+            )
+        # f_comp[mask] = t1 + t2 + t3 + t4 + t5_partial[mask]
+        f_comp[mask] = t2 + t3 + t4 + t5_partial[mask]
+        mask = (np.log10(max_Porbs) >= 8.0)
+        # f_comp[mask] = t1 + t2 + t3 + t4 + t5
+        f_comp[mask] = t2 + t3 + t4 + t5
+        f_act = 0.65*f_comp+0.35*f_comp*M_act
+        lnprior_bound = np.log(f_act)
+
+    return lnprior_bound
 
 def lnprior_background(N_comp: int, delta_mags: np.array,
                        separations: np.array,

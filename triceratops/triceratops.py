@@ -60,6 +60,13 @@ class target:
             ]
         stars = new_df.to_pandas()
 
+        # start TRILEGAL query
+        output_url = query_TRILEGAL(
+            stars["ra"].values[0],
+            stars["dec"].values[0],
+            verbose=0
+            )
+        self.trilegal_url = output_url
 
         TESS_images = []
         col0s, row0s = [], []
@@ -485,10 +492,11 @@ class target:
             ra = filtered_stars["ra"].values[i]
             dec = filtered_stars["dec"].values[i]
 
+            # get url to TRILEGAL results
+            output_url = self.trilegal_url
+
             # target star
             if i == 0:
-                # start TRILEGAL query
-                output_url = query_TRILEGAL(ra, dec, verbose)
 
                 # check to see if there are any missing stellar
                 # parameters and, if there are, ask for input
