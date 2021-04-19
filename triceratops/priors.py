@@ -169,7 +169,6 @@ def sample_q(x, M_s):
     Returns:
         x (numpy array): Sampled mass ratios.
     """
-    assert M_s >= 0.1
     if M_s >= 1.0:
         # power coefficients
         p1 = 0.3
@@ -265,8 +264,8 @@ def sample_q(x, M_s):
                 (x[mask3]/Norm - I2)*(p2+1)/(A2)
                 + 0.95**(p2+1))**(1/(p2+1))
             )
-    elif M_s == 0.1:
-        x = np.full(len(x), 0.1)
+    elif M_s <= 0.1:
+        x = np.full(len(x), M_s)
     return x
 
 
@@ -279,7 +278,6 @@ def sample_q_companion(x, M_s):
     Returns:
         x (numpy array): Sampled mass ratios.
     """
-    assert M_s >= 0.1
     if M_s >= 1.0:
         # power coefficients
         p1 = 0.3
@@ -375,8 +373,8 @@ def sample_q_companion(x, M_s):
                 (x[mask3]/Norm - I2)*(p2+1)/(A2)
                 + 0.95**(p2+1))**(1/(p2+1))
             )
-    elif M_s == 0.1:
-        x = np.full(len(x), 0.1)
+    elif M_s <= 0.1:
+        x = np.full(len(x), M_s)
     return x
 
 

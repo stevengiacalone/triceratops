@@ -56,7 +56,7 @@ class target:
             catalog="TIC"
             )
         new_df = df[
-            "ID", "Tmag", "ra", "dec", "mass", "rad", "Teff", "plx"
+            "ID", "Tmag", "Jmag", "Hmag", "Kmag", "ra", "dec", "mass", "rad", "Teff", "plx"
             ]
         stars = new_df.to_pandas()
 
@@ -430,11 +430,54 @@ class target:
                 tdepths[i] = 1-(flux_ratios[i]-tdepth)/flux_ratios[i]
         tdepths[tdepths > 1] = 0
         self.stars["tdepth"] = tdepths
+
+        # check target and possible NFPs for missing properties
+        filtered_stars = self.stars[self.stars["tdepth"] > 0]
+        for i, ID in enumerate(filtered_stars["ID"].values):
+            M_s = filtered_stars["mass"].values[i]
+            R_s = filtered_stars["rad"].values[i]
+            Teff = filtered_stars["Teff"].values[i]
+            Tmag = filtered_stars["Tmag"].values[i]
+            plx = filtered_stars["plx"].values[i]
+            if i == 0:
+                if (np.isnan(M_s) or np.isnan(R_s)
+                    or np.isnan(Teff) or np.isnan(plx)):
+                    print(
+                        "WARNING: " + str(ID)
+                        + " is missing stellar properties required "
+                        + "for validation."
+                        + "Please ensure a stellar "
+                        + "mass (in M_Sun), radius (in R_Sun), "
+                        + "Teff (in K), and plx (in mas) "
+                        + "are provided in the .stars dataframe."
+                        )
+            else:
+                if (np.isnan(M_s) or np.isnan(R_s)
+                    or np.isnan(Teff)):
+                    print(
+                        "WARNING: " + str(ID)
+                        + " is missing stellar properties. "
+                        + "If a mass (in M_Sun), "
+                        + "radius (in R_Sun), and/or Teff (in K) "
+                        + "are not added to the .stars dataframe, "
+                        + "Solar values will be assumed."
+                        )
+        return
+
+    def remove_star(self, drop_stars: np.ndarray):
+        """
+        Drops stars from .stars dataframe so that they are
+        excluded from validation analysis.
+        Args:
+            drop_stars (numpy array): Array of (int) TIC IDs
+                                      for stars to drop.
+        """
+        self.stars = self.stars[~self.stars["ID"].isin(drop_stars)]
         return
 
     def calc_probs(self, time: np.ndarray, flux_0: np.ndarray,
                    flux_err_0: float, P_orb: float,
-                   contrast_curve_file: str = None,
+                   contrast_curve_file: str = None, band: str = "TESS",
                    N: int = 1000000, parallel: bool = False,
                    verbose: int = 1):
         """
@@ -449,6 +492,8 @@ class target:
                                        File should contain column with
                                        separations (in arcsec) followed
                                        by column with Delta_mags.
+            band (str): Photometric band of contrast curve. Options are
+                        TESS, Vis, J, H, and K.
             N (int): Number of draws for MC.
             parallel (bool): Whether or not to simulate light curves
                              in parallel.
@@ -487,6 +532,9 @@ class target:
             R_s = filtered_stars["rad"].values[i]
             Teff = filtered_stars["Teff"].values[i]
             Tmag = filtered_stars["Tmag"].values[i]
+            Jmag = filtered_stars["Jmag"].values[i]
+            Hmag = filtered_stars["Hmag"].values[i]
+            Kmag = filtered_stars["Kmag"].values[i]
             plx = filtered_stars["plx"].values[i]
             Z = 0.0
             ra = filtered_stars["ra"].values[i]
@@ -595,6 +643,7 @@ class target:
                         time, flux, flux_err, P_orb,
                         M_s, R_s, Teff, Z,
                         plx, contrast_curve_file,
+                        band,
                         N, parallel
                         )
                     j = 3
@@ -620,6 +669,7 @@ class target:
                         time, flux, flux_err, P_orb,
                         M_s, R_s, Teff, Z,
                         plx, contrast_curve_file,
+                        band,
                         N, parallel
                         )
                     j = 4
@@ -669,6 +719,7 @@ class target:
                         time, flux, flux_err, P_orb,
                         M_s, R_s, Teff, Z,
                         plx, contrast_curve_file,
+                        band,
                         N, parallel
                         )
                     j = 6
@@ -694,6 +745,7 @@ class target:
                         time, flux, flux_err, P_orb,
                         M_s, R_s, Teff, Z,
                         plx, contrast_curve_file,
+                        band,
                         N, parallel
                         )
                     j = 7
@@ -742,7 +794,9 @@ class target:
                     res = lnZ_DTP(
                         time, flux, flux_err, P_orb,
                         M_s, R_s, Teff, Z,
-                        Tmag, output_url, contrast_curve_file,
+                        Tmag, Jmag, Hmag, Kmag,
+                        output_url,
+                        contrast_curve_file, band,
                         N, parallel
                         )
                     j = 9
@@ -767,7 +821,9 @@ class target:
                     res, res_twin = lnZ_DEB(
                         time, flux, flux_err, P_orb,
                         M_s, R_s, Teff, Z,
-                        Tmag, output_url, contrast_curve_file,
+                        Tmag, Jmag, Hmag, Kmag,
+                        output_url,
+                        contrast_curve_file, band,
                         N, parallel
                         )
                     j = 10
@@ -816,7 +872,9 @@ class target:
                     res = lnZ_BTP(
                         time, flux, flux_err, P_orb,
                         M_s, R_s, Teff,
-                        Tmag, output_url, contrast_curve_file,
+                        Tmag, Jmag, Hmag, Kmag,
+                        output_url,
+                        contrast_curve_file, band,
                         N, parallel
                         )
                     j = 12
@@ -841,7 +899,9 @@ class target:
                     res, res_twin = lnZ_BEB(
                         time, flux, flux_err, P_orb,
                         M_s, R_s, Teff,
-                        Tmag, output_url, contrast_curve_file,
+                        Tmag, Jmag, Hmag, Kmag,
+                        output_url,
+                        contrast_curve_file, band,
                         N, parallel
                         )
                     j = 13

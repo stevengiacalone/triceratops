@@ -74,26 +74,65 @@ def stellar_relations(Masses: np.array,
     Teffs[Teffs < 2800] = 2800
     return Radii, Teffs
 
-
 Mass_nodes = np.array([
     0.1, 0.15, 0.23, 0.4, 0.58, 0.7, 0.9, 1.15, 1.45, 2.2, 2.8
     ])
 flux_nodes = np.array([
     -3, -2.5, -2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2
     ])
-flux_spline = InterpolatedUnivariateSpline(Mass_nodes, flux_nodes)
+flux_spline = InterpolatedUnivariateSpline(
+    Mass_nodes, flux_nodes
+    )
 
+Mass_nodes_J = np.array([
+    0.1, 0.2, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5, 3
+    ])
+flux_nodes_J = np.array([
+    -5.7, -3.8, -1.6, 0, 1.2, 2.9, 3.3, 4, 6
+    ])/2.5
+flux_spline_J = InterpolatedUnivariateSpline(
+    Mass_nodes_J, flux_nodes_J
+    )
 
-def flux_relation(Masses: np.array):
+Mass_nodes_H = np.array([
+    0.1, 0.23, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5, 3
+    ])
+flux_nodes_H = np.array([
+    -4.9, -2.8, -0.9, 0.6, 1.5, 3, 3.3, 4, 6
+    ])/2.5
+flux_spline_H = InterpolatedUnivariateSpline(
+    Mass_nodes_H, flux_nodes_H
+    )
+
+Mass_nodes_K = np.array([
+    0.1, 0.2, 0.35, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5, 3
+    ])
+flux_nodes_K = np.array([
+    -4.7, -2.9, -1.7, -0.7, 0.6, 1.6, 3, 3.3, 4, 6
+    ])/2.5
+flux_spline_K = InterpolatedUnivariateSpline(
+    Mass_nodes_K, flux_nodes_K
+    )
+
+def flux_relation(Masses: np.array, band: str = "TESS"):
     """
     Estimates fluxes of stars given masses.
     Args:
         Masses (numpy array): Star masses [Solar masses].
+        band (string): Photometric band. Options are
+                       TESS, Vis, J, H, and K.
     Returns:
         fluxes (numpy array): Flux ratio between star and
-                              a 0.9 Solar mass star.
+                              a ~1 Solar mass star.
     """
-    fluxes = 10**flux_spline(Masses)
+    if (band == "TESS") or (band == "Vis"):
+        fluxes = 10**flux_spline(Masses)
+    if band == "J":
+        fluxes = 10**flux_spline_J(Masses)
+    if band == "H":
+        fluxes = 10**flux_spline_H(Masses)
+    if band == "K":
+        fluxes = 10**flux_spline_K(Masses)
     return fluxes
 
 
@@ -286,6 +325,9 @@ def trilegal_results(output_url, Tmag: float):
         Teffs = 10**df["logTe"].values
         Zs = np.array(df["[M/H]"], dtype=float)
         Tmags = df["TESS"].values
+        Jmags = df["J"].values
+        Hmags = df["H"].values
+        Kmags = df["Ks"].values
         headers = np.array(list(df))
         # if able to use TRILEGAL v1.6 and get TESS mags, use them
         if "TESS" in headers:
@@ -295,13 +337,14 @@ def trilegal_results(output_url, Tmag: float):
             Teffs = Teffs[mask]
             Zs = Zs[mask]
             Tmags = Tmags[mask]
+            Jmags = Jmags[mask]
+            Hmags = Hmags[mask]
+            Kmags = Kmags[mask]
         # otherwise, use 2mass mags from TRILEGAL v1.5 and convert
         # to T mags using the relations from section 2.2.1.1 of
         # Stassun et al. 2018
         else:
             Tmags = np.zeros(df.shape[0])
-            Jmags = df["J"].values
-            Kmags = df["Ks"].values
             for i, (J, Ks) in enumerate(zip(Jmags, Kmags)):
                 if (-0.1 <= J-Ks <= 0.70):
                     Tmags[i] = (
@@ -323,4 +366,7 @@ def trilegal_results(output_url, Tmag: float):
             Teffs = Teffs[mask]
             Zs = Zs[mask]
             Tmags = Tmags[mask]
-        return Tmags, Masses, loggs, Teffs, Zs
+            Jmags = Jmags[mask]
+            Hmags = Hmags[mask]
+            Kmags = Kmags[mask]
+        return Tmags, Masses, loggs, Teffs, Zs, Jmags, Hmags, Kmags

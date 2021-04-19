@@ -300,6 +300,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Z: float, plx: float, contrast_curve_file: str = None,
+            band: str = "TESS",
             N: int = 1000000, parallel: bool = False):
     """
     Calculates the marginal likelihood of the PTP scenario.
@@ -315,6 +316,8 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         Z (float): Target star metallicity [dex].
         plx (float): Target star parallax [mas].
         contrast_curve_file (string): Path to contrast curve file.
+        band (string): Photometric band of contrast curve. Options are
+                       TESS, Vis, J, H, and K.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
@@ -350,8 +353,9 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         )
 
     # calculate priors for companions
-    delta_mags = 2.5*np.log10(fluxratios_comp/(1-fluxratios_comp))
     if contrast_curve_file is None:
+        # use TESS/Vis band flux ratios
+        delta_mags = 2.5*np.log10(fluxratios_comp/(1-fluxratios_comp))
         lnprior_companion = lnprior_bound_TP(
             M_s, plx, np.abs(delta_mags),
             np.array([2.2]), np.array([1.0])
@@ -359,6 +363,13 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
+        # use flux ratio of contrast curve band
+        fluxratios_comp_cc = (
+            flux_relation(masses_comp, band)
+            / (flux_relation(masses_comp, band)
+                + flux_relation(np.array([M_s]), band))
+            )
+        delta_mags = 2.5*np.log10(fluxratios_comp_cc/(1-fluxratios_comp_cc))
         separations, contrasts = file_to_contrast_curve(
             contrast_curve_file
             )
@@ -440,6 +451,7 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Z: float, plx: float, contrast_curve_file: str = None,
+            band: str = "TESS",
             N: int = 1000000, parallel: bool = False):
     """
     Calculates the marginal likelihood of the PEB scenario.
@@ -455,6 +467,8 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         Z (float): Target star metallicity [dex].
         plx (float): Target star parallax [mas].
         contrast_curve_file (string): Path to contrast curve file.
+        band (string): Photometric band of contrast curve. Options are
+                       TESS, Vis, J, H, and K.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
@@ -505,8 +519,9 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         )
 
     # calculate priors for companions
-    delta_mags = 2.5*np.log10(fluxratios_comp/(1-fluxratios_comp))
     if contrast_curve_file is None:
+        # use TESS/Vis band flux ratios
+        delta_mags = 2.5*np.log10(fluxratios_comp/(1-fluxratios_comp))
         lnprior_companion = lnprior_bound_EB(
             M_s, plx, np.abs(delta_mags),
             np.array([2.2]), np.array([1.0])
@@ -514,6 +529,13 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
+        # use flux ratio of contrast curve band
+        fluxratios_comp_cc = (
+            flux_relation(masses_comp, band)
+            / (flux_relation(masses_comp, band)
+                + flux_relation(np.array([M_s]), band))
+            )
+        delta_mags = 2.5*np.log10(fluxratios_comp_cc/(1-fluxratios_comp_cc))
         separations, contrasts = file_to_contrast_curve(
             contrast_curve_file
             )
@@ -644,6 +666,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float, Z: float,
             plx: float, contrast_curve_file: str = None,
+            band: str = "TESS",
             N: int = 1000000, parallel: bool = False):
     """
     Calculates the marginal likelihood of the STP scenario.
@@ -659,6 +682,8 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
         Z (float): Target star metallicity [dex].
         plx (float): Target star parallax [mas].
         contrast_curve_file (string): contrast curve file.
+        band (string): Photometric band of contrast curve. Options are
+                       TESS, Vis, J, H, and K.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
@@ -703,8 +728,9 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
         u1s_comp[i], u2s_comp[i] = u1s_at_Z[mask], u2s_at_Z[mask]
 
     # calculate priors for companions
-    delta_mags = 2.5*np.log10(fluxratios_comp/(1-fluxratios_comp))
     if contrast_curve_file is None:
+        # use TESS/Vis band flux ratios
+        delta_mags = 2.5*np.log10(fluxratios_comp/(1-fluxratios_comp))
         lnprior_companion = lnprior_bound_TP(
             M_s, plx, np.abs(delta_mags),
             np.array([2.2]), np.array([1.0])
@@ -712,6 +738,13 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
+        # use flux ratio of contrast curve band
+        fluxratios_comp_cc = (
+            flux_relation(masses_comp, band)
+            / (flux_relation(masses_comp, band)
+                + flux_relation(np.array([M_s]), band))
+            )
+        delta_mags = 2.5*np.log10(fluxratios_comp_cc/(1-fluxratios_comp_cc))
         separations, contrasts = file_to_contrast_curve(
             contrast_curve_file
             )
@@ -793,6 +826,7 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Z: float, plx: float, contrast_curve_file: str = None,
+            band: str = "TESS",
             N: int = 1000000, parallel: bool = False):
     """
     Calculates the marginal likelihood of the SEB scenario.
@@ -808,6 +842,8 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         Z (float): Target star metallicity [dex].
         plx (float): Target star parallax [mas].
         contrast_curve_file (string): Path to contrast curve file.
+        band (string): Photometric band of contrast curve. Options are
+                       TESS, Vis, J, H, and K.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
@@ -865,11 +901,12 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         )
 
     # calculate priors for companions
-    delta_mags = 2.5*np.log10(
-        (fluxratios_comp/(1-fluxratios_comp))
-        + (fluxratios/(1-fluxratios))
-        )
     if contrast_curve_file is None:
+        # use TESS/Vis band flux ratios
+        delta_mags = 2.5*np.log10(
+            (fluxratios_comp/(1-fluxratios_comp))
+            + (fluxratios/(1-fluxratios))
+            )
         lnprior_companion = lnprior_bound_EB(
             M_s, plx, np.abs(delta_mags),
             np.array([2.2]), np.array([1.0])
@@ -877,6 +914,21 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
+        # use flux ratio of contrast curve band
+        fluxratios_cc = (
+            flux_relation(masses, band)
+            / (flux_relation(masses, band)
+                + flux_relation(np.array([M_s]), band))
+            )
+        fluxratios_comp_cc = (
+            flux_relation(masses_comp, band)
+            / (flux_relation(masses_comp, band)
+                + flux_relation(np.array([M_s]), band))
+            )
+        delta_mags = 2.5*np.log10(
+            (fluxratios_comp_cc/(1-fluxratios_comp_cc))
+            + (fluxratios_cc/(1-fluxratios_cc))
+            )
         separations, contrasts = file_to_contrast_curve(
             contrast_curve_file
             )
@@ -1010,9 +1062,10 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 
 def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
-            Z: float, Tmag: float, output_url: str,
-            contrast_curve_file: str = None, N: int = 1000000,
-            parallel: bool = False):
+            Z: float, Tmag: float, Jmag: float, Hmag: float,
+            Kmag: float, output_url: str,
+            contrast_curve_file: str = None, band: str = "TESS",
+            N: int = 1000000, parallel: bool = False):
     """
     Calculates the marginal likelihood of the DTP scenario.
     Args:
@@ -1026,8 +1079,13 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         Teff (float): Target star effective temperature [K].
         Z (float): Target star metallicity [dex].
         Tmag (float): Target star TESS magnitude.
+        Jmag (float): Target star J magnitude.
+        Hmag (float): Target star H magnitude.
+        Kmag (float): Target star K magnitude.
         output_url (string): Link to trilegal query results.
         contrast_curve_file (string): Contrast curve file.
+        band (string): Photometric band of contrast curve. Options are
+                       TESS, Vis, J, H, and K.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
@@ -1049,26 +1107,39 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
 
     # determine background star population properties
-    Tmags_comp, masses_comp, loggs_comp, Teffs_comp, Zs_comp = (
+    (Tmags_comp, masses_comp, loggs_comp, Teffs_comp, Zs_comp,
+        Jmags_comp, Hmags_comp, Kmags_comp) = (
         trilegal_results(output_url, Tmag)
         )
     delta_mags = Tmag - Tmags_comp
+    delta_Jmags = Jmag - Jmags_comp
+    delta_Hmags = Hmag - Hmags_comp
+    delta_Kmags = Kmag - Kmags_comp
     fluxratios_comp = 10**(delta_mags/2.5) / (1 + 10**(delta_mags/2.5))
     N_comp = Tmags_comp.shape[0]
     # draw random sample of background stars
     idxs = np.random.randint(0, N_comp-1, N)
 
     # calculate priors for companions
-    delta_mags = 2.5*np.log10(
-        fluxratios_comp[idxs]/(1-fluxratios_comp[idxs])
-        )
     if contrast_curve_file is None:
+        # use TESS/Vis band flux ratios
+        delta_mags = 2.5*np.log10(
+            fluxratios_comp[idxs]/(1-fluxratios_comp[idxs])
+            )
         lnprior_companion = np.full(
             N, np.log10((N_comp/0.1) * (1/3600)**2 * 2.2**2)
             )
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
+        if band == "J":
+            delta_mags = delta_Jmags[idx]
+        elif band == "H":
+            delta_mags = delta_Hmags[idx]
+        elif band == "K":
+            delta_mags = delta_Kmags[idx]
+        else:
+            delta_mags = delta_mags[idx]
         separations, contrasts = file_to_contrast_curve(
             contrast_curve_file
             )
@@ -1149,9 +1220,10 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
 def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
-            Z: float, Tmag: float, output_url: str,
-            contrast_curve_file: str = None, N: int = 1000000,
-            parallel: bool = False):
+            Z: float, Tmag: float, Jmag: float, Hmag: float,
+            Kmag: float, output_url: str,
+            contrast_curve_file: str = None, band: str = "TESS",
+            N: int = 1000000, parallel: bool = False):
     """
     Calculates the marginal likelihood of the DEB scenario.
     Args:
@@ -1165,8 +1237,13 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         Teff (float): Target star effective temperature [K].
         Z (float): Target star metallicity [dex].
         Tmag (float): Target star TESS magnitude.
+        Jmag (float): Target star J magnitude.
+        Hmag (float): Target star H magnitude.
+        Kmag (float): Target star K magnitude.
         output_url (string): Link to trilegal query results.
         contrast_curve_file (string): Path to contrast curve file.
+        band (string): Photometric band of contrast curve. Options are
+                       TESS, Vis, J, H, and K.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
@@ -1205,26 +1282,39 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         )
 
     # determine background star population properties
-    Tmags_comp, masses_comp, loggs_comp, Teffs_comp, Zs_comp = (
+    (Tmags_comp, masses_comp, loggs_comp, Teffs_comp, Zs_comp,
+        Jmags_comp, Hmags_comp, Kmags_comp) = (
         trilegal_results(output_url, Tmag)
         )
     delta_mags = Tmag - Tmags_comp
+    delta_Jmags = Jmag - Jmags_comp
+    delta_Hmags = Hmag - Hmags_comp
+    delta_Kmags = Kmag - Kmags_comp
     fluxratios_comp = 10**(delta_mags/2.5) / (1 + 10**(delta_mags/2.5))
     N_comp = Tmags_comp.shape[0]
     # draw random sample of background stars
     idxs = np.random.randint(0, N_comp-1, N)
 
     # calculate priors for companions
-    delta_mags = 2.5*np.log10(
-        fluxratios_comp[idxs]/(1-fluxratios_comp[idxs])
-        )
     if contrast_curve_file is None:
+        # use TESS/Vis band flux ratios
+        delta_mags = 2.5*np.log10(
+            fluxratios_comp[idxs]/(1-fluxratios_comp[idxs])
+            )
         lnprior_companion = np.full(
             N, np.log10((N_comp/0.1) * (1/3600)**2 * 2.2**2)
             )
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
+        if band == "J":
+            delta_mags = delta_Jmags[idx]
+        elif band == "H":
+            delta_mags = delta_Hmags[idx]
+        elif band == "K":
+            delta_mags = delta_Kmags[idx]
+        else:
+            delta_mags = delta_mags[idx]
         separations, contrasts = file_to_contrast_curve(
             contrast_curve_file
             )
@@ -1355,9 +1445,10 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 
 def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
-            Tmag: float, output_url: str,
-            contrast_curve_file: str = None, N: int = 1000000,
-            parallel: bool = False):
+            Tmag: float, Jmag: float, Hmag: float, Kmag: float,
+            output_url: str,
+            contrast_curve_file: str = None, band: str = "TESS",
+            N: int = 1000000, parallel: bool = False):
     """
     Calculates the marginal likelihood of the BTP scenario.
     Args:
@@ -1370,8 +1461,13 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         R_s (float): Target star radius [Solar radii].
         Teff (float): Target star effective temperature [K].
         Tmag (float): Target star TESS magnitude.
+        Jmag (float): Target star J magnitude.
+        Hmag (float): Target star H magnitude.
+        Kmag (float): Target star K magnitude.
         output_url (string): Link to trilegal query results.
         contrast_curve_file (string): Path to contrast curve file.
+        band (string): Photometric band of contrast curve. Options are
+                       TESS, Vis, J, H, and K.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
@@ -1381,11 +1477,15 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     lnsigma = np.log(sigma)
 
     # determine background star population properties
-    Tmags_comp, masses_comp, loggs_comp, Teffs_comp, Zs_comp = (
+    (Tmags_comp, masses_comp, loggs_comp, Teffs_comp, Zs_comp,
+        Jmags_comp, Hmags_comp, Kmags_comp) = (
         trilegal_results(output_url, Tmag)
         )
     radii_comp = np.sqrt(G*masses_comp*Msun / 10**loggs_comp) / Rsun
     delta_mags = Tmag - Tmags_comp
+    delta_Jmags = Jmag - Jmags_comp
+    delta_Hmags = Hmag - Hmags_comp
+    delta_Kmags = Kmag - Kmags_comp
     fluxratios_comp = 10**(delta_mags/2.5) / (1 + 10**(delta_mags/2.5))
     N_comp = Tmags_comp.shape[0]
     # determine limb darkening coefficients of background stars
@@ -1406,16 +1506,25 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     idxs = np.random.randint(0, N_comp, N)
 
     # calculate priors for companions
-    delta_mags = 2.5*np.log10(
-        fluxratios_comp[idxs]/(1-fluxratios_comp[idxs])
-        )
     if contrast_curve_file is None:
+        # use TESS/Vis band flux ratios
+        delta_mags = 2.5*np.log10(
+            fluxratios_comp[idxs]/(1-fluxratios_comp[idxs])
+            )
         lnprior_companion = np.full(
             N, np.log10((N_comp/0.1) * (1/3600)**2 * 2.2**2)
             )
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
+        if band == "J":
+            delta_mags = delta_Jmags[idx]
+        elif band == "H":
+            delta_mags = delta_Hmags[idx]
+        elif band == "K":
+            delta_mags = delta_Kmags[idx]
+        else:
+            delta_mags = delta_mags[idx]
         separations, contrasts = file_to_contrast_curve(
             contrast_curve_file
             )
@@ -1501,9 +1610,10 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
 def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
-            Tmag: float, output_url: str,
-            contrast_curve_file: str = None, N: int = 1000000,
-            parallel: bool = False):
+            Tmag: float, Jmag:float, Hmag: float, Kmag: float,
+            output_url: str,
+            contrast_curve_file: str = None, band: str = "TESS",
+            N: int = 1000000, parallel: bool = False):
     """
     Calculates the marginal likelihood of the BEB scenario.
     Args:
@@ -1516,8 +1626,13 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         R_s (float): Target star radius [Solar radii].
         Teff (float): Target star effective temperature [K].
         Tmag (float): Target star TESS magnitude.
+        Jmag (float): Target star J magnitude.
+        Hmag (float): Target star H magnitude.
+        Kmag (float): Target star K magnitude.
         output_url (string): Link to trilegal query results.
         contrast_curve_file (string): Path to contrast curve file.
+        band (string): Photometric band of contrast curve. Options are
+                       TESS, Vis, J, H, and K.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
@@ -1535,12 +1650,19 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     argps = sample_w(np.random.rand(N))
 
     # determine background star population properties
-    Tmags_comp, masses_comp, loggs_comp, Teffs_comp, Zs_comp = (
+    (Tmags_comp, masses_comp, loggs_comp, Teffs_comp, Zs_comp,
+        Jmags_comp, Hmags_comp, Kmags_comp) = (
         trilegal_results(output_url, Tmag)
         )
     radii_comp = np.sqrt(G*masses_comp*Msun / 10**loggs_comp) / Rsun
     delta_mags = Tmag - Tmags_comp
+    delta_Jmags = Jmag - Jmags_comp
+    delta_Hmags = Hmag - Hmags_comp
+    delta_Kmags = Kmag - Kmags_comp
     fluxratios_comp = 10**(delta_mags/2.5) / (1 + 10**(delta_mags/2.5))
+    fluxratios_comp_J = 10**(delta_Jmags/2.5) / (1 + 10**(delta_Jmags/2.5))
+    fluxratios_comp_H = 10**(delta_Hmags/2.5) / (1 + 10**(delta_Hmags/2.5))
+    fluxratios_comp_K = 10**(delta_Kmags/2.5) / (1 + 10**(delta_Kmags/2.5))
     N_comp = Tmags_comp.shape[0]
     # determine limb darkening coefficients of background stars
     u1s_comp, u2s_comp = np.zeros(N_comp), np.zeros(N_comp)
@@ -1568,7 +1690,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     radii, Teffs = stellar_relations(
         masses, radii_comp[idxs], Teffs_comp[idxs]
         )
-    # calculate flux ratios in the TESS band
+    # calculate EB flux ratios in the TESS band
     fluxratios_comp_bound = (
         flux_relation(masses_comp[idxs])
         / (
@@ -1582,19 +1704,47 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         / (flux_relation(masses) + flux_relation(np.array([M_s])))
         * distance_correction
         )
+    # calculate EB flux ratios in the contrast curve band
+    if band == "J":
+        fluxratios_comp_cc = fluxratios_comp_J[idx]
+    elif band == "H":
+        fluxratios_comp_cc = fluxratios_comp_H[idx]
+    elif band == "K":
+        fluxratios_comp_cc = fluxratios_comp_K[idx]
+    else:
+        fluxratios_comp_cc = fluxratios_comp[idx]
+    fluxratios_comp_bound_cc = (
+        flux_relation(masses_comp[idxs], band)
+        / (
+            flux_relation(masses_comp[idxs], band)
+            + flux_relation(np.array([M_s]), band)
+            )
+        )
+    distance_correction_cc = fluxratios_comp_cc/fluxratios_comp_bound_cc
+    fluxratios_cc = (
+        flux_relation(masses, band)
+        / (flux_relation(masses, band) + flux_relation(np.array([M_s]), band))
+        * distance_correction_cc
+        )
 
     # calculate priors for companions
-    delta_mags = 2.5*np.log10(
-        (fluxratios_comp[idxs]/(1-fluxratios_comp[idxs]))
-        + (fluxratios/(1-fluxratios))
-        )
     if contrast_curve_file is None:
+        # use TESS/Vis band flux ratios
+        delta_mags = 2.5*np.log10(
+            (fluxratios_comp[idxs]/(1-fluxratios_comp[idxs]))
+            + (fluxratios/(1-fluxratios))
+            )
         lnprior_companion = np.full(
             N, np.log10((N_comp/0.1) * (1/3600)**2 * 2.2**2)
             )
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
+        # use contrast curve band flux ratios
+        delta_mags = 2.5*np.log10(
+            (fluxratios_comp_cc/(1-fluxratios_comp_cc))
+            + (fluxratios_cc/(1-fluxratios_cc))
+            )
         separations, contrasts = file_to_contrast_curve(
             contrast_curve_file
             )
@@ -1766,7 +1916,8 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
     lnsigma = np.log(sigma)
 
     # determine properties of possible stars
-    Tmags_nearby, masses_nearby, loggs_nearby, Teffs_nearby, Zs_nearby = (
+    (Tmags_nearby, masses_nearby, loggs_nearby, Teffs_nearby,
+        Zs_nearby, Jmags_nearby, Hmags_nearby, Kmags_nearby) = (
         trilegal_results(output_url, Tmag)
         )
     mask = (Tmag-1 < Tmags_nearby) & (Tmags_nearby < Tmag+1)
@@ -1918,7 +2069,8 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
     argps = sample_w(np.random.rand(N))
 
     # determine properties of possible stars
-    Tmags_nearby, masses_nearby, loggs_nearby, Teffs_nearby, Zs_nearby = (
+    (Tmags_nearby, masses_nearby, loggs_nearby, Teffs_nearby,
+        Zs_nearby, Jmags_nearby, Hmags_nearby, Kmags_nearby) = (
         trilegal_results(output_url, Tmag)
         )
     mask = (Tmag-1 < Tmags_nearby) & (Tmags_nearby < Tmag+1)
