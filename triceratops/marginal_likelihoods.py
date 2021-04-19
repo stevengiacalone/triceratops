@@ -1133,13 +1133,13 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
         if band == "J":
-            delta_mags = delta_Jmags[idx]
+            delta_mags = delta_Jmags[idxs]
         elif band == "H":
-            delta_mags = delta_Hmags[idx]
+            delta_mags = delta_Hmags[idxs]
         elif band == "K":
-            delta_mags = delta_Kmags[idx]
+            delta_mags = delta_Kmags[idxs]
         else:
-            delta_mags = delta_mags[idx]
+            delta_mags = delta_mags[idxs]
         separations, contrasts = file_to_contrast_curve(
             contrast_curve_file
             )
@@ -1308,13 +1308,13 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
         if band == "J":
-            delta_mags = delta_Jmags[idx]
+            delta_mags = delta_Jmags[idxs]
         elif band == "H":
-            delta_mags = delta_Hmags[idx]
+            delta_mags = delta_Hmags[idxs]
         elif band == "K":
-            delta_mags = delta_Kmags[idx]
+            delta_mags = delta_Kmags[idxs]
         else:
-            delta_mags = delta_mags[idx]
+            delta_mags = delta_mags[idxs]
         separations, contrasts = file_to_contrast_curve(
             contrast_curve_file
             )
@@ -1518,13 +1518,13 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
         if band == "J":
-            delta_mags = delta_Jmags[idx]
+            delta_mags = delta_Jmags[idxs]
         elif band == "H":
-            delta_mags = delta_Hmags[idx]
+            delta_mags = delta_Hmags[idxs]
         elif band == "K":
-            delta_mags = delta_Kmags[idx]
+            delta_mags = delta_Kmags[idxs]
         else:
-            delta_mags = delta_mags[idx]
+            delta_mags = delta_mags[idxs]
         separations, contrasts = file_to_contrast_curve(
             contrast_curve_file
             )
