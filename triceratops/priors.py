@@ -265,7 +265,7 @@ def sample_q(x, M_s):
                 + 0.95**(p2+1))**(1/(p2+1))
             )
     elif M_s <= 0.1:
-        x = np.full(len(x), M_s)
+        x = np.full(len(x), 1.0)
     return x
 
 
@@ -374,7 +374,7 @@ def sample_q_companion(x, M_s):
                 + 0.95**(p2+1))**(1/(p2+1))
             )
     elif M_s <= 0.1:
-        x = np.full(len(x), M_s)
+        x = np.full(len(x), 1.0)
     return x
 
 
