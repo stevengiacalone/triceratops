@@ -1706,13 +1706,13 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         )
     # calculate EB flux ratios in the contrast curve band
     if band == "J":
-        fluxratios_comp_cc = fluxratios_comp_J[idx]
+        fluxratios_comp_cc = fluxratios_comp_J[idxs]
     elif band == "H":
-        fluxratios_comp_cc = fluxratios_comp_H[idx]
+        fluxratios_comp_cc = fluxratios_comp_H[idxs]
     elif band == "K":
-        fluxratios_comp_cc = fluxratios_comp_K[idx]
+        fluxratios_comp_cc = fluxratios_comp_K[idxs]
     else:
-        fluxratios_comp_cc = fluxratios_comp[idx]
+        fluxratios_comp_cc = fluxratios_comp[idxs]
     fluxratios_comp_bound_cc = (
         flux_relation(masses_comp[idxs], band)
         / (
