@@ -5,6 +5,7 @@ from astropy.wcs import WCS
 from astropy.wcs.utils import pixel_to_skycoord
 import astropy.units as u
 import numpy as np
+from astroquery.vizier import Vizier
 from scipy.integrate import dblquad
 from pandas import DataFrame, read_csv
 from math import floor, ceil
@@ -33,7 +34,7 @@ ln2pi = np.log(2*pi)
 
 class target:
     def __init__(self, ID: int, sectors: np.ndarray,
-                 search_radius: int = 10):
+                 search_radius: int = 10, mission: str = "TESS"):
         """
         Queries TIC for sources near the target and obtains a cutout
         of the pixels enclosing the target.
@@ -45,13 +46,43 @@ class target:
                                  star to search.
         """
         self.ID = ID
+        if mission != "TESS" or mission != "Kepler" or mission != "K2":
+            raise ValueError("Introduced invalid mission: " + mission)
+        self.mission = mission
         self.sectors = sectors
         self.search_radius = search_radius
         self.N_pix = 2*search_radius+2
         # query TIC for nearby stars
         pixel_size = 20.25*u.arcsec
+        ra = None
+        dec = None
+        if mission == "Kepler":
+            columns = ["_RA", "_DE"]
+            result = (
+                Vizier(columns=columns)
+                    .query_constraints(KIC=str(ID), catalog="J/ApJS/229/30/catalog")[0]
+                    .as_array()
+            )
+            ra = result[0]["_RA"]
+            dec = result[0]["_DE"]
+        elif mission == "K2":
+            result = (
+                Vizier(columns=["RAJ2000", "DEJ2000"])
+                    .query_constraints(ID=str(ID), catalog="IV/34/epic")[0]
+                    .as_array()
+            )
+            ra = result[0]["RAJ2000"]
+            dec = result[0]["DEJ2000"]
+        ticid = ID
+        if ra is not None and dec is not None:
+            region_results = Catalogs.query_region(
+                (ra, dec),
+                radius=search_radius * pixel_size,
+                catalog="TIC"
+            )
+            ticid = region_results[0]
         df = Catalogs.query_object(
-            "TIC"+str(ID),
+            "TIC"+str(ticid),
             radius=search_radius*pixel_size,
             catalog="TIC"
             )
