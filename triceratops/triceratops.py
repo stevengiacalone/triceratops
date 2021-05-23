@@ -1,3 +1,4 @@
+import lightkurve
 from astroquery.mast import Catalogs, Tesscut
 from astropy.coordinates import SkyCoord
 from astropy import constants
@@ -46,7 +47,7 @@ class target:
                                  star to search.
         """
         self.ID = ID
-        if mission != "TESS" or mission != "Kepler" or mission != "K2":
+        if mission != "TESS" and mission != "Kepler" and mission != "K2":
             raise ValueError("Introduced invalid mission: " + mission)
         self.mission = mission
         self.sectors = sectors
@@ -75,12 +76,11 @@ class target:
             dec = result[0]["DEJ2000"]
         ticid = ID
         if ra is not None and dec is not None:
-            region_results = Catalogs.query_region(
-                (ra, dec),
+            ticid = Catalogs.query_region(
+                SkyCoord(ra, dec, unit="deg"),
                 radius=search_radius * pixel_size,
                 catalog="TIC"
-            )
-            ticid = region_results[0]
+            )[0]["ID"]
         df = Catalogs.query_object(
             "TIC"+str(ticid),
             radius=search_radius*pixel_size,
@@ -109,17 +109,36 @@ class target:
             ra = stars["ra"].values
             dec = stars["dec"].values
             cutout_coord = SkyCoord(ra[0], dec[0], unit="deg")
-            cutout_hdu = Tesscut.get_cutouts(
-                cutout_coord,
-                size=self.N_pix,
-                sector=sector
-                )[0]
-            cutout_table = cutout_hdu[1].data
-            hdu = cutout_hdu[2].header
-            wcs = WCS(hdu)
-            TESS_images.append(np.mean(cutout_table["FLUX"], axis=0))
-            col0 = cutout_hdu[1].header["1CRV4P"]
-            row0 = cutout_hdu[1].header["2CRV4P"]
+            if mission == "TESS":
+                cutout_hdu = Tesscut.get_cutouts(
+                    cutout_coord,
+                    size=self.N_pix,
+                    sector=sector
+                    )[0]
+                cutout_table = cutout_hdu[1].data
+                hdu = cutout_hdu[2].header
+                wcs = WCS(hdu)
+                TESS_images.append(np.mean(cutout_table["FLUX"], axis=0))
+                col0 = cutout_hdu[1].header["1CRV4P"]
+                row0 = cutout_hdu[1].header["2CRV4P"]
+            elif mission == "Kepler":
+                tpf_search_results = lightkurve.search_targetpixelfile("KIC " + str(ID), mission="Kepler",
+                                                                       cadence=60, quarter=sectors).download_all()
+                cutout_table = tpf_search_results[0].hdu[1].data
+                hdu = tpf_search_results[0].hdu[2].header
+                wcs = WCS(hdu)
+                TESS_images.append(np.mean(cutout_table["FLUX"], axis=0))
+                col0 = tpf_search_results[0].hdu[1].header["1CRV4P"]
+                row0 = tpf_search_results[0].hdu[1].header["2CRV4P"]
+            elif mission == "K2":
+                tpf_search_results = lightkurve.search_targetpixelfile("EPIC " + str(ID), mission="K2",
+                                                                       cadence=60, campaign=sectors).download_all()
+                cutout_table = tpf_search_results[0].hdu[1].data
+                hdu = tpf_search_results[0].hdu[2].header
+                wcs = WCS(hdu)
+                TESS_images.append(np.mean(cutout_table["FLUX"], axis=0))
+                col0 = tpf_search_results[0].hdu[1].header["1CRV4P"]
+                row0 = tpf_search_results[0].hdu[1].header["2CRV4P"]
             col0s.append(col0)
             row0s.append(row0)
 
