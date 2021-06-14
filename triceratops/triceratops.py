@@ -1,3 +1,4 @@
+import lightkurve
 from astroquery.mast import Catalogs, Tesscut
 from astropy.coordinates import SkyCoord
 from astropy import constants
@@ -5,6 +6,7 @@ from astropy.wcs import WCS
 from astropy.wcs.utils import pixel_to_skycoord
 import astropy.units as u
 import numpy as np
+from astroquery.vizier import Vizier
 from scipy.integrate import dblquad
 from pandas import DataFrame, read_csv
 from math import floor, ceil
@@ -33,7 +35,7 @@ ln2pi = np.log(2*pi)
 
 class target:
     def __init__(self, ID: int, sectors: np.ndarray,
-                 search_radius: int = 10):
+                 search_radius: int = 10, mission: str = "TESS"):
         """
         Queries TIC for sources near the target and obtains a cutout
         of the pixels enclosing the target.
@@ -45,13 +47,42 @@ class target:
                                  star to search.
         """
         self.ID = ID
+        if mission != "TESS" and mission != "Kepler" and mission != "K2":
+            raise ValueError("Introduced invalid mission: " + mission)
+        self.mission = mission
         self.sectors = sectors
         self.search_radius = search_radius
         self.N_pix = 2*search_radius+2
         # query TIC for nearby stars
         pixel_size = 20.25*u.arcsec
+        ra = None
+        dec = None
+        if mission == "Kepler":
+            columns = ["_RA", "_DE"]
+            result = (
+                Vizier(columns=columns)
+                    .query_constraints(KIC=str(ID), catalog="J/ApJS/229/30/catalog")[0]
+                    .as_array()
+            )
+            ra = result[0]["_RA"]
+            dec = result[0]["_DE"]
+        elif mission == "K2":
+            result = (
+                Vizier(columns=["RAJ2000", "DEJ2000"])
+                    .query_constraints(ID=str(ID), catalog="IV/34/epic")[0]
+                    .as_array()
+            )
+            ra = result[0]["RAJ2000"]
+            dec = result[0]["DEJ2000"]
+        ticid = ID
+        if ra is not None and dec is not None:
+            ticid = Catalogs.query_region(
+                SkyCoord(ra, dec, unit="deg"),
+                radius=search_radius * pixel_size,
+                catalog="TIC"
+            )[0]["ID"]
         df = Catalogs.query_object(
-            "TIC"+str(ID),
+            "TIC"+str(ticid),
             radius=search_radius*pixel_size,
             catalog="TIC"
             )
@@ -78,17 +109,36 @@ class target:
             ra = stars["ra"].values
             dec = stars["dec"].values
             cutout_coord = SkyCoord(ra[0], dec[0], unit="deg")
-            cutout_hdu = Tesscut.get_cutouts(
-                cutout_coord,
-                size=self.N_pix,
-                sector=sector
-                )[0]
-            cutout_table = cutout_hdu[1].data
-            hdu = cutout_hdu[2].header
-            wcs = WCS(hdu)
-            TESS_images.append(np.mean(cutout_table["FLUX"], axis=0))
-            col0 = cutout_hdu[1].header["1CRV4P"]
-            row0 = cutout_hdu[1].header["2CRV4P"]
+            if mission == "TESS":
+                cutout_hdu = Tesscut.get_cutouts(
+                    cutout_coord,
+                    size=self.N_pix,
+                    sector=sector
+                    )[0]
+                cutout_table = cutout_hdu[1].data
+                hdu = cutout_hdu[2].header
+                wcs = WCS(hdu)
+                TESS_images.append(np.mean(cutout_table["FLUX"], axis=0))
+                col0 = cutout_hdu[1].header["1CRV4P"]
+                row0 = cutout_hdu[1].header["2CRV4P"]
+            elif mission == "Kepler":
+                tpf_search_results = lightkurve.search_targetpixelfile("KIC " + str(ID), mission="Kepler",
+                                                                       cadence=60, quarter=sectors).download_all()
+                cutout_table = tpf_search_results[0].hdu[1].data
+                hdu = tpf_search_results[0].hdu[2].header
+                wcs = WCS(hdu)
+                TESS_images.append(np.mean(cutout_table["FLUX"], axis=0))
+                col0 = tpf_search_results[0].hdu[1].header["1CRV4P"]
+                row0 = tpf_search_results[0].hdu[1].header["2CRV4P"]
+            elif mission == "K2":
+                tpf_search_results = lightkurve.search_targetpixelfile("EPIC " + str(ID), mission="K2",
+                                                                       cadence=60, campaign=sectors).download_all()
+                cutout_table = tpf_search_results[0].hdu[1].data
+                hdu = tpf_search_results[0].hdu[2].header
+                wcs = WCS(hdu)
+                TESS_images.append(np.mean(cutout_table["FLUX"], axis=0))
+                col0 = tpf_search_results[0].hdu[1].header["1CRV4P"]
+                row0 = tpf_search_results[0].hdu[1].header["2CRV4P"]
             col0s.append(col0)
             row0s.append(row0)
 
