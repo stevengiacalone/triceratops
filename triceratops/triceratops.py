@@ -42,11 +42,15 @@ class target:
         Args:
             ID (int): TIC ID of the target.
             sectors (numpy array): Sectors in which the target
-                                   has been observed.
+                                   has been observed. If Kepler or K2
+                                   selected, sectors corresponds to
+                                   quarter or campaign, respectively.
             search_radius (int): Number of pixels from the target
                                  star to search.
+            mission (str): "TESS", "Kepler", or "K2".
         """
         self.ID = ID
+        self.mission = mission
         if mission != "TESS" and mission != "Kepler" and mission != "K2":
             raise ValueError("Introduced invalid mission: " + mission)
         self.mission = mission
@@ -54,23 +58,30 @@ class target:
         self.search_radius = search_radius
         self.N_pix = 2*search_radius+2
         # query TIC for nearby stars
-        pixel_size = 20.25*u.arcsec
+        if mission == "TESS":
+            pixel_size = 20.25*u.arcsec
+        else:
+            pixel_size = 4*u.arcsec
         ra = None
         dec = None
         if mission == "Kepler":
             columns = ["_RA", "_DE"]
             result = (
                 Vizier(columns=columns)
-                    .query_constraints(KIC=str(ID), catalog="J/ApJS/229/30/catalog")[0]
-                    .as_array()
+                    .query_constraints(
+                        KIC=str(ID),
+                        catalog="J/ApJS/229/30/catalog"
+                        )[0].as_array()
             )
             ra = result[0]["_RA"]
             dec = result[0]["_DE"]
         elif mission == "K2":
             result = (
                 Vizier(columns=["RAJ2000", "DEJ2000"])
-                    .query_constraints(ID=str(ID), catalog="IV/34/epic")[0]
-                    .as_array()
+                    .query_constraints(
+                        ID=str(ID),
+                        catalog="IV/34/epic"
+                        )[0].as_array()
             )
             ra = result[0]["RAJ2000"]
             dec = result[0]["DEJ2000"]
@@ -87,7 +98,8 @@ class target:
             catalog="TIC"
             )
         new_df = df[
-            "ID", "Tmag", "Jmag", "Hmag", "Kmag", "ra", "dec", "mass", "rad", "Teff", "plx"
+            "ID", "Tmag", "Jmag", "Hmag", "Kmag",
+            "ra", "dec", "mass", "rad", "Teff", "plx"
             ]
         stars = new_df.to_pandas()
 
@@ -118,27 +130,59 @@ class target:
                 cutout_table = cutout_hdu[1].data
                 hdu = cutout_hdu[2].header
                 wcs = WCS(hdu)
-                TESS_images.append(np.mean(cutout_table["FLUX"], axis=0))
+                n_cols_before = 0
+                n_rows_before = 0
+                TESS_images.append(np.nanmean(cutout_table["FLUX"], axis=0))
                 col0 = cutout_hdu[1].header["1CRV4P"]
                 row0 = cutout_hdu[1].header["2CRV4P"]
             elif mission == "Kepler":
-                tpf_search_results = lightkurve.search_targetpixelfile("KIC " + str(ID), mission="Kepler",
-                                                                       cadence=60, quarter=sectors).download_all()
-                cutout_table = tpf_search_results[0].hdu[1].data
-                hdu = tpf_search_results[0].hdu[2].header
+                tpf = lightkurve.search_targetpixelfile(
+                    "KIC " + str(ID),
+                    mission="Kepler",
+                    quarter=sector
+                    ).download_all()
+                cutout_table = tpf[0].hdu[1].data
+                hdu = tpf[0].hdu[2].header
                 wcs = WCS(hdu)
-                TESS_images.append(np.mean(cutout_table["FLUX"], axis=0))
-                col0 = tpf_search_results[0].hdu[1].header["1CRV4P"]
-                row0 = tpf_search_results[0].hdu[1].header["2CRV4P"]
+                image = np.nanmean(cutout_table["FLUX"], axis=0)
+                n_rows_before = (self.N_pix - image.shape[0])//2
+                n_rows_after = ((self.N_pix - image.shape[0])
+                    - (self.N_pix - image.shape[0])//2)
+                n_cols_before = (self.N_pix - image.shape[1])//2
+                n_cols_after = ((self.N_pix - image.shape[1])
+                    - (self.N_pix - image.shape[1])//2)
+                npad = ((n_rows_before, n_rows_after),
+                        (n_cols_before, n_cols_after))
+                image = np.pad(
+                    image, npad, mode='constant', constant_values=(np.nan)
+                    )
+                TESS_images.append(image)
+                col0 = tpf[0].hdu[1].header["1CRV4P"] - n_cols_before
+                row0 = tpf[0].hdu[1].header["2CRV4P"] - n_rows_before
             elif mission == "K2":
-                tpf_search_results = lightkurve.search_targetpixelfile("EPIC " + str(ID), mission="K2",
-                                                                       cadence=60, campaign=sectors).download_all()
-                cutout_table = tpf_search_results[0].hdu[1].data
-                hdu = tpf_search_results[0].hdu[2].header
+                tpf = lightkurve.search_targetpixelfile(
+                    "EPIC " + str(ID),
+                    mission="K2",
+                    campaign=sector
+                    ).download_all()
+                cutout_table = tpf[0].hdu[1].data
+                hdu = tpf[0].hdu[2].header
                 wcs = WCS(hdu)
-                TESS_images.append(np.mean(cutout_table["FLUX"], axis=0))
-                col0 = tpf_search_results[0].hdu[1].header["1CRV4P"]
-                row0 = tpf_search_results[0].hdu[1].header["2CRV4P"]
+                image = np.nanmean(cutout_table["FLUX"], axis=0)
+                n_rows_before = (self.N_pix - image.shape[0])//2
+                n_rows_after = ((self.N_pix - image.shape[0])
+                    - (self.N_pix - image.shape[0])//2)
+                n_cols_before = (self.N_pix - image.shape[1])//2
+                n_cols_after = ((self.N_pix - image.shape[1])
+                    - (self.N_pix - image.shape[1])//2)
+                npad = ((n_rows_before, n_rows_after),
+                        (n_cols_before, n_cols_after))
+                image = np.pad(
+                    image, npad, mode='constant', constant_values=(np.nan)
+                    )
+                TESS_images.append(image)
+                col0 = tpf[0].hdu[1].header["1CRV4P"] - n_cols_before
+                row0 = tpf[0].hdu[1].header["2CRV4P"] - n_rows_before
             col0s.append(col0)
             row0s.append(row0)
 
@@ -150,8 +194,8 @@ class target:
                 Decpix = np.asscalar(
                     wcs.all_world2pix(ra[i], dec[i], 0)[1]
                     )
-                pix_coord[i, 0] = col0+RApix
-                pix_coord[i, 1] = row0+Decpix
+                pix_coord[i, 0] = col0+RApix + n_cols_before
+                pix_coord[i, 1] = row0+Decpix + n_rows_before
             pix_coords.append(pix_coord)
 
         # for each star, get the separation and position angle
@@ -295,29 +339,30 @@ class target:
             ),
             "k--", alpha=0.5, zorder=0)
         # N and E arrows
-        v1 = np.array([0, 1])
-        v2 = self.pix_coords[idx][1] - self.pix_coords[idx][0]
-        sign = np.sign(v2[0])
-        angle1 = sign * (
-            np.arccos(np.dot(v1, v2)
-            / np.sqrt((np.dot(v1, v1)) * np.dot(v2, v2))) * 180/np.pi
-            )
-        angle2 = self.stars["PA (E of N)"].values[1]
-        rot = angle1-angle2
-        roatated_arrow = AnchoredDirectionArrows(
-                            ax[0].transAxes,
-                            "E", "N",
-                            loc="upper left",
-                            color="k",
-                            angle=-rot,
-                            length=0.1,
-                            fontsize=0.05,
-                            back_length=0,
-                            head_length=5,
-                            head_width=5,
-                            tail_width=1
-                            )
-        ax[0].add_artist(roatated_arrow)
+        if len(self.pix_coords[idx]) > 1:
+            v1 = np.array([0, 1])
+            v2 = self.pix_coords[idx][1] - self.pix_coords[idx][0]
+            sign = np.sign(v2[0])
+            angle1 = sign * (
+                np.arccos(np.dot(v1, v2)
+                / np.sqrt((np.dot(v1, v1)) * np.dot(v2, v2))) * 180/np.pi
+                )
+            angle2 = self.stars["PA (E of N)"].values[1]
+            rot = angle1-angle2
+            rotated_arrow = AnchoredDirectionArrows(
+                                ax[0].transAxes,
+                                "E", "N",
+                                loc="upper left",
+                                color="k",
+                                angle=-rot,
+                                length=0.1,
+                                fontsize=0.05,
+                                back_length=0,
+                                head_length=5,
+                                head_width=5,
+                                tail_width=1
+                                )
+            ax[0].add_artist(rotated_arrow)
         # stars
         sc = ax[0].scatter(
             self.pix_coords[idx][1:, 0],
@@ -527,7 +572,7 @@ class target:
 
     def calc_probs(self, time: np.ndarray, flux_0: np.ndarray,
                    flux_err_0: float, P_orb: float,
-                   contrast_curve_file: str = None, band: str = "TESS",
+                   contrast_curve_file: str = None, filt: str = "TESS",
                    N: int = 1000000, parallel: bool = False,
                    verbose: int = 1):
         """
@@ -542,13 +587,17 @@ class target:
                                        File should contain column with
                                        separations (in arcsec) followed
                                        by column with Delta_mags.
-            band (str): Photometric band of contrast curve. Options are
+            filt (str): Photometric filter of contrast curve. Options are
                         TESS, Vis, J, H, and K.
             N (int): Number of draws for MC.
             parallel (bool): Whether or not to simulate light curves
                              in parallel.
             verbose (int): 1 to print progress, 0 to print nothing.
         """
+        # remove nans from light curve
+        mask = ~np.isnan(time) & ~np.isnan(flux_0)
+        time = time[mask]
+        flux_0 = flux_0[mask]
         # construct a new dataframe that gives the values of lnL, best
         # fit parameters, lnprior, and relative probability of
         # each scenario considered
@@ -620,7 +669,7 @@ class target:
                     res = lnZ_TTP(
                         time, flux, flux_err, P_orb,
                         M_s, R_s, Teff, Z,
-                        N, parallel
+                        N, parallel, self.mission
                         )
                     j = 0
                     targets[j] = ID
@@ -644,7 +693,7 @@ class target:
                     res, res_twin = lnZ_TEB(
                         time, flux, flux_err, P_orb,
                         M_s, R_s, Teff, Z,
-                        N, parallel
+                        N, parallel, self.mission
                         )
                     j = 1
                     targets[j] = ID
@@ -693,8 +742,8 @@ class target:
                         time, flux, flux_err, P_orb,
                         M_s, R_s, Teff, Z,
                         plx, contrast_curve_file,
-                        band,
-                        N, parallel
+                        filt,
+                        N, parallel, self.mission
                         )
                     j = 3
                     targets[j] = ID
@@ -719,8 +768,8 @@ class target:
                         time, flux, flux_err, P_orb,
                         M_s, R_s, Teff, Z,
                         plx, contrast_curve_file,
-                        band,
-                        N, parallel
+                        filt,
+                        N, parallel, self.mission
                         )
                     j = 4
                     targets[j] = ID
@@ -769,8 +818,8 @@ class target:
                         time, flux, flux_err, P_orb,
                         M_s, R_s, Teff, Z,
                         plx, contrast_curve_file,
-                        band,
-                        N, parallel
+                        filt,
+                        N, parallel, self.mission
                         )
                     j = 6
                     targets[j] = ID
@@ -795,8 +844,8 @@ class target:
                         time, flux, flux_err, P_orb,
                         M_s, R_s, Teff, Z,
                         plx, contrast_curve_file,
-                        band,
-                        N, parallel
+                        filt,
+                        N, parallel, self.mission
                         )
                     j = 7
                     targets[j] = ID
@@ -846,8 +895,8 @@ class target:
                         M_s, R_s, Teff, Z,
                         Tmag, Jmag, Hmag, Kmag,
                         output_url,
-                        contrast_curve_file, band,
-                        N, parallel
+                        contrast_curve_file, filt,
+                        N, parallel, self.mission
                         )
                     j = 9
                     targets[j] = ID
@@ -873,8 +922,8 @@ class target:
                         M_s, R_s, Teff, Z,
                         Tmag, Jmag, Hmag, Kmag,
                         output_url,
-                        contrast_curve_file, band,
-                        N, parallel
+                        contrast_curve_file, filt,
+                        N, parallel, self.mission
                         )
                     j = 10
                     targets[j] = ID
@@ -924,8 +973,8 @@ class target:
                         M_s, R_s, Teff,
                         Tmag, Jmag, Hmag, Kmag,
                         output_url,
-                        contrast_curve_file, band,
-                        N, parallel
+                        contrast_curve_file, filt,
+                        N, parallel, self.mission
                         )
                     j = 12
                     targets[j] = ID
@@ -951,8 +1000,8 @@ class target:
                         M_s, R_s, Teff,
                         Tmag, Jmag, Hmag, Kmag,
                         output_url,
-                        contrast_curve_file, band,
-                        N, parallel
+                        contrast_curve_file, filt,
+                        N, parallel, self.mission
                         )
                     j = 13
                     targets[j] = ID
@@ -1009,7 +1058,7 @@ class target:
                 res = lnZ_TTP(
                     time, flux, flux_err, P_orb,
                     M_s, R_s, Teff, Z,
-                    N, parallel
+                    N, parallel, self.mission
                     )
                 j = 15 + 3*(i-1)
                 targets[j] = ID
@@ -1033,7 +1082,7 @@ class target:
                 res, res_twin = lnZ_TEB(
                     time, flux, flux_err, P_orb,
                     M_s, R_s, Teff, Z,
-                    N, parallel
+                    N, parallel, self.mission
                     )
                 j = 16 + 3*(i-1)
                 targets[j] = ID
@@ -1206,11 +1255,11 @@ class target:
                 ax[i, j].yaxis.set_major_formatter(y_formatter)
                 ax[i, j].errorbar(
                     time, flux, flux_err, fmt=".",
-                    color="blue", alpha=0.1, zorder=0,
+                    color="blue", alpha=0.25, zorder=0,
                     rasterized=True
                     )
                 ax[i, j].plot(
-                    model_time, best_model, "k-", lw=5, zorder=2
+                    model_time, best_model, "k-", lw=3, zorder=2
                     )
                 ax[i, j].set_ylabel("normalized flux", fontsize=12)
                 ax[i, j].annotate(

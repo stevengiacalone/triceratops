@@ -17,26 +17,28 @@ au = constants.au.cgs.value
 pi = np.pi
 ln2pi = np.log(2*pi)
 
-# load limb darkening coefficients
-LDC_FILE = resource_filename('triceratops', 'data/ldc.tsv')
-ldc = read_csv(
-    LDC_FILE, sep='\t', skiprows=48, usecols=[0, 1, 2, 3, 4, 5]
-    )[2:]
-ldc = ldc[(
-    (np.array(ldc.Teff, dtype=int) <= 10000)
-    & (np.array(ldc.logg, dtype=float) >= 3.5)
-    & (np.array(ldc.xi, dtype=float) == 2.0)
-    )]
-ldc_Zs = np.array(ldc.Z, dtype=float)
-ldc_Teffs = np.array(ldc.Teff, dtype=int)
-ldc_loggs = np.array(ldc.logg, dtype=float)
-ldc_u1s = np.array(ldc.aLSM, dtype=float)
-ldc_u2s = np.array(ldc.bLSM, dtype=float)
+# load TESS limb darkening coefficients
+LDC_FILE = resource_filename('triceratops', 'data/ldc_tess.csv')
+ldc_T = read_csv(LDC_FILE)
+ldc_T_Zs = np.array(ldc_T.Z, dtype=float)
+ldc_T_Teffs = np.array(ldc_T.Teff, dtype=int)
+ldc_T_loggs = np.array(ldc_T.logg, dtype=float)
+ldc_T_u1s = np.array(ldc_T.aLSM, dtype=float)
+ldc_T_u2s = np.array(ldc_T.bLSM, dtype=float)
 
+# load Kepler limb darkening coefficients
+LDC_FILE = resource_filename('triceratops', 'data/ldc_kepler.csv')
+ldc_K = read_csv(LDC_FILE)
+ldc_K_Zs = np.array(ldc_K.Z, dtype=float)
+ldc_K_Teffs = np.array(ldc_K.Teff, dtype=int)
+ldc_K_loggs = np.array(ldc_K.logg, dtype=float)
+ldc_K_u1s = np.array(ldc_K.a, dtype=float)
+ldc_K_u2s = np.array(ldc_K.b, dtype=float)
 
 def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
-            Z: float, N: int = 1000000, parallel: bool = False):
+            Z: float, N: int = 1000000, parallel: bool = False,
+            mission: str = "TESS"):
     """
     Calculates the marginal likelihood of the TTP scenario.
     Args:
@@ -52,6 +54,7 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
+        mission (str): TESS, Kepler, or K2.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
@@ -59,6 +62,18 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     a = ((G*M_s*Msun)/(4*pi**2)*(P_orb*86400)**2)**(1/3)
     logg = np.log10(G*(M_s*Msun)/(R_s*Rsun)**2)
     # determine target star limb darkening coefficients
+    if mission == "TESS":
+        ldc_Zs = ldc_T_Zs
+        ldc_Teffs = ldc_T_Teffs
+        ldc_loggs = ldc_T_loggs
+        ldc_u1s = ldc_T_u1s
+        ldc_u2s = ldc_T_u2s
+    else:
+        ldc_Zs = ldc_K_Zs
+        ldc_Teffs = ldc_K_Teffs
+        ldc_loggs = ldc_K_loggs
+        ldc_u1s = ldc_K_u1s
+        ldc_u2s = ldc_K_u2s
     this_Z = ldc_Zs[np.argmin(np.abs(ldc_Zs-Z))]
     this_Teff = ldc_Teffs[np.argmin(np.abs(ldc_Teffs-Teff))]
     this_logg = ldc_loggs[np.argmin(np.abs(ldc_loggs-logg))]
@@ -122,7 +137,7 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
                     )
 
     idx = lnL.argmax()
-    Z = np.mean(np.exp(lnL + lnprior_Mstar + lnprior_Porb))
+    Z = np.mean(np.exp(lnL + lnprior_Mstar + lnprior_Porb + 709))
     lnZ = np.log(Z)
     res = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,
@@ -136,7 +151,8 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
 def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
-            Z: float, N: int = 1000000, parallel: bool = False):
+            Z: float, N: int = 1000000, parallel: bool = False,
+            mission: str = "TESS"):
     """
     Calculates the marginal likelihood of the TEB scenario.
     Args:
@@ -152,6 +168,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
+        mission (str): TESS, Kepler, or K2.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -159,6 +176,18 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     lnsigma = np.log(sigma)
     logg = np.log10(G*(M_s*Msun)/(R_s*Rsun)**2)
     # determine target star limb darkening coefficients
+    if mission == "TESS":
+        ldc_Zs = ldc_T_Zs
+        ldc_Teffs = ldc_T_Teffs
+        ldc_loggs = ldc_T_loggs
+        ldc_u1s = ldc_T_u1s
+        ldc_u2s = ldc_T_u2s
+    else:
+        ldc_Zs = ldc_K_Zs
+        ldc_Teffs = ldc_K_Teffs
+        ldc_loggs = ldc_K_loggs
+        ldc_u1s = ldc_K_u1s
+        ldc_u2s = ldc_K_u2s
     this_Z = ldc_Zs[np.argmin(np.abs(ldc_Zs-Z))]
     this_Teff = ldc_Teffs[np.argmin(np.abs(ldc_Teffs-Teff))]
     this_logg = ldc_loggs[np.argmin(np.abs(ldc_loggs-logg))]
@@ -272,7 +301,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     # results for q < 0.95
     idx = lnL.argmax()
-    Z = np.mean(np.exp(lnL + lnprior_Mstar + lnprior_Porb))
+    Z = np.mean(np.exp(lnL + lnprior_Mstar + lnprior_Porb + 709))
     lnZ = np.log(Z)
     res = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,
@@ -284,7 +313,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     }
     # results for q >= 0.95 and 2xP_orb
     idx = lnL_twin.argmax()
-    Z = np.mean(np.exp(lnL_twin + lnprior_Mstar + lnprior_Porb))
+    Z = np.mean(np.exp(lnL_twin + lnprior_Mstar + lnprior_Porb + 709))
     lnZ = np.log(Z)
     res_twin = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,
@@ -300,8 +329,9 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Z: float, plx: float, contrast_curve_file: str = None,
-            band: str = "TESS",
-            N: int = 1000000, parallel: bool = False):
+            filt: str = "TESS",
+            N: int = 1000000, parallel: bool = False,
+            mission: str = "TESS"):
     """
     Calculates the marginal likelihood of the PTP scenario.
     Args:
@@ -316,11 +346,12 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         Z (float): Target star metallicity [dex].
         plx (float): Target star parallax [mas].
         contrast_curve_file (string): Path to contrast curve file.
-        band (string): Photometric band of contrast curve. Options are
-                       TESS, Vis, J, H, and K.
+        filt (string): Photometric filter of contrast curve. Options
+                         are TESS, Vis, J, H, and K.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
+        mission (str): TESS, Kepler, or K2.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
@@ -328,6 +359,18 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     a = ((G*M_s*Msun)/(4*pi**2)*(P_orb*86400)**2)**(1/3)
     logg = np.log10(G*(M_s*Msun)/(R_s*Rsun)**2)
     # determine target star limb darkening coefficients
+    if mission == "TESS":
+        ldc_Zs = ldc_T_Zs
+        ldc_Teffs = ldc_T_Teffs
+        ldc_loggs = ldc_T_loggs
+        ldc_u1s = ldc_T_u1s
+        ldc_u2s = ldc_T_u2s
+    else:
+        ldc_Zs = ldc_K_Zs
+        ldc_Teffs = ldc_K_Teffs
+        ldc_loggs = ldc_K_loggs
+        ldc_u1s = ldc_K_u1s
+        ldc_u2s = ldc_K_u2s
     this_Z = ldc_Zs[np.argmin(np.abs(ldc_Zs-Z))]
     this_Teff = ldc_Teffs[np.argmin(np.abs(ldc_Teffs-Teff))]
     this_logg = ldc_loggs[np.argmin(np.abs(ldc_loggs-logg))]
@@ -363,11 +406,11 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
-        # use flux ratio of contrast curve band
+        # use flux ratio of contrast curve filter
         fluxratios_comp_cc = (
-            flux_relation(masses_comp, band)
-            / (flux_relation(masses_comp, band)
-                + flux_relation(np.array([M_s]), band))
+            flux_relation(masses_comp, filt)
+            / (flux_relation(masses_comp, filt)
+                + flux_relation(np.array([M_s]), filt))
             )
         delta_mags = 2.5*np.log10(fluxratios_comp_cc/(1-fluxratios_comp_cc))
         separations, contrasts = file_to_contrast_curve(
@@ -435,7 +478,7 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     idx = lnL.argmax()
     Z = np.mean(
-        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb)
+        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 709)
         )
     lnZ = np.log(Z)
     res = {
@@ -451,8 +494,9 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Z: float, plx: float, contrast_curve_file: str = None,
-            band: str = "TESS",
-            N: int = 1000000, parallel: bool = False):
+            filt: str = "TESS",
+            N: int = 1000000, parallel: bool = False,
+            mission: str = "TESS"):
     """
     Calculates the marginal likelihood of the PEB scenario.
     Args:
@@ -467,11 +511,12 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         Z (float): Target star metallicity [dex].
         plx (float): Target star parallax [mas].
         contrast_curve_file (string): Path to contrast curve file.
-        band (string): Photometric band of contrast curve. Options are
-                       TESS, Vis, J, H, and K.
+        filt (string): Photometric filter of contrast curve. Options
+                         are TESS, Vis, J, H, and K.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
+        mission (str): TESS, Kepler, or K2.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -479,6 +524,18 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     lnsigma = np.log(sigma)
     logg = np.log10(G*(M_s*Msun)/(R_s*Rsun)**2)
     # determine target star limb darkening coefficients
+    if mission == "TESS":
+        ldc_Zs = ldc_T_Zs
+        ldc_Teffs = ldc_T_Teffs
+        ldc_loggs = ldc_T_loggs
+        ldc_u1s = ldc_T_u1s
+        ldc_u2s = ldc_T_u2s
+    else:
+        ldc_Zs = ldc_K_Zs
+        ldc_Teffs = ldc_K_Teffs
+        ldc_loggs = ldc_K_loggs
+        ldc_u1s = ldc_K_u1s
+        ldc_u2s = ldc_K_u2s
     this_Z = ldc_Zs[np.argmin(np.abs(ldc_Zs-Z))]
     this_Teff = ldc_Teffs[np.argmin(np.abs(ldc_Teffs-Teff))]
     this_logg = ldc_loggs[np.argmin(np.abs(ldc_loggs-logg))]
@@ -529,11 +586,11 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
-        # use flux ratio of contrast curve band
+        # use flux ratio of contrast curve filter
         fluxratios_comp_cc = (
-            flux_relation(masses_comp, band)
-            / (flux_relation(masses_comp, band)
-                + flux_relation(np.array([M_s]), band))
+            flux_relation(masses_comp, filt)
+            / (flux_relation(masses_comp, filt)
+                + flux_relation(np.array([M_s]), filt))
             )
         delta_mags = 2.5*np.log10(fluxratios_comp_cc/(1-fluxratios_comp_cc))
         separations, contrasts = file_to_contrast_curve(
@@ -635,7 +692,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q < 0.95
     idx = lnL.argmax()
     Z = np.mean(
-        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb)
+        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 709)
         )
     lnZ = np.log(Z)
     res = {
@@ -649,7 +706,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q >= 0.95 and 2xP_orb
     idx = lnL_twin.argmax()
     Z = np.mean(
-        np.exp(lnL_twin+lnprior_companion+lnprior_Mstar+lnprior_Porb)
+        np.exp(lnL_twin+lnprior_companion+lnprior_Mstar+lnprior_Porb+709)
         )
     lnZ = np.log(Z)
     res_twin = {
@@ -666,8 +723,9 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float, Z: float,
             plx: float, contrast_curve_file: str = None,
-            band: str = "TESS",
-            N: int = 1000000, parallel: bool = False):
+            filt: str = "TESS",
+            N: int = 1000000, parallel: bool = False,
+            mission: str = "TESS"):
     """
     Calculates the marginal likelihood of the STP scenario.
     Args:
@@ -682,11 +740,12 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
         Z (float): Target star metallicity [dex].
         plx (float): Target star parallax [mas].
         contrast_curve_file (string): contrast curve file.
-        band (string): Photometric band of contrast curve. Options are
-                       TESS, Vis, J, H, and K.
+        filt (string): Photometric filter of contrast curve. Options
+                         are TESS, Vis, J, H, and K.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
+        mission (str): TESS, Kepler, or K2.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -709,11 +768,28 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
         )
 
     # calculate limb darkening ceofficients for companions
-    ldc_at_Z = ldc[(ldc_Zs == ldc_Zs[np.abs(ldc_Zs - Z).argmin()])]
-    Teffs_at_Z = np.array(ldc_at_Z.Teff, dtype=int)
-    loggs_at_Z = np.array(ldc_at_Z.logg, dtype=float)
-    u1s_at_Z = np.array(ldc_at_Z.aLSM, dtype=float)
-    u2s_at_Z = np.array(ldc_at_Z.bLSM, dtype=float)
+    if mission == "TESS":
+        ldc_Zs = ldc_T_Zs
+        ldc_Teffs = ldc_T_Teffs
+        ldc_loggs = ldc_T_loggs
+        ldc_u1s = ldc_T_u1s
+        ldc_u2s = ldc_T_u2s
+        ldc_at_Z = ldc_T[(ldc_Zs == ldc_Zs[np.abs(ldc_Zs - Z).argmin()])]
+        Teffs_at_Z = np.array(ldc_at_Z.Teff, dtype=int)
+        loggs_at_Z = np.array(ldc_at_Z.logg, dtype=float)
+        u1s_at_Z = np.array(ldc_at_Z.aLSM, dtype=float)
+        u2s_at_Z = np.array(ldc_at_Z.bLSM, dtype=float)
+    else:
+        ldc_Zs = ldc_K_Zs
+        ldc_Teffs = ldc_K_Teffs
+        ldc_loggs = ldc_K_loggs
+        ldc_u1s = ldc_K_u1s
+        ldc_u2s = ldc_K_u2s
+        ldc_at_Z = ldc_K[(ldc_Zs == ldc_Zs[np.abs(ldc_Zs - Z).argmin()])]
+        Teffs_at_Z = np.array(ldc_at_Z.Teff, dtype=int)
+        loggs_at_Z = np.array(ldc_at_Z.logg, dtype=float)
+        u1s_at_Z = np.array(ldc_at_Z.a, dtype=float)
+        u2s_at_Z = np.array(ldc_at_Z.b, dtype=float)
     rounded_loggs_comp = np.round(loggs_comp/0.5) * 0.5
     rounded_loggs_comp[rounded_loggs_comp < 3.5] = 3.5
     rounded_loggs_comp[rounded_loggs_comp > 5.0] = 5.0
@@ -738,11 +814,11 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
-        # use flux ratio of contrast curve band
+        # use flux ratio of contrast curve filter
         fluxratios_comp_cc = (
-            flux_relation(masses_comp, band)
-            / (flux_relation(masses_comp, band)
-                + flux_relation(np.array([M_s]), band))
+            flux_relation(masses_comp, filt)
+            / (flux_relation(masses_comp, filt)
+                + flux_relation(np.array([M_s]), filt))
             )
         delta_mags = 2.5*np.log10(fluxratios_comp_cc/(1-fluxratios_comp_cc))
         separations, contrasts = file_to_contrast_curve(
@@ -809,7 +885,7 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     idx = lnL.argmax()
     Z = np.mean(
-        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb)
+        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 709)
         )
     lnZ = np.log(Z)
     res = {
@@ -826,8 +902,9 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Z: float, plx: float, contrast_curve_file: str = None,
-            band: str = "TESS",
-            N: int = 1000000, parallel: bool = False):
+            filt: str = "TESS",
+            N: int = 1000000, parallel: bool = False,
+            mission: str = "TESS"):
     """
     Calculates the marginal likelihood of the SEB scenario.
     Args:
@@ -842,11 +919,12 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         Z (float): Target star metallicity [dex].
         plx (float): Target star parallax [mas].
         contrast_curve_file (string): Path to contrast curve file.
-        band (string): Photometric band of contrast curve. Options are
-                       TESS, Vis, J, H, and K.
+        filt (string): Photometric filter of contrast curve. Options
+                         are TESS, Vis, J, H, and K.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
+        mission (str): TESS, Kepler, or K2.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -873,11 +951,28 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         )
 
     # calculate limb darkening ceofficients for companions
-    ldc_at_Z = ldc[(ldc_Zs == ldc_Zs[np.abs(ldc_Zs - Z).argmin()])]
-    Teffs_at_Z = np.array(ldc_at_Z.Teff, dtype=int)
-    loggs_at_Z = np.array(ldc_at_Z.logg, dtype=float)
-    u1s_at_Z = np.array(ldc_at_Z.aLSM, dtype=float)
-    u2s_at_Z = np.array(ldc_at_Z.bLSM, dtype=float)
+    if mission == "TESS":
+        ldc_Zs = ldc_T_Zs
+        ldc_Teffs = ldc_T_Teffs
+        ldc_loggs = ldc_T_loggs
+        ldc_u1s = ldc_T_u1s
+        ldc_u2s = ldc_T_u2s
+        ldc_at_Z = ldc_T[(ldc_Zs == ldc_Zs[np.abs(ldc_Zs - Z).argmin()])]
+        Teffs_at_Z = np.array(ldc_at_Z.Teff, dtype=int)
+        loggs_at_Z = np.array(ldc_at_Z.logg, dtype=float)
+        u1s_at_Z = np.array(ldc_at_Z.aLSM, dtype=float)
+        u2s_at_Z = np.array(ldc_at_Z.bLSM, dtype=float)
+    else:
+        ldc_Zs = ldc_K_Zs
+        ldc_Teffs = ldc_K_Teffs
+        ldc_loggs = ldc_K_loggs
+        ldc_u1s = ldc_K_u1s
+        ldc_u2s = ldc_K_u2s
+        ldc_at_Z = ldc_K[(ldc_Zs == ldc_Zs[np.abs(ldc_Zs - Z).argmin()])]
+        Teffs_at_Z = np.array(ldc_at_Z.Teff, dtype=int)
+        loggs_at_Z = np.array(ldc_at_Z.logg, dtype=float)
+        u1s_at_Z = np.array(ldc_at_Z.a, dtype=float)
+        u2s_at_Z = np.array(ldc_at_Z.b, dtype=float)
     rounded_loggs_comp = np.round(loggs_comp/0.5) * 0.5
     rounded_loggs_comp[rounded_loggs_comp < 3.5] = 3.5
     rounded_loggs_comp[rounded_loggs_comp > 5.0] = 5.0
@@ -914,16 +1009,16 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
-        # use flux ratio of contrast curve band
+        # use flux ratio of contrast curve filter
         fluxratios_cc = (
-            flux_relation(masses, band)
-            / (flux_relation(masses, band)
-                + flux_relation(np.array([M_s]), band))
+            flux_relation(masses, filt)
+            / (flux_relation(masses, filt)
+                + flux_relation(np.array([M_s]), filt))
             )
         fluxratios_comp_cc = (
-            flux_relation(masses_comp, band)
-            / (flux_relation(masses_comp, band)
-                + flux_relation(np.array([M_s]), band))
+            flux_relation(masses_comp, filt)
+            / (flux_relation(masses_comp, filt)
+                + flux_relation(np.array([M_s]), filt))
             )
         delta_mags = 2.5*np.log10(
             (fluxratios_comp_cc/(1-fluxratios_comp_cc))
@@ -1030,7 +1125,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q < 0.95
     idx = lnL.argmax()
     Z = np.mean(
-        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb)
+        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 709)
         )
     lnZ = np.log(Z)
     res = {
@@ -1045,7 +1140,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q >= 0.95 and 2xP_orb
     idx = lnL_twin.argmax()
     Z = np.mean(
-        np.exp(lnL_twin+lnprior_companion+lnprior_Mstar+lnprior_Porb)
+        np.exp(lnL_twin+lnprior_companion+lnprior_Mstar+lnprior_Porb+709)
         )
     lnZ = np.log(Z)
     res_twin = {
@@ -1064,8 +1159,9 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Z: float, Tmag: float, Jmag: float, Hmag: float,
             Kmag: float, output_url: str,
-            contrast_curve_file: str = None, band: str = "TESS",
-            N: int = 1000000, parallel: bool = False):
+            contrast_curve_file: str = None, filt: str = "TESS",
+            N: int = 1000000, parallel: bool = False,
+            mission: str = "TESS"):
     """
     Calculates the marginal likelihood of the DTP scenario.
     Args:
@@ -1084,11 +1180,12 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         Kmag (float): Target star K magnitude.
         output_url (string): Link to trilegal query results.
         contrast_curve_file (string): Contrast curve file.
-        band (string): Photometric band of contrast curve. Options are
-                       TESS, Vis, J, H, and K.
+        filt (string): Photometric filter of contrast curve. Options
+                         are TESS, Vis, J, H, and K.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
+        mission (str): TESS, Kepler, or K2.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
@@ -1096,6 +1193,18 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     a = ((G*M_s*Msun)/(4*pi**2)*(P_orb*86400)**2)**(1/3)
     logg = np.log10(G*(M_s*Msun)/(R_s*Rsun)**2)
     # determine target star limb darkening coefficients
+    if mission == "TESS":
+        ldc_Zs = ldc_T_Zs
+        ldc_Teffs = ldc_T_Teffs
+        ldc_loggs = ldc_T_loggs
+        ldc_u1s = ldc_T_u1s
+        ldc_u2s = ldc_T_u2s
+    else:
+        ldc_Zs = ldc_K_Zs
+        ldc_Teffs = ldc_K_Teffs
+        ldc_loggs = ldc_K_loggs
+        ldc_u1s = ldc_K_u1s
+        ldc_u2s = ldc_K_u2s
     this_Z = ldc_Zs[np.argmin(np.abs(ldc_Zs-Z))]
     this_Teff = ldc_Teffs[np.argmin(np.abs(ldc_Teffs-Teff))]
     this_logg = ldc_loggs[np.argmin(np.abs(ldc_loggs-logg))]
@@ -1132,11 +1241,11 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
-        if band == "J":
+        if filt == "J":
             delta_mags = delta_Jmags[idxs]
-        elif band == "H":
+        elif filt == "H":
             delta_mags = delta_Hmags[idxs]
-        elif band == "K":
+        elif filt == "K":
             delta_mags = delta_Kmags[idxs]
         else:
             delta_mags = delta_mags[idxs]
@@ -1205,7 +1314,7 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     idx = lnL.argmax()
     Z = np.mean(
-        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb)
+        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 709)
         )
     lnZ = np.log(Z)
     res = {
@@ -1222,8 +1331,9 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Z: float, Tmag: float, Jmag: float, Hmag: float,
             Kmag: float, output_url: str,
-            contrast_curve_file: str = None, band: str = "TESS",
-            N: int = 1000000, parallel: bool = False):
+            contrast_curve_file: str = None, filt: str = "TESS",
+            N: int = 1000000, parallel: bool = False,
+            mission: str = "TESS"):
     """
     Calculates the marginal likelihood of the DEB scenario.
     Args:
@@ -1242,11 +1352,12 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         Kmag (float): Target star K magnitude.
         output_url (string): Link to trilegal query results.
         contrast_curve_file (string): Path to contrast curve file.
-        band (string): Photometric band of contrast curve. Options are
-                       TESS, Vis, J, H, and K.
+        filt (string): Photometric filter of contrast curve. Options
+                         are TESS, Vis, J, H, and K.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
+        mission (str): TESS, Kepler, or K2.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -1254,6 +1365,18 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     lnsigma = np.log(sigma)
     logg = np.log10(G*(M_s*Msun)/(R_s*Rsun)**2)
     # determine target star limb darkening coefficients
+    if mission == "TESS":
+        ldc_Zs = ldc_T_Zs
+        ldc_Teffs = ldc_T_Teffs
+        ldc_loggs = ldc_T_loggs
+        ldc_u1s = ldc_T_u1s
+        ldc_u2s = ldc_T_u2s
+    else:
+        ldc_Zs = ldc_K_Zs
+        ldc_Teffs = ldc_K_Teffs
+        ldc_loggs = ldc_K_loggs
+        ldc_u1s = ldc_K_u1s
+        ldc_u2s = ldc_K_u2s
     this_Z = ldc_Zs[np.argmin(np.abs(ldc_Zs-Z))]
     this_Teff = ldc_Teffs[np.argmin(np.abs(ldc_Teffs-Teff))]
     this_logg = ldc_loggs[np.argmin(np.abs(ldc_loggs-logg))]
@@ -1307,11 +1430,11 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
-        if band == "J":
+        if filt == "J":
             delta_mags = delta_Jmags[idxs]
-        elif band == "H":
+        elif filt == "H":
             delta_mags = delta_Hmags[idxs]
-        elif band == "K":
+        elif filt == "K":
             delta_mags = delta_Kmags[idxs]
         else:
             delta_mags = delta_mags[idxs]
@@ -1415,7 +1538,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q < 0.95
     idx = lnL.argmax()
     Z = np.mean(
-        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb)
+        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 709)
         )
     lnZ = np.log(Z)
     res = {
@@ -1429,7 +1552,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q >= 0.95 and 2xP_orb
     idx = lnL_twin.argmax()
     Z = np.mean(
-        np.exp(lnL_twin+lnprior_companion+lnprior_Mstar+lnprior_Porb)
+        np.exp(lnL_twin+lnprior_companion+lnprior_Mstar+lnprior_Porb+709)
         )
     lnZ = np.log(Z)
     res_twin = {
@@ -1447,8 +1570,9 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Tmag: float, Jmag: float, Hmag: float, Kmag: float,
             output_url: str,
-            contrast_curve_file: str = None, band: str = "TESS",
-            N: int = 1000000, parallel: bool = False):
+            contrast_curve_file: str = None, filt: str = "TESS",
+            N: int = 1000000, parallel: bool = False,
+            mission: str = "TESS"):
     """
     Calculates the marginal likelihood of the BTP scenario.
     Args:
@@ -1466,11 +1590,12 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         Kmag (float): Target star K magnitude.
         output_url (string): Link to trilegal query results.
         contrast_curve_file (string): Path to contrast curve file.
-        band (string): Photometric band of contrast curve. Options are
-                       TESS, Vis, J, H, and K.
+        filt (string): Photometric filter of contrast curve. Options
+                         are TESS, Vis, J, H, and K.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
+        mission (str): TESS, Kepler, or K2.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
@@ -1489,6 +1614,18 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     fluxratios_comp = 10**(delta_mags/2.5) / (1 + 10**(delta_mags/2.5))
     N_comp = Tmags_comp.shape[0]
     # determine limb darkening coefficients of background stars
+    if mission == "TESS":
+        ldc_Zs = ldc_T_Zs
+        ldc_Teffs = ldc_T_Teffs
+        ldc_loggs = ldc_T_loggs
+        ldc_u1s = ldc_T_u1s
+        ldc_u2s = ldc_T_u2s
+    else:
+        ldc_Zs = ldc_K_Zs
+        ldc_Teffs = ldc_K_Teffs
+        ldc_loggs = ldc_K_loggs
+        ldc_u1s = ldc_K_u1s
+        ldc_u2s = ldc_K_u2s
     u1s_comp, u2s_comp = np.zeros(N_comp), np.zeros(N_comp)
     for i in range(N_comp):
         this_Teff = ldc_Teffs[np.argmin(np.abs(ldc_Teffs-Teffs_comp[i]))]
@@ -1517,11 +1654,11 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
-        if band == "J":
+        if filt == "J":
             delta_mags = delta_Jmags[idxs]
-        elif band == "H":
+        elif filt == "H":
             delta_mags = delta_Hmags[idxs]
-        elif band == "K":
+        elif filt == "K":
             delta_mags = delta_Kmags[idxs]
         else:
             delta_mags = delta_mags[idxs]
@@ -1594,7 +1731,7 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     idx = lnL.argmax()
     Z = np.mean(
-        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb)
+        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 709)
         )
     lnZ = np.log(Z)
     res = {
@@ -1612,8 +1749,9 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Tmag: float, Jmag:float, Hmag: float, Kmag: float,
             output_url: str,
-            contrast_curve_file: str = None, band: str = "TESS",
-            N: int = 1000000, parallel: bool = False):
+            contrast_curve_file: str = None, filt: str = "TESS",
+            N: int = 1000000, parallel: bool = False,
+            mission: str = "TESS"):
     """
     Calculates the marginal likelihood of the BEB scenario.
     Args:
@@ -1631,11 +1769,12 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         Kmag (float): Target star K magnitude.
         output_url (string): Link to trilegal query results.
         contrast_curve_file (string): Path to contrast curve file.
-        band (string): Photometric band of contrast curve. Options are
-                       TESS, Vis, J, H, and K.
+        filt (string): Photometric filter of contrast curve. Options
+                         are TESS, Vis, J, H, and K.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
+        mission (str): TESS, Kepler, or K2.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -1665,6 +1804,18 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     fluxratios_comp_K = 10**(delta_Kmags/2.5) / (1 + 10**(delta_Kmags/2.5))
     N_comp = Tmags_comp.shape[0]
     # determine limb darkening coefficients of background stars
+    if mission == "TESS":
+        ldc_Zs = ldc_T_Zs
+        ldc_Teffs = ldc_T_Teffs
+        ldc_loggs = ldc_T_loggs
+        ldc_u1s = ldc_T_u1s
+        ldc_u2s = ldc_T_u2s
+    else:
+        ldc_Zs = ldc_K_Zs
+        ldc_Teffs = ldc_K_Teffs
+        ldc_loggs = ldc_K_loggs
+        ldc_u1s = ldc_K_u1s
+        ldc_u2s = ldc_K_u2s
     u1s_comp, u2s_comp = np.zeros(N_comp), np.zeros(N_comp)
     for i in range(N_comp):
         this_Teff = ldc_Teffs[np.argmin(
@@ -1704,26 +1855,27 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         / (flux_relation(masses) + flux_relation(np.array([M_s])))
         * distance_correction
         )
-    # calculate EB flux ratios in the contrast curve band
-    if band == "J":
+    # calculate EB flux ratios in the contrast curve filter
+    if filt == "J":
         fluxratios_comp_cc = fluxratios_comp_J[idxs]
-    elif band == "H":
+    elif filt == "H":
         fluxratios_comp_cc = fluxratios_comp_H[idxs]
-    elif band == "K":
+    elif filt == "K":
         fluxratios_comp_cc = fluxratios_comp_K[idxs]
     else:
         fluxratios_comp_cc = fluxratios_comp[idxs]
     fluxratios_comp_bound_cc = (
-        flux_relation(masses_comp[idxs], band)
+        flux_relation(masses_comp[idxs], filt)
         / (
-            flux_relation(masses_comp[idxs], band)
-            + flux_relation(np.array([M_s]), band)
+            flux_relation(masses_comp[idxs], filt)
+            + flux_relation(np.array([M_s]), filt)
             )
         )
     distance_correction_cc = fluxratios_comp_cc/fluxratios_comp_bound_cc
     fluxratios_cc = (
-        flux_relation(masses, band)
-        / (flux_relation(masses, band) + flux_relation(np.array([M_s]), band))
+        flux_relation(masses, filt)
+        / (flux_relation(masses, filt)
+            + flux_relation(np.array([M_s]), filt))
         * distance_correction_cc
         )
 
@@ -1740,7 +1892,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
-        # use contrast curve band flux ratios
+        # use contrast curve filter flux ratios
         delta_mags = 2.5*np.log10(
             (fluxratios_comp_cc/(1-fluxratios_comp_cc))
             + (fluxratios_cc/(1-fluxratios_cc))
@@ -1863,7 +2015,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q < 0.95
     idx = lnL.argmax()
     Z = np.mean(
-        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb)
+        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 709)
         )
     lnZ = np.log(Z)
     res = {
@@ -1878,7 +2030,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q >= 0.95 and 2xP_orb
     idx = lnL_twin.argmax()
     Z = np.mean(
-        np.exp(lnL_twin+lnprior_companion+lnprior_Mstar+lnprior_Porb)
+        np.exp(lnL_twin+lnprior_companion+lnprior_Mstar+lnprior_Porb+709)
         )
     lnZ = np.log(Z)
     res_twin = {
@@ -1895,7 +2047,8 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 
 def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb: float, Tmag: float, output_url: str,
-                    N: int = 1000000, parallel: bool = False):
+                    N: int = 1000000, parallel: bool = False,
+                    mission: str = "TESS"):
     """
     Calculates the marginal likelihood of the NTP scenario for
     a star of unknown properties.
@@ -1910,6 +2063,7 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
+        mission (str): TESS, Kepler, or K2.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
@@ -1931,6 +2085,18 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         ) / Rsun
     N_possible = Tmags_possible.shape[0]
     # determine limb darkening coefficients of background stars
+    if mission == "TESS":
+        ldc_Zs = ldc_T_Zs
+        ldc_Teffs = ldc_T_Teffs
+        ldc_loggs = ldc_T_loggs
+        ldc_u1s = ldc_T_u1s
+        ldc_u2s = ldc_T_u2s
+    else:
+        ldc_Zs = ldc_K_Zs
+        ldc_Teffs = ldc_K_Teffs
+        ldc_loggs = ldc_K_loggs
+        ldc_u1s = ldc_K_u1s
+        ldc_u2s = ldc_K_u2s
     u1s_possible = np.zeros(N_possible)
     u2s_possible = np.zeros(N_possible)
     for i in range(N_possible):
@@ -2026,7 +2192,7 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
                     )
 
     idx = lnL.argmax()
-    Z = np.mean(np.exp(lnL + lnprior_Mstar + lnprior_Porb))
+    Z = np.mean(np.exp(lnL + lnprior_Mstar + lnprior_Porb + 709))
     lnZ = np.log(Z)
     res = {
         'M_s': masses_possible[idxs[idx]], 'R_s': radii_possible[idxs[idx]],
@@ -2041,7 +2207,8 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
 
 def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb: float, Tmag: float, output_url: str,
-                    N: int = 1000000, parallel: bool = False):
+                    N: int = 1000000, parallel: bool = False,
+                    mission: str = "TESS"):
     """
     Calculates the marginal likelihood of the NEB scenario for a star
     of unknown properties.
@@ -2056,6 +2223,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
+        mission (str): TESS, Kepler, or K2.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -2084,6 +2252,18 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         ) / Rsun
     N_possible = Tmags_possible.shape[0]
     # determine limb darkening coefficients of background stars
+    if mission == "TESS":
+        ldc_Zs = ldc_T_Zs
+        ldc_Teffs = ldc_T_Teffs
+        ldc_loggs = ldc_T_loggs
+        ldc_u1s = ldc_T_u1s
+        ldc_u2s = ldc_T_u2s
+    else:
+        ldc_Zs = ldc_K_Zs
+        ldc_Teffs = ldc_K_Teffs
+        ldc_loggs = ldc_K_loggs
+        ldc_u1s = ldc_K_u1s
+        ldc_u2s = ldc_K_u2s
     u1s_possible = np.zeros(N_possible)
     u2s_possible = np.zeros(N_possible)
     for i in range(N_possible):
@@ -2235,7 +2415,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     # results for q < 0.95
     idx = lnL.argmax()
-    Z = np.mean(np.exp(lnL + lnprior_Mstar + lnprior_Porb))
+    Z = np.mean(np.exp(lnL + lnprior_Mstar + lnprior_Porb + 709))
     lnZ = np.log(Z)
     res = {
         'M_s': masses_possible[idxs[idx]],
@@ -2249,7 +2429,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
     }
     # results for q >= 0.95 and 2xP_orb
     idx = lnL_twin.argmax()
-    Z = np.mean(np.exp(lnL_twin + lnprior_Mstar + lnprior_Porb))
+    Z = np.mean(np.exp(lnL_twin + lnprior_Mstar + lnprior_Porb + 709))
     lnZ = np.log(Z)
     res_twin = {
         'M_s': masses_possible[idxs[idx]],
@@ -2266,7 +2446,8 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
 
 def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb: float, R_s: float, Teff: float, Z: float,
-                    N: int = 1000000, parallel: bool = False):
+                    N: int = 1000000, parallel: bool = False,
+                    mission: str = "TESS"):
     """
     Calculates the marginal likelihood of the NTP scenario for
     subgiant stars.
@@ -2282,6 +2463,7 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
+        mission (str): TESS, Kepler, or K2.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
@@ -2289,6 +2471,18 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     logg = 3.0
     M_s = (10**logg)*(R_s*Rsun)**2 / G / Msun
     # determine target star limb darkening coefficients
+    if mission == "TESS":
+        ldc_Zs = ldc_T_Zs
+        ldc_Teffs = ldc_T_Teffs
+        ldc_loggs = ldc_T_loggs
+        ldc_u1s = ldc_T_u1s
+        ldc_u2s = ldc_T_u2s
+    else:
+        ldc_Zs = ldc_K_Zs
+        ldc_Teffs = ldc_K_Teffs
+        ldc_loggs = ldc_K_loggs
+        ldc_u1s = ldc_K_u1s
+        ldc_u2s = ldc_K_u2s
     this_Z = ldc_Zs[np.argmin(np.abs(ldc_Zs-Z))]
     this_Teff = ldc_Teffs[np.argmin(np.abs(ldc_Teffs-Teff))]
     this_logg = ldc_loggs[np.argmin(np.abs(ldc_loggs-logg))]
@@ -2354,7 +2548,7 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
                     )
 
     idx = lnL.argmax()
-    Z = np.mean(np.exp(lnL + lnprior_Mstar + lnprior_Porb))
+    Z = np.mean(np.exp(lnL + lnprior_Mstar + lnprior_Porb + 709))
     lnZ = np.log(Z)
     res = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,
@@ -2368,7 +2562,8 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
 
 def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb: float, R_s: float, Teff: float, Z: float,
-                    N: int = 1000000, parallel: bool = False):
+                    N: int = 1000000, parallel: bool = False,
+                    mission: str = "TESS"):
     """
     Calculates the marginal likelihood of the NEB scenario
     for subgiant stars.
@@ -2384,6 +2579,7 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
+        mission (str): TESS, Kepler, or K2.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -2392,6 +2588,18 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     logg = 3.0
     M_s = (10**logg)*(R_s*Rsun)**2 / G / Msun
     # determine target star limb darkening coefficients
+    if mission == "TESS":
+        ldc_Zs = ldc_T_Zs
+        ldc_Teffs = ldc_T_Teffs
+        ldc_loggs = ldc_T_loggs
+        ldc_u1s = ldc_T_u1s
+        ldc_u2s = ldc_T_u2s
+    else:
+        ldc_Zs = ldc_K_Zs
+        ldc_Teffs = ldc_K_Teffs
+        ldc_loggs = ldc_K_loggs
+        ldc_u1s = ldc_K_u1s
+        ldc_u2s = ldc_K_u2s
     this_Z = ldc_Zs[np.argmin(np.abs(ldc_Zs-Z))]
     this_Teff = ldc_Teffs[np.argmin(np.abs(ldc_Teffs-Teff))]
     this_logg = ldc_loggs[np.argmin(np.abs(ldc_loggs-logg))]
@@ -2506,7 +2714,7 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     # results for q < 0.95
     idx = lnL.argmax()
-    Z = np.mean(np.exp(lnL + lnprior_Mstar + lnprior_Porb))
+    Z = np.mean(np.exp(lnL + lnprior_Mstar + lnprior_Porb + 709))
     lnZ = np.log(Z)
     res = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,
@@ -2518,7 +2726,7 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     }
     # results for q >= 0.95 and 2xP_orb
     idx = lnL_twin.argmax()
-    Z = np.mean(np.exp(lnL_twin + lnprior_Mstar + lnprior_Porb))
+    Z = np.mean(np.exp(lnL_twin + lnprior_Mstar + lnprior_Porb + 709))
     lnZ = np.log(Z)
     res_twin = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,

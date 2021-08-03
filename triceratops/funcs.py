@@ -114,24 +114,24 @@ flux_spline_K = InterpolatedUnivariateSpline(
     Mass_nodes_K, flux_nodes_K
     )
 
-def flux_relation(Masses: np.array, band: str = "TESS"):
+def flux_relation(Masses: np.array, filt: str = "TESS"):
     """
     Estimates fluxes of stars given masses.
     Args:
         Masses (numpy array): Star masses [Solar masses].
-        band (string): Photometric band. Options are
+        filt (string): Photometric filter. Options are
                        TESS, Vis, J, H, and K.
     Returns:
         fluxes (numpy array): Flux ratio between star and
                               a ~1 Solar mass star.
     """
-    if (band == "TESS") or (band == "Vis"):
+    if (filt == "TESS") or (filt == "Vis"):
         fluxes = 10**flux_spline(Masses)
-    if band == "J":
+    if filt == "J":
         fluxes = 10**flux_spline_J(Masses)
-    if band == "H":
+    if filt == "H":
         fluxes = 10**flux_spline_H(Masses)
-    if band == "K":
+    if filt == "K":
         fluxes = 10**flux_spline_K(Masses)
     return fluxes
 

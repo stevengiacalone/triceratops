@@ -754,6 +754,7 @@ def lnprior_bound_TP(M_s: float, plx: float, delta_mags: np.array,
         # f_comp[mask] = t1 + t2 + t3 + t4 + t5
         f_comp[mask] = t4 + t5
         f_act = 0.65*f_comp+0.35*f_comp*M_act
+        f_act[f_act < 0.0] = 0.0
         lnprior_bound = np.log(f_act)
 
     return lnprior_bound
@@ -955,6 +956,7 @@ def lnprior_bound_EB(M_s: float, plx: float, delta_mags: np.array,
         # f_comp[mask] = t1 + t2 + t3 + t4 + t5
         f_comp[mask] = t2 + t3 + t4 + t5
         f_act = 0.65*f_comp+0.35*f_comp*M_act
+        f_act[f_act < 0.0] = 0.0
         lnprior_bound = np.log(f_act)
 
     return lnprior_bound
