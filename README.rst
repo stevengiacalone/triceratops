@@ -71,7 +71,7 @@ Help
 
 If you are having trouble getting ``triceratops`` working on your machine, I recommend installing it in a fresh conda environment. You can download the latest distribution of anaconda `here <https://www.anaconda.com/distribution/>`_. After doing so, run the following in terminal::
 
-    $ conda create -n myenv python=3.6
+    $ conda create -n myenv python=3.8
     $ conda activate myenv
     (myenv) $ pip install triceratops jupyterlab
 
