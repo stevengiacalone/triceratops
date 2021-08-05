@@ -137,7 +137,9 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
                     )
 
     idx = lnL.argmax()
-    Z = np.mean(np.exp(lnL + lnprior_Mstar + lnprior_Porb + 709))
+    Z = np.mean(np.nan_to_num(
+        np.exp(lnL + lnprior_Mstar + lnprior_Porb + 600)
+        ))
     lnZ = np.log(Z)
     res = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,
@@ -301,7 +303,9 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     # results for q < 0.95
     idx = lnL.argmax()
-    Z = np.mean(np.exp(lnL + lnprior_Mstar + lnprior_Porb + 709))
+    Z = np.mean(np.nan_to_num(
+        np.exp(lnL + lnprior_Mstar + lnprior_Porb + 600)
+        ))
     lnZ = np.log(Z)
     res = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,
@@ -313,7 +317,9 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     }
     # results for q >= 0.95 and 2xP_orb
     idx = lnL_twin.argmax()
-    Z = np.mean(np.exp(lnL_twin + lnprior_Mstar + lnprior_Porb + 709))
+    Z = np.mean(np.nan_to_num(
+        np.exp(lnL_twin + lnprior_Mstar + lnprior_Porb + 600)
+        ))
     lnZ = np.log(Z)
     res_twin = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,
@@ -478,7 +484,9 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     idx = lnL.argmax()
     Z = np.mean(
-        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 709)
+        np.nan_to_num(
+            np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 600)
+            )
         )
     lnZ = np.log(Z)
     res = {
@@ -692,7 +700,9 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q < 0.95
     idx = lnL.argmax()
     Z = np.mean(
-        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 709)
+        np.nan_to_num(
+            np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 600)
+            )
         )
     lnZ = np.log(Z)
     res = {
@@ -706,7 +716,9 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q >= 0.95 and 2xP_orb
     idx = lnL_twin.argmax()
     Z = np.mean(
-        np.exp(lnL_twin+lnprior_companion+lnprior_Mstar+lnprior_Porb+709)
+        np.nan_to_num(
+            np.exp(lnL_twin+lnprior_companion+lnprior_Mstar+lnprior_Porb+600)
+            )
         )
     lnZ = np.log(Z)
     res_twin = {
@@ -885,7 +897,9 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     idx = lnL.argmax()
     Z = np.mean(
-        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 709)
+        np.nan_to_num(
+            np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 600)
+            )
         )
     lnZ = np.log(Z)
     res = {
@@ -1125,7 +1139,9 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q < 0.95
     idx = lnL.argmax()
     Z = np.mean(
-        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 709)
+        np.nan_to_num(
+            np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 600)
+            )
         )
     lnZ = np.log(Z)
     res = {
@@ -1140,7 +1156,9 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q >= 0.95 and 2xP_orb
     idx = lnL_twin.argmax()
     Z = np.mean(
-        np.exp(lnL_twin+lnprior_companion+lnprior_Mstar+lnprior_Porb+709)
+        np.nan_to_num(
+            np.exp(lnL_twin+lnprior_companion+lnprior_Mstar+lnprior_Porb+600)
+            )
         )
     lnZ = np.log(Z)
     res_twin = {
@@ -1314,7 +1332,9 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     idx = lnL.argmax()
     Z = np.mean(
-        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 709)
+        np.nan_to_num(
+            np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 600)
+            )
         )
     lnZ = np.log(Z)
     res = {
@@ -1538,7 +1558,9 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q < 0.95
     idx = lnL.argmax()
     Z = np.mean(
-        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 709)
+        np.nan_to_num(
+            np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 600)
+            )
         )
     lnZ = np.log(Z)
     res = {
@@ -1552,7 +1574,9 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q >= 0.95 and 2xP_orb
     idx = lnL_twin.argmax()
     Z = np.mean(
-        np.exp(lnL_twin+lnprior_companion+lnprior_Mstar+lnprior_Porb+709)
+        np.nan_to_num(
+            np.exp(lnL_twin+lnprior_companion+lnprior_Mstar+lnprior_Porb+600)
+            )
         )
     lnZ = np.log(Z)
     res_twin = {
@@ -1731,7 +1755,9 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     idx = lnL.argmax()
     Z = np.mean(
-        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 709)
+        np.nan_to_num(
+            np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 600)
+            )
         )
     lnZ = np.log(Z)
     res = {
@@ -2015,7 +2041,9 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q < 0.95
     idx = lnL.argmax()
     Z = np.mean(
-        np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 709)
+        np.nan_to_num(
+            np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 600)
+            )
         )
     lnZ = np.log(Z)
     res = {
@@ -2030,7 +2058,9 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q >= 0.95 and 2xP_orb
     idx = lnL_twin.argmax()
     Z = np.mean(
-        np.exp(lnL_twin+lnprior_companion+lnprior_Mstar+lnprior_Porb+709)
+        np.nan_to_num(
+            np.exp(lnL_twin+lnprior_companion+lnprior_Mstar+lnprior_Porb+600)
+            )
         )
     lnZ = np.log(Z)
     res_twin = {
@@ -2192,7 +2222,9 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
                     )
 
     idx = lnL.argmax()
-    Z = np.mean(np.exp(lnL + lnprior_Mstar + lnprior_Porb + 709))
+    Z = np.mean(np.nan_to_num(
+        np.exp(lnL + lnprior_Mstar + lnprior_Porb + 600)
+        ))
     lnZ = np.log(Z)
     res = {
         'M_s': masses_possible[idxs[idx]], 'R_s': radii_possible[idxs[idx]],
@@ -2415,7 +2447,9 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     # results for q < 0.95
     idx = lnL.argmax()
-    Z = np.mean(np.exp(lnL + lnprior_Mstar + lnprior_Porb + 709))
+    Z = np.mean(np.nan_to_num(
+        np.exp(lnL + lnprior_Mstar + lnprior_Porb + 600)
+        ))
     lnZ = np.log(Z)
     res = {
         'M_s': masses_possible[idxs[idx]],
@@ -2429,7 +2463,9 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
     }
     # results for q >= 0.95 and 2xP_orb
     idx = lnL_twin.argmax()
-    Z = np.mean(np.exp(lnL_twin + lnprior_Mstar + lnprior_Porb + 709))
+    Z = np.mean(np.nan_to_num(
+        np.exp(lnL_twin + lnprior_Mstar + lnprior_Porb + 600)
+        ))
     lnZ = np.log(Z)
     res_twin = {
         'M_s': masses_possible[idxs[idx]],
@@ -2548,7 +2584,9 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
                     )
 
     idx = lnL.argmax()
-    Z = np.mean(np.exp(lnL + lnprior_Mstar + lnprior_Porb + 709))
+    Z = np.mean(np.nan_to_num(
+        np.exp(lnL + lnprior_Mstar + lnprior_Porb + 600)
+        ))
     lnZ = np.log(Z)
     res = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,
@@ -2714,7 +2752,9 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     # results for q < 0.95
     idx = lnL.argmax()
-    Z = np.mean(np.exp(lnL + lnprior_Mstar + lnprior_Porb + 709))
+    Z = np.mean(np.nan_to_num(
+        np.exp(lnL + lnprior_Mstar + lnprior_Porb + 600)
+        ))
     lnZ = np.log(Z)
     res = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,
@@ -2726,7 +2766,9 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     }
     # results for q >= 0.95 and 2xP_orb
     idx = lnL_twin.argmax()
-    Z = np.mean(np.exp(lnL_twin + lnprior_Mstar + lnprior_Porb + 709))
+    Z = np.mean(np.nan_to_num(
+        np.exp(lnL_twin + lnprior_Mstar + lnprior_Porb + 600)
+        ))
     lnZ = np.log(Z)
     res_twin = {
         'M_s': M_s, 'R_s': R_s, 'u1': u1, 'u2': u2,
