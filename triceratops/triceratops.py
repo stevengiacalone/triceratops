@@ -35,7 +35,8 @@ ln2pi = np.log(2*pi)
 
 class target:
     def __init__(self, ID: int, sectors: np.ndarray,
-                 search_radius: int = 10, mission: str = "TESS"):
+                 search_radius: int = 10, mission: str = "TESS",
+                 lightkurve_cache_dir=None):
         """
         Queries TIC for sources near the target and obtains a cutout
         of the pixels enclosing the target.
@@ -140,7 +141,7 @@ class target:
                     "KIC " + str(ID),
                     mission="Kepler",
                     quarter=sector
-                    ).download_all()
+                    ).download_all(download_dir=lightkurve_cache_dir)
                 cutout_table = tpf[0].hdu[1].data
                 hdu = tpf[0].hdu[2].header
                 wcs = WCS(hdu)
@@ -164,7 +165,7 @@ class target:
                     "EPIC " + str(ID),
                     mission="K2",
                     campaign=sector
-                    ).download_all()
+                    ).download_all(download_dir=lightkurve_cache_dir)
                 cutout_table = tpf[0].hdu[1].data
                 hdu = tpf[0].hdu[2].header
                 wcs = WCS(hdu)
