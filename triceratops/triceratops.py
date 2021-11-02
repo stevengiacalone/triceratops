@@ -269,6 +269,30 @@ class target:
                 )
         return
 
+    def remove_star(self, drop_stars: np.ndarray):
+        """
+        Drops stars from .stars dataframe so that they are
+        excluded from validation analysis.
+        Args:
+            drop_stars (numpy array): Array of (int) TIC IDs
+                                      for stars to drop.
+        """
+        self.stars = self.stars[~self.stars["ID"].isin(drop_stars)]
+        return
+
+    def update_star(self, ID: int, param: str, value: float):
+        """
+        UPdate parameters of a star in .stars dataframe.
+        Args:
+            ID (int): ID of star to edit.
+            param (str): Name of parameter to edit
+                         (i.e., the header of .stars dataframe)
+            value (float): Value to update the parameter to.
+        """
+        idx = self.stars[self.stars.ID == str(ID)].index
+        self.stars.loc[idx, [param]] = value
+        return
+
     def plot_field(self, sector: int = None, ap_pixels=None,
                    ap_color: str = "red", save: bool = False,
                    fname: str = None):
@@ -560,21 +584,11 @@ class target:
                         )
         return
 
-    def remove_star(self, drop_stars: np.ndarray):
-        """
-        Drops stars from .stars dataframe so that they are
-        excluded from validation analysis.
-        Args:
-            drop_stars (numpy array): Array of (int) TIC IDs
-                                      for stars to drop.
-        """
-        self.stars = self.stars[~self.stars["ID"].isin(drop_stars)]
-        return
-
     def calc_probs(self, time: np.ndarray, flux_0: np.ndarray,
                    flux_err_0: float, P_orb: float,
                    contrast_curve_file: str = None, filt: str = "TESS",
                    N: int = 1000000, parallel: bool = False,
+                   drop_scenario: list = [],
                    verbose: int = 1):
         """
         Calculates the relative probability of each scenario.
@@ -593,6 +607,8 @@ class target:
             N (int): Number of draws for MC.
             parallel (bool): Whether or not to simulate light curves
                              in parallel.
+            drop_scenario (list of strings): Scenarios to ignore
+                                             (e.g., ["TEB", "PEB"]).
             verbose (int): 1 to print progress, 0 to print nothing.
         """
         # remove nans from light curve
@@ -613,6 +629,7 @@ class target:
         best_u2 = np.zeros(N_scenarios)
         best_P_orb = np.zeros(N_scenarios)
         best_i = np.zeros(N_scenarios)
+        best_b = np.zeros(N_scenarios)
         best_R_p = np.zeros(N_scenarios)
         best_ecc = np.zeros(N_scenarios)
         best_argp = np.zeros(N_scenarios)
@@ -661,385 +678,539 @@ class target:
                     break
 
                 else:
-                    if verbose == 1:
-                        print(
-                            "Calculating TP, EB, and EBx2P scenario "
-                            + "probabilities for " + str(ID) + "."
+                    if "TP" in drop_scenario:
+                        j = 0
+                        targets[j] = ID
+                        star_num[j] = 1
+                        scenarios[j] = "TP"
+                        lnZ[j] = -np.inf
+                    else:
+                        if verbose == 1:
+                            print(
+                                "Calculating TP scenario "
+                                + "probabilitiey for " + str(ID) + "."
+                                )
+
+                        res = lnZ_TTP(
+                            time, flux, flux_err, P_orb,
+                            M_s, R_s, Teff, Z,
+                            N, parallel, self.mission
                             )
+                        # self.res_TTP = res
+                        j = 0
+                        targets[j] = ID
+                        star_num[j] = 1
+                        scenarios[j] = "TP"
+                        best_M_host[j] = res["M_s"][0]
+                        best_R_host[j] = res["R_s"][0]
+                        best_u1[j] = res["u1"][0]
+                        best_u2[j] = res["u2"][0]
+                        best_P_orb[j] = res["P_orb"][0]
+                        best_i[j] = res["inc"][0]
+                        best_b[j] = res["b"][0]
+                        best_R_p[j] = res["R_p"][0]
+                        best_ecc[j] = res["ecc"][0]
+                        best_argp[j] = res["argp"][0]
+                        best_M_EB[j] = res["M_EB"][0]
+                        best_R_EB[j] = res["R_EB"][0]
+                        best_fluxratio_EB[j] = res["fluxratio_EB"][0]
+                        best_fluxratio_comp[j] = res["fluxratio_comp"][0]
+                        lnZ[j] = res["lnZ"]
 
-                    res = lnZ_TTP(
-                        time, flux, flux_err, P_orb,
-                        M_s, R_s, Teff, Z,
-                        N, parallel, self.mission
-                        )
-                    j = 0
-                    targets[j] = ID
-                    star_num[j] = 1
-                    scenarios[j] = "TP"
-                    best_M_host[j] = res["M_s"]
-                    best_R_host[j] = res["R_s"]
-                    best_u1[j] = res["u1"]
-                    best_u2[j] = res["u2"]
-                    best_P_orb[j] = res["P_orb"]
-                    best_i[j] = res["inc"]
-                    best_R_p[j] = res["R_p"]
-                    best_ecc[j] = res["ecc"]
-                    best_argp[j] = res["argp"]
-                    best_M_EB[j] = res["M_EB"]
-                    best_R_EB[j] = res["R_EB"]
-                    best_fluxratio_EB[j] = res["fluxratio_EB"]
-                    best_fluxratio_comp[j] = res["fluxratio_comp"]
-                    lnZ[j] = res["lnZ"]
+                    if "EB" in drop_scenario:
+                        j = 1
+                        targets[j] = ID
+                        star_num[j] = 1
+                        scenarios[j] = "EB"
+                        lnZ[j] = -np.inf
+                        j = 2
+                        targets[j] = ID
+                        star_num[j] = 1
+                        scenarios[j] = "EBx2P"
+                        lnZ[j] = -np.inf
+                    else:
+                        if verbose == 1:
+                            print(
+                                "Calculating EB and EBx2P scenario "
+                                + "probabilities for " + str(ID) + "."
+                                )
 
-                    res, res_twin = lnZ_TEB(
-                        time, flux, flux_err, P_orb,
-                        M_s, R_s, Teff, Z,
-                        N, parallel, self.mission
-                        )
-                    j = 1
-                    targets[j] = ID
-                    star_num[j] = 1
-                    scenarios[j] = "EB"
-                    best_M_host[j] = res["M_s"]
-                    best_R_host[j] = res["R_s"]
-                    best_u1[j] = res["u1"]
-                    best_u2[j] = res["u2"]
-                    best_P_orb[j] = res["P_orb"]
-                    best_i[j] = res["inc"]
-                    best_R_p[j] = res["R_p"]
-                    best_ecc[j] = res["ecc"]
-                    best_argp[j] = res["argp"]
-                    best_M_EB[j] = res["M_EB"]
-                    best_R_EB[j] = res["R_EB"]
-                    best_fluxratio_EB[j] = res["fluxratio_EB"]
-                    best_fluxratio_comp[j] = res["fluxratio_comp"]
-                    lnZ[j] = res["lnZ"]
-                    j = 2
-                    targets[j] = ID
-                    star_num[j] = 1
-                    scenarios[j] = "EBx2P"
-                    best_M_host[j] = res_twin["M_s"]
-                    best_R_host[j] = res_twin["R_s"]
-                    best_u1[j] = res_twin["u1"]
-                    best_u2[j] = res_twin["u2"]
-                    best_P_orb[j] = res_twin["P_orb"]
-                    best_i[j] = res_twin["inc"]
-                    best_R_p[j] = res_twin["R_p"]
-                    best_ecc[j] = res_twin["ecc"]
-                    best_argp[j] = res_twin["argp"]
-                    best_M_EB[j] = res_twin["M_EB"]
-                    best_R_EB[j] = res_twin["R_EB"]
-                    best_fluxratio_EB[j] = res_twin["fluxratio_EB"]
-                    best_fluxratio_comp[j] = res_twin["fluxratio_comp"]
-                    lnZ[j] = res_twin["lnZ"]
-
-                    if verbose == 1:
-                        print(
-                            "Calculating PTP, PEB, and PEBx2P scenario "
-                            + "probabilities for " + str(ID) + "."
+                        res, res_twin = lnZ_TEB(
+                            time, flux, flux_err, P_orb,
+                            M_s, R_s, Teff, Z,
+                            N, parallel, self.mission
                             )
+                        # self.res_TEB = res
+                        j = 1
+                        targets[j] = ID
+                        star_num[j] = 1
+                        scenarios[j] = "EB"
+                        best_M_host[j] = res["M_s"][0]
+                        best_R_host[j] = res["R_s"][0]
+                        best_u1[j] = res["u1"][0]
+                        best_u2[j] = res["u2"][0]
+                        best_P_orb[j] = res["P_orb"][0]
+                        best_i[j] = res["inc"][0]
+                        best_b[j] = res["b"][0]
+                        best_R_p[j] = res["R_p"][0]
+                        best_ecc[j] = res["ecc"][0]
+                        best_argp[j] = res["argp"][0]
+                        best_M_EB[j] = res["M_EB"][0]
+                        best_R_EB[j] = res["R_EB"][0]
+                        best_fluxratio_EB[j] = res["fluxratio_EB"][0]
+                        best_fluxratio_comp[j] = res["fluxratio_comp"][0]
+                        lnZ[j] = res["lnZ"]
+                        # self.res_TEBx2P = res_twin
+                        j = 2
+                        targets[j] = ID
+                        star_num[j] = 1
+                        scenarios[j] = "EBx2P"
+                        best_M_host[j] = res_twin["M_s"][0]
+                        best_R_host[j] = res_twin["R_s"][0]
+                        best_u1[j] = res_twin["u1"][0]
+                        best_u2[j] = res_twin["u2"][0]
+                        best_P_orb[j] = res_twin["P_orb"][0]
+                        best_i[j] = res_twin["inc"][0]
+                        best_b[j] = res_twin["b"][0]
+                        best_R_p[j] = res_twin["R_p"][0]
+                        best_ecc[j] = res_twin["ecc"][0]
+                        best_argp[j] = res_twin["argp"][0]
+                        best_M_EB[j] = res_twin["M_EB"][0]
+                        best_R_EB[j] = res_twin["R_EB"][0]
+                        best_fluxratio_EB[j] = res_twin["fluxratio_EB"][0]
+                        best_fluxratio_comp[j] = res_twin["fluxratio_comp"][0]
+                        lnZ[j] = res_twin["lnZ"]
 
-                    res = lnZ_PTP(
-                        time, flux, flux_err, P_orb,
-                        M_s, R_s, Teff, Z,
-                        plx, contrast_curve_file,
-                        filt,
-                        N, parallel, self.mission
-                        )
-                    j = 3
-                    targets[j] = ID
-                    star_num[j] = 1
-                    scenarios[j] = "PTP"
-                    best_M_host[j] = res["M_s"]
-                    best_R_host[j] = res["R_s"]
-                    best_u1[j] = res["u1"]
-                    best_u2[j] = res["u2"]
-                    best_P_orb[j] = res["P_orb"]
-                    best_i[j] = res["inc"]
-                    best_R_p[j] = res["R_p"]
-                    best_ecc[j] = res["ecc"]
-                    best_argp[j] = res["argp"]
-                    best_M_EB[j] = res["M_EB"]
-                    best_R_EB[j] = res["R_EB"]
-                    best_fluxratio_EB[j] = res["fluxratio_EB"]
-                    best_fluxratio_comp[j] = res["fluxratio_comp"]
-                    lnZ[j] = res["lnZ"]
+                    if "PTP" in drop_scenario:
+                        j = 3
+                        targets[j] = ID
+                        star_num[j] = 1
+                        scenarios[j] = "PTP"
+                        lnZ[j] = -np.inf
+                    else:
+                        if verbose == 1:
+                            print(
+                                "Calculating PTP scenario "
+                                + "probability for " + str(ID) + "."
+                                )
 
-                    res, res_twin = lnZ_PEB(
-                        time, flux, flux_err, P_orb,
-                        M_s, R_s, Teff, Z,
-                        plx, contrast_curve_file,
-                        filt,
-                        N, parallel, self.mission
-                        )
-                    j = 4
-                    targets[j] = ID
-                    star_num[j] = 1
-                    scenarios[j] = "PEB"
-                    best_M_host[j] = res["M_s"]
-                    best_R_host[j] = res["R_s"]
-                    best_u1[j] = res["u1"]
-                    best_u2[j] = res["u2"]
-                    best_P_orb[j] = res["P_orb"]
-                    best_i[j] = res["inc"]
-                    best_R_p[j] = res["R_p"]
-                    best_ecc[j] = res["ecc"]
-                    best_argp[j] = res["argp"]
-                    best_M_EB[j] = res["M_EB"]
-                    best_R_EB[j] = res["R_EB"]
-                    best_fluxratio_EB[j] = res["fluxratio_EB"]
-                    best_fluxratio_comp[j] = res["fluxratio_comp"]
-                    lnZ[j] = res["lnZ"]
-                    j = 5
-                    targets[j] = ID
-                    star_num[j] = 1
-                    scenarios[j] = "PEBx2P"
-                    best_M_host[j] = res_twin["M_s"]
-                    best_R_host[j] = res_twin["R_s"]
-                    best_u1[j] = res_twin["u1"]
-                    best_u2[j] = res_twin["u2"]
-                    best_P_orb[j] = res_twin["P_orb"]
-                    best_i[j] = res_twin["inc"]
-                    best_R_p[j] = res_twin["R_p"]
-                    best_ecc[j] = res_twin["ecc"]
-                    best_argp[j] = res_twin["argp"]
-                    best_M_EB[j] = res_twin["M_EB"]
-                    best_R_EB[j] = res_twin["R_EB"]
-                    best_fluxratio_EB[j] = res_twin["fluxratio_EB"]
-                    best_fluxratio_comp[j] = res_twin["fluxratio_comp"]
-                    lnZ[j] = res_twin["lnZ"]
-
-                    if verbose == 1:
-                        print(
-                            "Calculating STP, SEB, and SEBx2P scenario "
-                            + "probabilities for " + str(ID) + "."
+                        res = lnZ_PTP(
+                            time, flux, flux_err, P_orb,
+                            M_s, R_s, Teff, Z,
+                            plx, contrast_curve_file,
+                            filt,
+                            N, parallel, self.mission
                             )
+                        # self.res_PTP = res
+                        j = 3
+                        targets[j] = ID
+                        star_num[j] = 1
+                        scenarios[j] = "PTP"
+                        best_M_host[j] = res["M_s"][0]
+                        best_R_host[j] = res["R_s"][0]
+                        best_u1[j] = res["u1"][0]
+                        best_u2[j] = res["u2"][0]
+                        best_P_orb[j] = res["P_orb"][0]
+                        best_i[j] = res["inc"][0]
+                        best_b[j] = res["b"][0]
+                        best_R_p[j] = res["R_p"][0]
+                        best_ecc[j] = res["ecc"][0]
+                        best_argp[j] = res["argp"][0]
+                        best_M_EB[j] = res["M_EB"][0]
+                        best_R_EB[j] = res["R_EB"][0]
+                        best_fluxratio_EB[j] = res["fluxratio_EB"][0]
+                        best_fluxratio_comp[j] = res["fluxratio_comp"][0]
+                        lnZ[j] = res["lnZ"]
 
-                    res = lnZ_STP(
-                        time, flux, flux_err, P_orb,
-                        M_s, R_s, Teff, Z,
-                        plx, contrast_curve_file,
-                        filt,
-                        N, parallel, self.mission
-                        )
-                    j = 6
-                    targets[j] = ID
-                    star_num[j] = 2
-                    scenarios[j] = "STP"
-                    best_M_host[j] = res["M_s"]
-                    best_R_host[j] = res["R_s"]
-                    best_u1[j] = res["u1"]
-                    best_u2[j] = res["u2"]
-                    best_P_orb[j] = res["P_orb"]
-                    best_i[j] = res["inc"]
-                    best_R_p[j] = res["R_p"]
-                    best_ecc[j] = res["ecc"]
-                    best_argp[j] = res["argp"]
-                    best_M_EB[j] = res["M_EB"]
-                    best_R_EB[j] = res["R_EB"]
-                    best_fluxratio_EB[j] = res["fluxratio_EB"]
-                    best_fluxratio_comp[j] = res["fluxratio_comp"]
-                    lnZ[j] = res["lnZ"]
+                    if "PEB" in drop_scenario:
+                        j = 4
+                        targets[j] = ID
+                        star_num[j] = 1
+                        scenarios[j] = "PEB"
+                        lnZ[j] = -np.inf
+                        j = 5
+                        targets[j] = ID
+                        star_num[j] = 1
+                        scenarios[j] = "PEBx2P"
+                        lnZ[j] = -np.inf
+                    else:
+                        if verbose == 1:
+                            print(
+                                "Calculating PEB and PEBx2P scenario "
+                                + "probabilities for " + str(ID) + "."
+                                )
 
-                    res, res_twin = lnZ_SEB(
-                        time, flux, flux_err, P_orb,
-                        M_s, R_s, Teff, Z,
-                        plx, contrast_curve_file,
-                        filt,
-                        N, parallel, self.mission
-                        )
-                    j = 7
-                    targets[j] = ID
-                    star_num[j] = 2
-                    scenarios[j] = "SEB"
-                    best_M_host[j] = res["M_s"]
-                    best_R_host[j] = res["R_s"]
-                    best_u1[j] = res["u1"]
-                    best_u2[j] = res["u2"]
-                    best_P_orb[j] = res["P_orb"]
-                    best_i[j] = res["inc"]
-                    best_R_p[j] = res["R_p"]
-                    best_ecc[j] = res["ecc"]
-                    best_argp[j] = res["argp"]
-                    best_M_EB[j] = res["M_EB"]
-                    best_R_EB[j] = res["R_EB"]
-                    best_fluxratio_EB[j] = res["fluxratio_EB"]
-                    best_fluxratio_comp[j] = res["fluxratio_comp"]
-                    lnZ[j] = res["lnZ"]
-                    j = 8
-                    targets[j] = ID
-                    star_num[j] = 2
-                    scenarios[j] = "SEBx2P"
-                    best_M_host[j] = res_twin["M_s"]
-                    best_R_host[j] = res_twin["R_s"]
-                    best_u1[j] = res_twin["u1"]
-                    best_u2[j] = res_twin["u2"]
-                    best_P_orb[j] = res_twin["P_orb"]
-                    best_i[j] = res_twin["inc"]
-                    best_R_p[j] = res_twin["R_p"]
-                    best_ecc[j] = res_twin["ecc"]
-                    best_argp[j] = res_twin["argp"]
-                    best_M_EB[j] = res_twin["M_EB"]
-                    best_R_EB[j] = res_twin["R_EB"]
-                    best_fluxratio_EB[j] = res_twin["fluxratio_EB"]
-                    best_fluxratio_comp[j] = res_twin["fluxratio_comp"]
-                    lnZ[j] = res_twin["lnZ"]
-
-                    if verbose == 1:
-                        print(
-                            "Calculating DTP, DEB, and DEBx2P scenario "
-                            + "probabilities for " + str(ID) + "."
+                        res, res_twin = lnZ_PEB(
+                            time, flux, flux_err, P_orb,
+                            M_s, R_s, Teff, Z,
+                            plx, contrast_curve_file,
+                            filt,
+                            N, parallel, self.mission
                             )
+                        # self.res_PEB = res
+                        j = 4
+                        targets[j] = ID
+                        star_num[j] = 1
+                        scenarios[j] = "PEB"
+                        best_M_host[j] = res["M_s"][0]
+                        best_R_host[j] = res["R_s"][0]
+                        best_u1[j] = res["u1"][0]
+                        best_u2[j] = res["u2"][0]
+                        best_P_orb[j] = res["P_orb"][0]
+                        best_i[j] = res["inc"][0]
+                        best_b[j] = res["b"][0]
+                        best_R_p[j] = res["R_p"][0]
+                        best_ecc[j] = res["ecc"][0]
+                        best_argp[j] = res["argp"][0]
+                        best_M_EB[j] = res["M_EB"][0]
+                        best_R_EB[j] = res["R_EB"][0]
+                        best_fluxratio_EB[j] = res["fluxratio_EB"][0]
+                        best_fluxratio_comp[j] = res["fluxratio_comp"][0]
+                        lnZ[j] = res["lnZ"]
+                        # self.res_PEBx2P = res_twin
+                        j = 5
+                        targets[j] = ID
+                        star_num[j] = 1
+                        scenarios[j] = "PEBx2P"
+                        best_M_host[j] = res_twin["M_s"][0]
+                        best_R_host[j] = res_twin["R_s"][0]
+                        best_u1[j] = res_twin["u1"][0]
+                        best_u2[j] = res_twin["u2"][0]
+                        best_P_orb[j] = res_twin["P_orb"][0]
+                        best_i[j] = res_twin["inc"][0]
+                        best_b[j] = res_twin["b"][0]
+                        best_R_p[j] = res_twin["R_p"][0]
+                        best_ecc[j] = res_twin["ecc"][0]
+                        best_argp[j] = res_twin["argp"][0]
+                        best_M_EB[j] = res_twin["M_EB"][0]
+                        best_R_EB[j] = res_twin["R_EB"][0]
+                        best_fluxratio_EB[j] = res_twin["fluxratio_EB"][0]
+                        best_fluxratio_comp[j] = res_twin["fluxratio_comp"][0]
+                        lnZ[j] = res_twin["lnZ"]
 
-                    res = lnZ_DTP(
-                        time, flux, flux_err, P_orb,
-                        M_s, R_s, Teff, Z,
-                        Tmag, Jmag, Hmag, Kmag,
-                        output_url,
-                        contrast_curve_file, filt,
-                        N, parallel, self.mission
-                        )
-                    j = 9
-                    targets[j] = ID
-                    star_num[j] = 1
-                    scenarios[j] = "DTP"
-                    best_M_host[j] = res["M_s"]
-                    best_R_host[j] = res["R_s"]
-                    best_u1[j] = res["u1"]
-                    best_u2[j] = res["u2"]
-                    best_P_orb[j] = res["P_orb"]
-                    best_i[j] = res["inc"]
-                    best_R_p[j] = res["R_p"]
-                    best_ecc[j] = res["ecc"]
-                    best_argp[j] = res["argp"]
-                    best_M_EB[j] = res["M_EB"]
-                    best_R_EB[j] = res["R_EB"]
-                    best_fluxratio_EB[j] = res["fluxratio_EB"]
-                    best_fluxratio_comp[j] = res["fluxratio_comp"]
-                    lnZ[j] = res["lnZ"]
+                    if "STP" in drop_scenario:
+                        j = 6
+                        targets[j] = ID
+                        star_num[j] = 2
+                        scenarios[j] = "STP"
+                        lnZ[j] = -np.inf
+                    else:
+                        if verbose == 1:
+                            print(
+                                "Calculating STP scenario "
+                                + "probability for " + str(ID) + "."
+                                )
 
-                    res, res_twin = lnZ_DEB(
-                        time, flux, flux_err, P_orb,
-                        M_s, R_s, Teff, Z,
-                        Tmag, Jmag, Hmag, Kmag,
-                        output_url,
-                        contrast_curve_file, filt,
-                        N, parallel, self.mission
-                        )
-                    j = 10
-                    targets[j] = ID
-                    star_num[j] = 1
-                    scenarios[j] = "DEB"
-                    best_M_host[j] = res["M_s"]
-                    best_R_host[j] = res["R_s"]
-                    best_u1[j] = res["u1"]
-                    best_u2[j] = res["u2"]
-                    best_P_orb[j] = res["P_orb"]
-                    best_i[j] = res["inc"]
-                    best_R_p[j] = res["R_p"]
-                    best_ecc[j] = res["ecc"]
-                    best_argp[j] = res["argp"]
-                    best_M_EB[j] = res["M_EB"]
-                    best_R_EB[j] = res["R_EB"]
-                    best_fluxratio_EB[j] = res["fluxratio_EB"]
-                    best_fluxratio_comp[j] = res["fluxratio_comp"]
-                    lnZ[j] = res["lnZ"]
-                    j = 11
-                    targets[j] = ID
-                    star_num[j] = 1
-                    scenarios[j] = "DEBx2P"
-                    best_M_host[j] = res_twin["M_s"]
-                    best_R_host[j] = res_twin["R_s"]
-                    best_u1[j] = res_twin["u1"]
-                    best_u2[j] = res_twin["u2"]
-                    best_P_orb[j] = res_twin["P_orb"]
-                    best_i[j] = res_twin["inc"]
-                    best_R_p[j] = res_twin["R_p"]
-                    best_ecc[j] = res_twin["ecc"]
-                    best_argp[j] = res_twin["argp"]
-                    best_M_EB[j] = res_twin["M_EB"]
-                    best_R_EB[j] = res_twin["R_EB"]
-                    best_fluxratio_EB[j] = res_twin["fluxratio_EB"]
-                    best_fluxratio_comp[j] = res_twin["fluxratio_comp"]
-                    lnZ[j] = res_twin["lnZ"]
-
-                    if verbose == 1:
-                        print(
-                            "Calculating BTP, BEB, and BEBx2P scenario "
-                            + "probabilities for " + str(ID) + "."
+                        res = lnZ_STP(
+                            time, flux, flux_err, P_orb,
+                            M_s, R_s, Teff, Z,
+                            plx, contrast_curve_file,
+                            filt,
+                            N, parallel, self.mission
                             )
+                        # self.res_STP = res
+                        j = 6
+                        targets[j] = ID
+                        star_num[j] = 2
+                        scenarios[j] = "STP"
+                        best_M_host[j] = res["M_s"][0]
+                        best_R_host[j] = res["R_s"][0]
+                        best_u1[j] = res["u1"][0]
+                        best_u2[j] = res["u2"][0]
+                        best_P_orb[j] = res["P_orb"][0]
+                        best_i[j] = res["inc"][0]
+                        best_b[j] = res["b"][0]
+                        best_R_p[j] = res["R_p"][0]
+                        best_ecc[j] = res["ecc"][0]
+                        best_argp[j] = res["argp"][0]
+                        best_M_EB[j] = res["M_EB"][0]
+                        best_R_EB[j] = res["R_EB"][0]
+                        best_fluxratio_EB[j] = res["fluxratio_EB"][0]
+                        best_fluxratio_comp[j] = res["fluxratio_comp"][0]
+                        lnZ[j] = res["lnZ"]
 
-                    res = lnZ_BTP(
-                        time, flux, flux_err, P_orb,
-                        M_s, R_s, Teff,
-                        Tmag, Jmag, Hmag, Kmag,
-                        output_url,
-                        contrast_curve_file, filt,
-                        N, parallel, self.mission
-                        )
-                    j = 12
-                    targets[j] = ID
-                    star_num[j] = 2
-                    scenarios[j] = "BTP"
-                    best_M_host[j] = res["M_s"]
-                    best_R_host[j] = res["R_s"]
-                    best_u1[j] = res["u1"]
-                    best_u2[j] = res["u2"]
-                    best_P_orb[j] = res["P_orb"]
-                    best_i[j] = res["inc"]
-                    best_R_p[j] = res["R_p"]
-                    best_ecc[j] = res["ecc"]
-                    best_argp[j] = res["argp"]
-                    best_M_EB[j] = res["M_EB"]
-                    best_R_EB[j] = res["R_EB"]
-                    best_fluxratio_EB[j] = res["fluxratio_EB"]
-                    best_fluxratio_comp[j] = res["fluxratio_comp"]
-                    lnZ[j] = res["lnZ"]
+                    if "SEB" in drop_scenario:
+                        j = 7
+                        targets[j] = ID
+                        star_num[j] = 2
+                        scenarios[j] = "SEB"
+                        lnZ[j] = -np.inf
+                        j = 8
+                        targets[j] = ID
+                        star_num[j] = 2
+                        scenarios[j] = "SEBx2P"
+                        lnZ[j] = -np.inf
+                    else:
+                        if verbose == 1:
+                            print(
+                                "Calculating SEB and SEBx2P scenario "
+                                + "probabilities for " + str(ID) + "."
+                                )
 
-                    res, res_twin = lnZ_BEB(
-                        time, flux, flux_err, P_orb,
-                        M_s, R_s, Teff,
-                        Tmag, Jmag, Hmag, Kmag,
-                        output_url,
-                        contrast_curve_file, filt,
-                        N, parallel, self.mission
-                        )
-                    j = 13
-                    targets[j] = ID
-                    star_num[j] = 2
-                    scenarios[j] = "BEB"
-                    best_M_host[j] = res["M_s"]
-                    best_R_host[j] = res["R_s"]
-                    best_u1[j] = res["u1"]
-                    best_u2[j] = res["u2"]
-                    best_P_orb[j] = res["P_orb"]
-                    best_i[j] = res["inc"]
-                    best_R_p[j] = res["R_p"]
-                    best_ecc[j] = res["ecc"]
-                    best_argp[j] = res["argp"]
-                    best_M_EB[j] = res["M_EB"]
-                    best_R_EB[j] = res["R_EB"]
-                    best_fluxratio_EB[j] = res["fluxratio_EB"]
-                    best_fluxratio_comp[j] = res["fluxratio_comp"]
-                    lnZ[j] = res["lnZ"]
-                    j = 14
-                    targets[j] = ID
-                    star_num[j] = 2
-                    scenarios[j] = "BEBx2P"
-                    best_M_host[j] = res_twin["M_s"]
-                    best_R_host[j] = res_twin["R_s"]
-                    best_u1[j] = res_twin["u1"]
-                    best_u2[j] = res_twin["u2"]
-                    best_P_orb[j] = res_twin["P_orb"]
-                    best_i[j] = res_twin["inc"]
-                    best_R_p[j] = res_twin["R_p"]
-                    best_ecc[j] = res_twin["ecc"]
-                    best_argp[j] = res_twin["argp"]
-                    best_M_EB[j] = res_twin["M_EB"]
-                    best_R_EB[j] = res_twin["R_EB"]
-                    best_fluxratio_EB[j] = res_twin["fluxratio_EB"]
-                    best_fluxratio_comp[j] = res_twin["fluxratio_comp"]
-                    lnZ[j] = res_twin["lnZ"]
+                        res, res_twin = lnZ_SEB(
+                            time, flux, flux_err, P_orb,
+                            M_s, R_s, Teff, Z,
+                            plx, contrast_curve_file,
+                            filt,
+                            N, parallel, self.mission
+                            )
+                        # self.res_SEB = res
+                        j = 7
+                        targets[j] = ID
+                        star_num[j] = 2
+                        scenarios[j] = "SEB"
+                        best_M_host[j] = res["M_s"][0]
+                        best_R_host[j] = res["R_s"][0]
+                        best_u1[j] = res["u1"][0]
+                        best_u2[j] = res["u2"][0]
+                        best_P_orb[j] = res["P_orb"][0]
+                        best_i[j] = res["inc"][0]
+                        best_b[j] = res["b"][0]
+                        best_R_p[j] = res["R_p"][0]
+                        best_ecc[j] = res["ecc"][0]
+                        best_argp[j] = res["argp"][0]
+                        best_M_EB[j] = res["M_EB"][0]
+                        best_R_EB[j] = res["R_EB"][0]
+                        best_fluxratio_EB[j] = res["fluxratio_EB"][0]
+                        best_fluxratio_comp[j] = res["fluxratio_comp"][0]
+                        lnZ[j] = res["lnZ"]
+                        # self.res_SEBx2P = res_twin
+                        j = 8
+                        targets[j] = ID
+                        star_num[j] = 2
+                        scenarios[j] = "SEBx2P"
+                        best_M_host[j] = res_twin["M_s"][0]
+                        best_R_host[j] = res_twin["R_s"][0]
+                        best_u1[j] = res_twin["u1"][0]
+                        best_u2[j] = res_twin["u2"][0]
+                        best_P_orb[j] = res_twin["P_orb"][0]
+                        best_i[j] = res_twin["inc"][0]
+                        best_b[j] = res_twin["b"][0]
+                        best_R_p[j] = res_twin["R_p"][0]
+                        best_ecc[j] = res_twin["ecc"][0]
+                        best_argp[j] = res_twin["argp"][0]
+                        best_M_EB[j] = res_twin["M_EB"][0]
+                        best_R_EB[j] = res_twin["R_EB"][0]
+                        best_fluxratio_EB[j] = res_twin["fluxratio_EB"][0]
+                        best_fluxratio_comp[j] = res_twin["fluxratio_comp"][0]
+                        lnZ[j] = res_twin["lnZ"]
+
+                    if "DTP" in drop_scenario:
+                        j = 9
+                        targets[j] = ID
+                        star_num[j] = 1
+                        scenarios[j] = "DTP"
+                        lnZ[j] = -np.inf
+                    else:
+                        if verbose == 1:
+                            print(
+                                "Calculating DTP scenario "
+                                + "probability for " + str(ID) + "."
+                                )
+
+                        res = lnZ_DTP(
+                            time, flux, flux_err, P_orb,
+                            M_s, R_s, Teff, Z,
+                            Tmag, Jmag, Hmag, Kmag,
+                            output_url,
+                            contrast_curve_file, filt,
+                            N, parallel, self.mission
+                            )
+                        # self.res_DTP = res
+                        j = 9
+                        targets[j] = ID
+                        star_num[j] = 1
+                        scenarios[j] = "DTP"
+                        best_M_host[j] = res["M_s"][0]
+                        best_R_host[j] = res["R_s"][0]
+                        best_u1[j] = res["u1"][0]
+                        best_u2[j] = res["u2"][0]
+                        best_P_orb[j] = res["P_orb"][0]
+                        best_i[j] = res["inc"][0]
+                        best_b[j] = res["b"][0]
+                        best_R_p[j] = res["R_p"][0]
+                        best_ecc[j] = res["ecc"][0]
+                        best_argp[j] = res["argp"][0]
+                        best_M_EB[j] = res["M_EB"][0]
+                        best_R_EB[j] = res["R_EB"][0]
+                        best_fluxratio_EB[j] = res["fluxratio_EB"][0]
+                        best_fluxratio_comp[j] = res["fluxratio_comp"][0]
+                        lnZ[j] = res["lnZ"]
+
+                    if "DEB" in drop_scenario:
+                        j = 10
+                        targets[j] = ID
+                        star_num[j] = 1
+                        scenarios[j] = "DEB"
+                        lnZ[j] = -np.inf
+                        j = 11
+                        targets[j] = ID
+                        star_num[j] = 1
+                        scenarios[j] = "DEBx2P"
+                        lnZ[j] = -np.inf
+                    else:
+                        if verbose == 1:
+                            print(
+                                "Calculating DEB and DEBx2P scenario "
+                                + "probabilities for " + str(ID) + "."
+                                )
+                        res, res_twin = lnZ_DEB(
+                            time, flux, flux_err, P_orb,
+                            M_s, R_s, Teff, Z,
+                            Tmag, Jmag, Hmag, Kmag,
+                            output_url,
+                            contrast_curve_file, filt,
+                            N, parallel, self.mission
+                            )
+                        # self.res_DEB = res
+                        j = 10
+                        targets[j] = ID
+                        star_num[j] = 1
+                        scenarios[j] = "DEB"
+                        best_M_host[j] = res["M_s"][0]
+                        best_R_host[j] = res["R_s"][0]
+                        best_u1[j] = res["u1"][0]
+                        best_u2[j] = res["u2"][0]
+                        best_P_orb[j] = res["P_orb"][0]
+                        best_i[j] = res["inc"][0]
+                        best_b[j] = res["b"][0]
+                        best_R_p[j] = res["R_p"][0]
+                        best_ecc[j] = res["ecc"][0]
+                        best_argp[j] = res["argp"][0]
+                        best_M_EB[j] = res["M_EB"][0]
+                        best_R_EB[j] = res["R_EB"][0]
+                        best_fluxratio_EB[j] = res["fluxratio_EB"][0]
+                        best_fluxratio_comp[j] = res["fluxratio_comp"][0]
+                        lnZ[j] = res["lnZ"]
+                        # self.res_DEBx2P = res_twin
+                        j = 11
+                        targets[j] = ID
+                        star_num[j] = 1
+                        scenarios[j] = "DEBx2P"
+                        best_M_host[j] = res_twin["M_s"][0]
+                        best_R_host[j] = res_twin["R_s"][0]
+                        best_u1[j] = res_twin["u1"][0]
+                        best_u2[j] = res_twin["u2"][0]
+                        best_P_orb[j] = res_twin["P_orb"][0]
+                        best_i[j] = res_twin["inc"][0]
+                        best_b[j] = res_twin["b"][0]
+                        best_R_p[j] = res_twin["R_p"][0]
+                        best_ecc[j] = res_twin["ecc"][0]
+                        best_argp[j] = res_twin["argp"][0]
+                        best_M_EB[j] = res_twin["M_EB"][0]
+                        best_R_EB[j] = res_twin["R_EB"][0]
+                        best_fluxratio_EB[j] = res_twin["fluxratio_EB"][0]
+                        best_fluxratio_comp[j] = res_twin["fluxratio_comp"][0]
+                        lnZ[j] = res_twin["lnZ"]
+
+                    if "BTP" in drop_scenario:
+                        j = 12
+                        targets[j] = ID
+                        star_num[j] = 2
+                        scenarios[j] = "BTP"
+                        lnZ[j] = -np.inf
+                    else:
+                        if verbose == 1:
+                            print(
+                                "Calculating BTP scenario "
+                                + "probability for " + str(ID) + "."
+                                )
+
+                        res = lnZ_BTP(
+                            time, flux, flux_err, P_orb,
+                            M_s, R_s, Teff,
+                            Tmag, Jmag, Hmag, Kmag,
+                            output_url,
+                            contrast_curve_file, filt,
+                            N, parallel, self.mission
+                            )
+                        # self.res_BTP = res
+                        j = 12
+                        targets[j] = ID
+                        star_num[j] = 2
+                        scenarios[j] = "BTP"
+                        best_M_host[j] = res["M_s"][0]
+                        best_R_host[j] = res["R_s"][0]
+                        best_u1[j] = res["u1"][0]
+                        best_u2[j] = res["u2"][0]
+                        best_P_orb[j] = res["P_orb"][0]
+                        best_i[j] = res["inc"][0]
+                        best_b[j] = res["b"][0]
+                        best_R_p[j] = res["R_p"][0]
+                        best_ecc[j] = res["ecc"][0]
+                        best_argp[j] = res["argp"][0]
+                        best_M_EB[j] = res["M_EB"][0]
+                        best_R_EB[j] = res["R_EB"][0]
+                        best_fluxratio_EB[j] = res["fluxratio_EB"][0]
+                        best_fluxratio_comp[j] = res["fluxratio_comp"][0]
+                        lnZ[j] = res["lnZ"]
+
+                    if "BEB" in drop_scenario:
+                        j = 13
+                        targets[j] = ID
+                        star_num[j] = 2
+                        scenarios[j] = "BEB"
+                        lnZ[j] = -np.inf
+                        j = 14
+                        targets[j] = ID
+                        star_num[j] = 2
+                        scenarios[j] = "BEBx2P"
+                        lnZ[j] = -np.inf
+                    else:
+                        if verbose == 1:
+                            print(
+                                "Calculating BEB and BEBx2P scenario "
+                                + "probabilities for " + str(ID) + "."
+                                )
+
+                        res, res_twin = lnZ_BEB(
+                            time, flux, flux_err, P_orb,
+                            M_s, R_s, Teff,
+                            Tmag, Jmag, Hmag, Kmag,
+                            output_url,
+                            contrast_curve_file, filt,
+                            N, parallel, self.mission
+                            )
+                        # self.res_BEB = res
+                        j = 13
+                        targets[j] = ID
+                        star_num[j] = 2
+                        scenarios[j] = "BEB"
+                        best_M_host[j] = res["M_s"][0]
+                        best_R_host[j] = res["R_s"][0]
+                        best_u1[j] = res["u1"][0]
+                        best_u2[j] = res["u2"][0]
+                        best_P_orb[j] = res["P_orb"][0]
+                        best_i[j] = res["inc"][0]
+                        best_b[j] = res["b"][0]
+                        best_R_p[j] = res["R_p"][0]
+                        best_ecc[j] = res["ecc"][0]
+                        best_argp[j] = res["argp"][0]
+                        best_M_EB[j] = res["M_EB"][0]
+                        best_R_EB[j] = res["R_EB"][0]
+                        best_fluxratio_EB[j] = res["fluxratio_EB"][0]
+                        best_fluxratio_comp[j] = res["fluxratio_comp"][0]
+                        lnZ[j] = res["lnZ"]
+                        # self.res_BEBx2P = res_twin
+                        j = 14
+                        targets[j] = ID
+                        star_num[j] = 2
+                        scenarios[j] = "BEBx2P"
+                        best_M_host[j] = res_twin["M_s"][0]
+                        best_R_host[j] = res_twin["R_s"][0]
+                        best_u1[j] = res_twin["u1"][0]
+                        best_u2[j] = res_twin["u2"][0]
+                        best_P_orb[j] = res_twin["P_orb"][0]
+                        best_i[j] = res_twin["inc"][0]
+                        best_b[j] = res_twin["b"][0]
+                        best_R_p[j] = res_twin["R_p"][0]
+                        best_ecc[j] = res_twin["ecc"][0]
+                        best_argp[j] = res_twin["argp"][0]
+                        best_M_EB[j] = res_twin["M_EB"][0]
+                        best_R_EB[j] = res_twin["R_EB"][0]
+                        best_fluxratio_EB[j] = res_twin["fluxratio_EB"][0]
+                        best_fluxratio_comp[j] = res_twin["fluxratio_comp"][0]
+                        lnZ[j] = res_twin["lnZ"]
 
             # nearby stars
             else:
@@ -1065,19 +1236,20 @@ class target:
                 targets[j] = ID
                 star_num[j] = 1
                 scenarios[j] = "NTP"
-                best_M_host[j] = res["M_s"]
-                best_R_host[j] = res["R_s"]
-                best_u1[j] = res["u1"]
-                best_u2[j] = res["u2"]
-                best_P_orb[j] = res["P_orb"]
-                best_i[j] = res["inc"]
-                best_R_p[j] = res["R_p"]
-                best_ecc[j] = res["ecc"]
-                best_argp[j] = res["argp"]
-                best_M_EB[j] = res["M_EB"]
-                best_R_EB[j] = res["R_EB"]
-                best_fluxratio_EB[j] = res["fluxratio_EB"]
-                best_fluxratio_comp[j] = res["fluxratio_comp"]
+                best_M_host[j] = res["M_s"][0]
+                best_R_host[j] = res["R_s"][0]
+                best_u1[j] = res["u1"][0]
+                best_u2[j] = res["u2"][0]
+                best_P_orb[j] = res["P_orb"][0]
+                best_i[j] = res["inc"][0]
+                best_b[j] = res["b"][0]
+                best_R_p[j] = res["R_p"][0]
+                best_ecc[j] = res["ecc"][0]
+                best_argp[j] = res["argp"][0]
+                best_M_EB[j] = res["M_EB"][0]
+                best_R_EB[j] = res["R_EB"][0]
+                best_fluxratio_EB[j] = res["fluxratio_EB"][0]
+                best_fluxratio_comp[j] = res["fluxratio_comp"][0]
                 lnZ[j] = res["lnZ"]
 
                 res, res_twin = lnZ_TEB(
@@ -1089,37 +1261,39 @@ class target:
                 targets[j] = ID
                 star_num[j] = 1
                 scenarios[j] = "NEB"
-                best_M_host[j] = res["M_s"]
-                best_R_host[j] = res["R_s"]
-                best_u1[j] = res["u1"]
-                best_u2[j] = res["u2"]
-                best_P_orb[j] = res["P_orb"]
-                best_i[j] = res["inc"]
-                best_R_p[j] = res["R_p"]
-                best_ecc[j] = res["ecc"]
-                best_argp[j] = res["argp"]
-                best_M_EB[j] = res["M_EB"]
-                best_R_EB[j] = res["R_EB"]
-                best_fluxratio_EB[j] = res["fluxratio_EB"]
-                best_fluxratio_comp[j] = res["fluxratio_comp"]
+                best_M_host[j] = res["M_s"][0]
+                best_R_host[j] = res["R_s"][0]
+                best_u1[j] = res["u1"][0]
+                best_u2[j] = res["u2"][0]
+                best_P_orb[j] = res["P_orb"][0]
+                best_i[j] = res["inc"][0]
+                best_b[j] = res["b"][0]
+                best_R_p[j] = res["R_p"][0]
+                best_ecc[j] = res["ecc"][0]
+                best_argp[j] = res["argp"][0]
+                best_M_EB[j] = res["M_EB"][0]
+                best_R_EB[j] = res["R_EB"][0]
+                best_fluxratio_EB[j] = res["fluxratio_EB"][0]
+                best_fluxratio_comp[j] = res["fluxratio_comp"][0]
                 lnZ[j] = res["lnZ"]
                 j = 17 + 3*(i-1)
                 targets[j] = ID
                 star_num[j] = 1
                 scenarios[j] = "NEBx2P"
-                best_M_host[j] = res_twin["M_s"]
-                best_R_host[j] = res_twin["R_s"]
-                best_u1[j] = res_twin["u1"]
-                best_u2[j] = res_twin["u2"]
-                best_P_orb[j] = res_twin["P_orb"]
-                best_i[j] = res_twin["inc"]
-                best_R_p[j] = res_twin["R_p"]
-                best_ecc[j] = res_twin["ecc"]
-                best_argp[j] = res_twin["argp"]
-                best_M_EB[j] = res_twin["M_EB"]
-                best_R_EB[j] = res_twin["R_EB"]
-                best_fluxratio_EB[j] = res_twin["fluxratio_EB"]
-                best_fluxratio_comp[j] = res_twin["fluxratio_comp"]
+                best_M_host[j] = res_twin["M_s"][0]
+                best_R_host[j] = res_twin["R_s"][0]
+                best_u1[j] = res_twin["u1"][0]
+                best_u2[j] = res_twin["u2"][0]
+                best_P_orb[j] = res_twin["P_orb"][0]
+                best_i[j] = res_twin["inc"][0]
+                best_b[j] = res_twin["b"][0]
+                best_R_p[j] = res_twin["R_p"][0]
+                best_ecc[j] = res_twin["ecc"][0]
+                best_argp[j] = res_twin["argp"][0]
+                best_M_EB[j] = res_twin["M_EB"][0]
+                best_R_EB[j] = res_twin["R_EB"][0]
+                best_fluxratio_EB[j] = res_twin["fluxratio_EB"][0]
+                best_fluxratio_comp[j] = res_twin["fluxratio_comp"][0]
                 lnZ[j] = res_twin["lnZ"]
 
         # calculate the relative probability of each scenario
@@ -1129,12 +1303,18 @@ class target:
 
         # now save all of the arrays as a dataframe
         prob_df = DataFrame({
-            "ID": targets, "scenario": scenarios,
-            "M_s": best_M_host, "R_s": best_R_host,
-            "P_orb": best_P_orb, "inc": best_i,
-            "ecc": best_ecc, "w": best_argp,
+            "ID": targets,
+            "scenario": scenarios,
+            "M_s": best_M_host,
+            "R_s": best_R_host,
+            "P_orb": best_P_orb,
+            "inc": best_i,
+            "b": best_b,
+            "ecc": best_ecc,
+            "w": best_argp,
             "R_p": best_R_p,
-            "M_EB": best_M_EB, "R_EB": best_R_EB,
+            "M_EB": best_M_EB,
+            "R_EB": best_R_EB,
             "prob": relative_probs
             })
         self.probs = prob_df
@@ -1203,14 +1383,18 @@ class target:
                         * (df['P_orb'].values[k]*86400)**2
                         )**(1/3)
                     u1, u2 = u1s[k], u2s[k]
-                    best_model = simulate_TP_transit(
-                        model_time,
-                        df['R_p'].values[k], df['P_orb'].values[k],
-                        df['inc'].values[k], a, df["R_s"].values[k],
-                        u1, u2,
-                        df["ecc"].values[k], df["w"].values[k],
-                        fluxratios_comp[k], comp
-                        )
+                    # if scenario was not skipped, calculate best-fit lc
+                    if df["M_s"].values[k] != 0.0:
+                        best_model = simulate_TP_transit(
+                            model_time,
+                            df['R_p'].values[k], df['P_orb'].values[k],
+                            df['inc'].values[k], a, df["R_s"].values[k],
+                            u1, u2,
+                            df["ecc"].values[k], df["w"].values[k],
+                            fluxratios_comp[k], comp
+                            )
+                    else:
+                        best_model = np.ones(len(model_time))
                 # all small EBs
                 elif j == 1:
                     if star_num[k] == 1:
@@ -1223,14 +1407,18 @@ class target:
                         * (df['P_orb'].values[k]*86400)**2
                         )**(1/3)
                     u1, u2 = u1s[k], u2s[k]
-                    best_model = simulate_EB_transit(
-                        model_time,
-                        df["R_EB"].values[k], fluxratios_EB[k],
-                        df['P_orb'].values[k], df['inc'].values[k],
-                        a, df["R_s"].values[k], u1, u2,
-                        df["ecc"].values[k], df["w"].values[k],
-                        fluxratios_comp[k], comp
-                        )[0]
+                    # if scenario was not skipped, calculate best-fit lc
+                    if df["M_s"].values[k] != 0.0:
+                        best_model = simulate_EB_transit(
+                            model_time,
+                            df["R_EB"].values[k], fluxratios_EB[k],
+                            df['P_orb'].values[k], df['inc'].values[k],
+                            a, df["R_s"].values[k], u1, u2,
+                            df["ecc"].values[k], df["w"].values[k],
+                            fluxratios_comp[k], comp
+                            )[0]
+                    else:
+                        best_model = np.ones(len(model_time))
                 # all twin EBs
                 elif j == 2:
                     if star_num[k] == 1:
@@ -1243,14 +1431,18 @@ class target:
                         * (df['P_orb'].values[k]*86400)**2
                         )**(1/3)
                     u1, u2 = u1s[k], u2s[k]
-                    best_model = simulate_EB_transit(
-                        model_time,
-                        df["R_EB"].values[k], fluxratios_EB[k],
-                        df['P_orb'].values[k], df['inc'].values[k],
-                        a, df["R_s"].values[k], u1, u2,
-                        df["ecc"].values[k], df["w"].values[k],
-                        fluxratios_comp[k], comp
-                        )[0]
+                    # if scenario was not skipped, calculate best-fit lc
+                    if df["M_s"].values[k] != 0.0:
+                        best_model = simulate_EB_transit(
+                            model_time,
+                            df["R_EB"].values[k], fluxratios_EB[k],
+                            df['P_orb'].values[k], df['inc'].values[k],
+                            a, df["R_s"].values[k], u1, u2,
+                            df["ecc"].values[k], df["w"].values[k],
+                            fluxratios_comp[k], comp
+                            )[0]
+                    else:
+                        best_model = np.ones(len(model_time))
 
                 y_formatter = ticker.ScalarFormatter(useOffset=False)
                 ax[i, j].yaxis.set_major_formatter(y_formatter)
