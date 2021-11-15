@@ -38,7 +38,7 @@ ldc_K_u2s = np.array(ldc_K.b, dtype=float)
 def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Z: float, N: int = 1000000, parallel: bool = False,
-            mission: str = "TESS"):
+            mission: str = "TESS", flatpriors: bool = False):
     """
     Calculates the marginal likelihood of the TTP scenario.
     Args:
@@ -88,16 +88,17 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     lnprior_Mstar = lnprior_Mstar_planet(np.array([M_s]))
 
     # calculate orbital period prior
-    lnprior_Porb = lnprior_Porb_planet(P_orb)
+    lnprior_Porb = lnprior_Porb_planet(P_orb, flatpriors)
 
     # sample from prior distributions
-    rps = sample_rp(np.random.rand(N), np.full_like(N, M_s))
+    rps = sample_rp(np.random.rand(N), np.full_like(N, M_s), flatpriors)
     incs = sample_inc(np.random.rand(N))
     eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=P_orb)
     argps = sample_w(np.random.rand(N))
 
     # calculate impact parameter
-    b = a*np.cos(incs*pi/180)/(R_s*Rsun)
+    r = a*(1-eccs**2)/(1+eccs*np.sin(argps*np.pi/180)) 
+    b = r*np.cos(incs*pi/180)/(R_s*Rsun)
 
     # calculate transit probability for each instance
     e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
@@ -168,7 +169,7 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Z: float, N: int = 1000000, parallel: bool = False,
-            mission: str = "TESS"):
+            mission: str = "TESS", flatpriors: bool = False):
     """
     Calculates the marginal likelihood of the TEB scenario.
     Args:
@@ -245,8 +246,10 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     Ptra_twin = (radii*Rsun + R_s*Rsun)/a_twin * e_corr
 
     # calculate impact parameter
-    b = a*np.cos(incs*pi/180)/(R_s*Rsun)
-    b_twin = a_twin*np.cos(incs*pi/180)/(R_s*Rsun)
+    r = a*(1-eccs**2)/(1+eccs*np.sin(argps*np.pi/180)) 
+    b = r*np.cos(incs*pi/180)/(R_s*Rsun)
+    r_twin = a_twin*(1-eccs**2)/(1+eccs*np.sin(argps*np.pi/180)) 
+    b_twin = r_twin*np.cos(incs*pi/180)/(R_s*Rsun)
 
     # find instances with collisions
     coll = ((radii*Rsun + R_s*Rsun) > a*(1-eccs))
@@ -375,7 +378,7 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             Z: float, plx: float, contrast_curve_file: str = None,
             filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
-            mission: str = "TESS"):
+            mission: str = "TESS", flatpriors: bool = False):
     """
     Calculates the marginal likelihood of the PTP scenario.
     Args:
@@ -470,16 +473,17 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     lnprior_Mstar = lnprior_Mstar_planet(np.array([M_s]))
 
     # calculate orbital period prior
-    lnprior_Porb = lnprior_Porb_planet(P_orb)
+    lnprior_Porb = lnprior_Porb_planet(P_orb, flatpriors)
 
     # sample from prior distributions
-    rps = sample_rp(np.random.rand(N), np.full_like(N, M_s))
+    rps = sample_rp(np.random.rand(N), np.full_like(N, M_s), flatpriors)
     incs = sample_inc(np.random.rand(N))
     eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=P_orb)
     argps = sample_w(np.random.rand(N))
 
     # calculate impact parameter
-    b = a*np.cos(incs*pi/180)/(R_s*Rsun)
+    r = a*(1-eccs**2)/(1+eccs*np.sin(argps*np.pi/180)) 
+    b = r*np.cos(incs*pi/180)/(R_s*Rsun)
 
     # calculate transit probability for each instance
     e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
@@ -556,7 +560,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             Z: float, plx: float, contrast_curve_file: str = None,
             filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
-            mission: str = "TESS"):
+            mission: str = "TESS", flatpriors: bool = False):
     """
     Calculates the marginal likelihood of the PEB scenario.
     Args:
@@ -676,8 +680,10 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     Ptra_twin = (radii*Rsun + R_s*Rsun)/a_twin * e_corr
 
     # calculate impact parameter
-    b = a*np.cos(incs*pi/180)/(R_s*Rsun)
-    b_twin = a_twin*np.cos(incs*pi/180)/(R_s*Rsun)
+    r = a*(1-eccs**2)/(1+eccs*np.sin(argps*np.pi/180)) 
+    b = r*np.cos(incs*pi/180)/(R_s*Rsun)
+    r_twin = a_twin*(1-eccs**2)/(1+eccs*np.sin(argps*np.pi/180)) 
+    b_twin = r_twin*np.cos(incs*pi/180)/(R_s*Rsun)
 
     # find instances with collisions
     coll = ((radii*Rsun + R_s*Rsun) > a*(1-eccs))
@@ -813,7 +819,7 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
             plx: float, contrast_curve_file: str = None,
             filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
-            mission: str = "TESS"):
+            mission: str = "TESS", flatpriors: bool = False):
     """
     Calculates the marginal likelihood of the STP scenario.
     Args:
@@ -923,10 +929,10 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
     lnprior_Mstar = lnprior_Mstar_planet(masses_comp)
 
     # calculate orbital period prior
-    lnprior_Porb = lnprior_Porb_planet(P_orb)
+    lnprior_Porb = lnprior_Porb_planet(P_orb, flatpriors)
 
     # sample from prior distributions
-    rps = sample_rp(np.random.rand(N), masses_comp)
+    rps = sample_rp(np.random.rand(N), masses_comp, flatpriors)
     incs = sample_inc(np.random.rand(N))
     eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=P_orb)
     argps = sample_w(np.random.rand(N))
@@ -937,7 +943,8 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
     Ptra = (rps*Rearth + radii_comp*Rsun)/a * e_corr
 
     # calculate impact parameter
-    b = a*np.cos(incs*pi/180)/(radii_comp*Rsun)
+    r = a*(1-eccs**2)/(1+eccs*np.sin(argps*np.pi/180)) 
+    b = r*np.cos(incs*pi/180)/(radii_comp*Rsun)
 
     # find instances with collisions
     coll = ((rps*Rearth + radii_comp*Rsun) > a*(1-eccs))
@@ -1007,7 +1014,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             Z: float, plx: float, contrast_curve_file: str = None,
             filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
-            mission: str = "TESS"):
+            mission: str = "TESS", flatpriors: bool = False):
     """
     Calculates the marginal likelihood of the SEB scenario.
     Args:
@@ -1155,8 +1162,10 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     Ptra_twin = (radii*Rsun + radii_comp*Rsun)/a_twin * e_corr
 
     # calculate impact parameter
-    b = a*np.cos(incs*pi/180)/(radii_comp*Rsun)
-    b_twin = a_twin*np.cos(incs*pi/180)/(radii_comp*Rsun)
+    r = a*(1-eccs**2)/(1+eccs*np.sin(argps*np.pi/180)) 
+    b = r*np.cos(incs*pi/180)/(radii_comp*Rsun)
+    r_twin = a_twin*(1-eccs**2)/(1+eccs*np.sin(argps*np.pi/180)) 
+    b_twin = r_twin*np.cos(incs*pi/180)/(radii_comp*Rsun)
 
     # find instances with collisions
     coll = ((radii*Rsun + radii_comp*Rsun) > a*(1-eccs))
@@ -1290,7 +1299,7 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             Kmag: float, output_url: str,
             contrast_curve_file: str = None, filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
-            mission: str = "TESS"):
+            mission: str = "TESS", flatpriors: bool = False):
     """
     Calculates the marginal likelihood of the DTP scenario.
     Args:
@@ -1391,16 +1400,17 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     lnprior_Mstar = lnprior_Mstar_planet(np.array([M_s]))
 
     # calculate orbital period prior
-    lnprior_Porb = lnprior_Porb_planet(P_orb)
+    lnprior_Porb = lnprior_Porb_planet(P_orb, flatpriors)
 
     # sample from R_p and inc prior distributions
-    rps = sample_rp(np.random.rand(N), np.full_like(N, M_s))
+    rps = sample_rp(np.random.rand(N), np.full_like(N, M_s), flatpriors)
     incs = sample_inc(np.random.rand(N))
     eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=P_orb)
     argps = sample_w(np.random.rand(N))
 
     # calculate impact parameter
-    b = a*np.cos(incs*pi/180)/(R_s*Rsun)
+    r = a*(1-eccs**2)/(1+eccs*np.sin(argps*np.pi/180)) 
+    b = r*np.cos(incs*pi/180)/(R_s*Rsun)
 
     # calculate transit probability for each instance
     e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
@@ -1478,7 +1488,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             Kmag: float, output_url: str,
             contrast_curve_file: str = None, filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
-            mission: str = "TESS"):
+            mission: str = "TESS", flatpriors: bool = False):
     """
     Calculates the marginal likelihood of the DEB scenario.
     Args:
@@ -1606,8 +1616,10 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     Ptra_twin = (radii*Rsun + R_s*Rsun)/a_twin * e_corr
 
     # calculate impact parameter
-    b = a*np.cos(incs*pi/180)/(R_s*Rsun)
-    b_twin = a_twin*np.cos(incs*pi/180)/(R_s*Rsun)
+    r = a*(1-eccs**2)/(1+eccs*np.sin(argps*np.pi/180)) 
+    b = r*np.cos(incs*pi/180)/(R_s*Rsun)
+    r_twin = a_twin*(1-eccs**2)/(1+eccs*np.sin(argps*np.pi/180)) 
+    b_twin = r_twin*np.cos(incs*pi/180)/(R_s*Rsun)
 
     # find instances with collisions
     coll = ((radii*Rsun + R_s*Rsun) > a*(1-eccs))
@@ -1745,7 +1757,7 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             output_url: str,
             contrast_curve_file: str = None, filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
-            mission: str = "TESS"):
+            mission: str = "TESS", flatpriors: bool = False):
     """
     Calculates the marginal likelihood of the BTP scenario.
     Args:
@@ -1848,10 +1860,10 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     lnprior_Mstar = lnprior_Mstar_planet(masses_comp[idxs])
 
     # calculate orbital period prior
-    lnprior_Porb = lnprior_Porb_planet(P_orb)
+    lnprior_Porb = lnprior_Porb_planet(P_orb, flatpriors)
 
     # sample from inc and R_p prior distributions
-    rps = sample_rp(np.random.rand(N), masses_comp[idxs])
+    rps = sample_rp(np.random.rand(N), masses_comp[idxs], flatpriors)
     incs = sample_inc(np.random.rand(N))
     eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=P_orb)
     argps = sample_w(np.random.rand(N))
@@ -1862,7 +1874,8 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     Ptra = (rps*Rearth + radii_comp[idxs]*Rsun)/a * e_corr
 
     # calculate impact parameter
-    b = a*np.cos(incs*pi/180)/(radii_comp[idxs]*Rsun)
+    r = a*(1-eccs**2)/(1+eccs*np.sin(argps*np.pi/180)) 
+    b = r*np.cos(incs*pi/180)/(radii_comp[idxs]*Rsun)
 
     # find instances with collisions
     coll = ((rps*Rearth + radii_comp[idxs]*Rsun) > a*(1-eccs))
@@ -1939,7 +1952,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             output_url: str,
             contrast_curve_file: str = None, filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
-            mission: str = "TESS"):
+            mission: str = "TESS", flatpriors: bool = False):
     """
     Calculates the marginal likelihood of the BEB scenario.
     Args:
@@ -2113,8 +2126,10 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     Ptra_twin = (radii*Rsun + radii_comp[idxs]*Rsun)/a_twin * e_corr
 
     # calculate impact parameter
-    b = a*np.cos(incs*pi/180)/(radii_comp[idxs]*Rsun)
-    b_twin = a_twin*np.cos(incs*pi/180)/(radii_comp[idxs]*Rsun)
+    r = a*(1-eccs**2)/(1+eccs*np.sin(argps*np.pi/180)) 
+    b = r*np.cos(incs*pi/180)/(radii_comp[idxs]*Rsun)
+    r_twin = a_twin*(1-eccs**2)/(1+eccs*np.sin(argps*np.pi/180)) 
+    b_twin = r_twin*np.cos(incs*pi/180)/(radii_comp[idxs]*Rsun)
 
     # find instances with collisions
     coll = ((radii*Rsun + radii_comp[idxs]*Rsun) > a*(1-eccs))
@@ -2262,7 +2277,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb: float, Tmag: float, output_url: str,
                     N: int = 1000000, parallel: bool = False,
-                    mission: str = "TESS"):
+                    mission: str = "TESS", flatpriors: bool = False):
     """
     Calculates the marginal likelihood of the NTP scenario for
     a star of unknown properties.
@@ -2357,10 +2372,10 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
     lnprior_Mstar = lnprior_Mstar_planet(masses_possible[idxs])
 
     # calculate orbital period prior
-    lnprior_Porb = lnprior_Porb_planet(P_orb)
+    lnprior_Porb = lnprior_Porb_planet(P_orb, flatpriors)
 
     # sample from inc and R_p prior distributions
-    rps = sample_rp(np.random.rand(N), masses_possible[idxs])
+    rps = sample_rp(np.random.rand(N), masses_possible[idxs], flatpriors)
     incs = sample_inc(np.random.rand(N))
     eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=P_orb)
     argps = sample_w(np.random.rand(N))
@@ -2373,7 +2388,8 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
     Ptra = (rps*Rearth + radii_possible[idxs]*Rsun)/a * e_corr
 
     # calculate impact parameter
-    b = a*np.cos(incs*pi/180)/(radii_possible[idxs]*Rsun)
+    r = a*(1-eccs**2)/(1+eccs*np.sin(argps*np.pi/180)) 
+    b = r*np.cos(incs*pi/180)/(radii_possible[idxs]*Rsun)
 
     # find instances with collisions
     coll = ((rps*Rearth + radii_possible[idxs]*Rsun) > a*(1-eccs))
@@ -2446,7 +2462,7 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb: float, Tmag: float, output_url: str,
                     N: int = 1000000, parallel: bool = False,
-                    mission: str = "TESS"):
+                    mission: str = "TESS", flatpriors: bool = False):
     """
     Calculates the marginal likelihood of the NEB scenario for a star
     of unknown properties.
@@ -2576,8 +2592,10 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
     Ptra_twin = (radii*Rsun + radii_possible[idxs]*Rsun)/a_twin * e_corr
 
     # calculate impact parameter
-    b = a*np.cos(incs*pi/180)/(radii_possible[idxs]*Rsun)
-    b_twin = a_twin*np.cos(incs*pi/180)/(radii_possible[idxs]*Rsun)
+    r = a*(1-eccs**2)/(1+eccs*np.sin(argps*np.pi/180)) 
+    b = r*np.cos(incs*pi/180)/(radii_possible[idxs]*Rsun)
+    r_twin = a_twin*(1-eccs**2)/(1+eccs*np.sin(argps*np.pi/180)) 
+    b_twin = r_twin*np.cos(incs*pi/180)/(radii_possible[idxs]*Rsun)
 
     # find instances with collisions
     coll = ((radii*Rsun + radii_possible[idxs]*Rsun) > a*(1-eccs))
@@ -2719,7 +2737,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb: float, R_s: float, Teff: float, Z: float,
                     N: int = 1000000, parallel: bool = False,
-                    mission: str = "TESS"):
+                    mission: str = "TESS", flatpriors: bool = False):
     """
     Calculates the marginal likelihood of the NTP scenario for
     subgiant stars.
@@ -2770,10 +2788,10 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     lnprior_Mstar = lnprior_Mstar_planet(np.array([M_s]))
 
     # calculate orbital period prior
-    lnprior_Porb = lnprior_Porb_planet(P_orb)
+    lnprior_Porb = lnprior_Porb_planet(P_orb, flatpriors)
 
     # sample from inc and R_p prior distributions
-    rps = sample_rp(np.random.rand(N), np.full_like(N, M_s))
+    rps = sample_rp(np.random.rand(N), np.full_like(N, M_s), flatpriors)
     incs = sample_inc(np.random.rand(N))
     eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=P_orb)
     argps = sample_w(np.random.rand(N))
@@ -2784,7 +2802,8 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     Ptra = (rps*Rearth + R_s*Rsun)/a * e_corr
 
     # calculate impact parameter
-    b = a*np.cos(incs*pi/180)/(R_s*Rsun)
+    r = a*(1-eccs**2)/(1+eccs*np.sin(argps*np.pi/180)) 
+    b = r*np.cos(incs*pi/180)/(R_s*Rsun)
 
     # find instances with collisions
     coll = ((rps*Rearth + R_s*Rsun) > a*(1-eccs))
@@ -2851,7 +2870,7 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb: float, R_s: float, Teff: float, Z: float,
                     N: int = 1000000, parallel: bool = False,
-                    mission: str = "TESS"):
+                    mission: str = "TESS", flatpriors: bool = False):
     """
     Calculates the marginal likelihood of the NEB scenario
     for subgiant stars.
@@ -2929,8 +2948,10 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     Ptra_twin = (R_s*Rsun + R_s*Rsun)/a_twin * e_corr
 
     # calculate impact parameter
-    b = a*np.cos(incs*pi/180)/(R_s*Rsun)
-    b_twin = a_twin*np.cos(incs*pi/180)/(R_s*Rsun)
+    r = a*(1-eccs**2)/(1+eccs*np.sin(argps*np.pi/180)) 
+    b = r*np.cos(incs*pi/180)/(R_s*Rsun)
+    r_twin = a_twin*(1-eccs**2)/(1+eccs*np.sin(argps*np.pi/180)) 
+    b_twin = r_twin*np.cos(incs*pi/180)/(R_s*Rsun)
 
     # find instances with collisions
     coll = ((radii*Rsun + R_s*Rsun) > a*(1-eccs))

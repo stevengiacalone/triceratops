@@ -5,7 +5,7 @@ def readme():
         return f.read()
 
 setup(name = "triceratops",
-      version = '1.0.11',
+      version = '1.0.12',
       description = "Statistical Validation of Transiting Planet Candidates",
       long_description = readme(),
       author = "Steven Giacalone",

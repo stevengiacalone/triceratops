@@ -51,7 +51,7 @@ def simulate_TP_transit(time: np.ndarray, R_p: float, P_orb: float,
         a=a/(R_s*Rsun),
         i=inc*(pi/180.),
         e=ecc,
-        w=argp*(pi/180.)
+        w=(90-argp)*(pi/180.)
         )
     # step 2: adjust the light curve to account for flux dilution
     # from non-host star
@@ -109,7 +109,7 @@ def simulate_EB_transit(time: np.ndarray, R_EB: float,
         a=a/(R_s*Rsun),
         i=inc*(pi/180.),
         e=ecc,
-        w=argp*(pi/180.)
+        w=(90-argp)*(pi/180.)
         )
     # calculate secondary eclipse depth
     tm_sec.set_data(np.linspace(-0.05,0.05,25))
@@ -120,7 +120,7 @@ def simulate_EB_transit(time: np.ndarray, R_EB: float,
         a=a/(R_s*Rsun),
         i=inc*(pi/180.),
         e=ecc,
-        w=(argp+180)*(pi/180.)
+        w=(90-argp+180)*(pi/180.)
         )
     sec_flux = np.min(sec_flux)
     # step 2: adjust the light curve to account for flux dilution
@@ -303,8 +303,8 @@ def simulate_TP_transit_p(time: np.ndarray, R_p: np.ndarray,
     P_orb = np.full_like(k, P_orb)
     a = a/(R_s*Rsun)
     inc *= (pi/180.)
-    argp *= (pi/180.)
-    pvp = np.array([k, t0, P_orb, a, inc, ecc, argp]).T
+    w = (90-argp)*(pi/180.)
+    pvp = np.array([k, t0, P_orb, a, inc, ecc, w]).T
     ldc = np.array([u1, u2]).T
     tm.set_data(time)
     flux = tm.evaluate_pv(pvp=pvp, ldc=ldc)
@@ -365,7 +365,7 @@ def simulate_EB_transit_p(time: np.ndarray, R_EB: np.ndarray,
     P_orb = np.full_like(k, P_orb)
     a = a/(R_s*Rsun)
     inc *= (pi/180.)
-    w = argp*(pi/180.)
+    w = (90-argp)*(pi/180.)
     pvp = np.array([k, t0, P_orb, a, inc, ecc, w]).T
     ldc = np.array([u1, u2]).T
     tm.set_data(time)
@@ -373,8 +373,8 @@ def simulate_EB_transit_p(time: np.ndarray, R_EB: np.ndarray,
     # calculate secondary eclipse depth
     k = R_s/R_EB
     k[(k - 1.0) < 1e-6] *= 0.999
-    w = (argp+180)*(pi/180.)
-    pvp = np.array([k, t0, P_orb, a, inc, ecc, argp]).T
+    w = (90-argp+180)*(pi/180.)
+    pvp = np.array([k, t0, P_orb, a, inc, ecc, w]).T
     tm_sec.set_data(np.linspace(-0.05,0.05,25))
     sec_flux = tm_sec.evaluate_pv(pvp=pvp, ldc=ldc)
     sec_flux = np.min(sec_flux, axis=1)

@@ -13,102 +13,107 @@ au = constants.au.cgs.value
 pi = np.pi
 
 
-def sample_rp(x, M_s):
+def sample_rp(x, M_s, flatpriors):
     """
     Samples planet radii that are dependent on host mass.
     Args:
         x (numpy array): Random numbers between 0 and 1.
-        M_s (numpy array): Host star masses [Solar radii].
+        M_s (numpy array): Host star masses [Solar Masses].
     Returns:
         x (numpy array): Sampled planet radii [Earth radii].
 
     """
-    R_break1 = 3.0
-    R_break2 = 6.0
-    R_min = 0.5
-    R_max = 20.0
-    # power coefficients for M > 0.45
-    p1 = 0.0
-    p2 = -4.0
-    p3 = -0.5
-    # power coefficients for M <= 0.45
-    p4 = 0.0
-    p5 = -7.0
-    p6 = -0.5
-    # normalizing constants  for M > 0.45
-    A1 = R_break1**p1 / R_break1**p2
-    A2 = R_break2**p2 / R_break2**p3
-    I1 = (R_break1**(p1+1) - R_min**(p1+1))/(p1+1)
-    I2 = A1*(R_break2**(p2+1) - R_break1**(p2+1))/(p2+1)
-    I3 = A2*A1*(R_max**(p3+1) - R_break2**(p3+1))/(p3+1)
-    Norm1 = 1/(I1+I2+I3)
-    # normalizing constants  for M <= 0.45
-    A3 = R_break1**p4 / R_break1**p5
-    A4 = R_break2**p5 / R_break2**p6
-    I4 = (R_break1**(p4+1) - R_min**(p4+1))/(p4+1)
-    I5 = A3*(R_break2**(p5+1) - R_break1**(p5+1))/(p5+1)
-    I6 = A4*A3*(R_max**(p6+1) - R_break2**(p6+1))/(p6+1)
-    Norm2 = 1/(I4+I5+I6)
+    if flatpriors == False:
+        R_break1 = 3.0
+        R_break2 = 6.0
+        R_min = 0.5
+        R_max = 20.0
+        # power coefficients for M > 0.45
+        p1 = 0.0
+        p2 = -4.0
+        p3 = -0.5
+        # power coefficients for M <= 0.45
+        p4 = 0.0
+        p5 = -7.0
+        p6 = -0.5
+        # normalizing constants  for M > 0.45
+        A1 = R_break1**p1 / R_break1**p2
+        A2 = R_break2**p2 / R_break2**p3
+        I1 = (R_break1**(p1+1) - R_min**(p1+1))/(p1+1)
+        I2 = A1*(R_break2**(p2+1) - R_break1**(p2+1))/(p2+1)
+        I3 = A2*A1*(R_max**(p3+1) - R_break2**(p3+1))/(p3+1)
+        Norm1 = 1/(I1+I2+I3)
+        # normalizing constants  for M <= 0.45
+        A3 = R_break1**p4 / R_break1**p5
+        A4 = R_break2**p5 / R_break2**p6
+        I4 = (R_break1**(p4+1) - R_min**(p4+1))/(p4+1)
+        I5 = A3*(R_break2**(p5+1) - R_break1**(p5+1))/(p5+1)
+        I6 = A4*A3*(R_max**(p6+1) - R_break2**(p6+1))/(p6+1)
+        Norm2 = 1/(I4+I5+I6)
 
-    mask1 = (
-        (x <= Norm1*I1)
-        & (M_s > 0.45)
-        )
-    mask2 = (
-        (x > Norm1*I1)
-        & (x <= Norm1*(I1+I2))
-        & (M_s > 0.45)
-        )
-    mask3 = (
-        (x > Norm1*(I1+I2))
-        & (x <= Norm1*(I1+I2+I3))
-        & (M_s > 0.45)
-        )
-    mask4 = (
-        (x <= Norm2*I4)
-        & (M_s <= 0.45)
-        )
-    mask5 = (
-        (x > Norm2*I4)
-        & (x <= Norm2*(I4+I5))
-        & (M_s <= 0.45)
-        )
-    mask6 = (
-        (x > Norm2*(I4+I5))
-        & (x <= Norm2*(I4+I5+I6))
-        & (M_s <= 0.45)
-        )
-    x[mask1] = (
-        (x[mask1]/Norm1*(p1+1) + R_min**(p1+1))**(1/(p1+1))
-        )
-    x[mask2] = (
-        (
-            (x[mask2]/Norm1 - I1)*(p2+1)/A1
-            + R_break1**(p2+1)
-        )**(1/(p2+1))
-        )
-    x[mask3] = (
-        (
-            (x[mask3]/Norm1 - I1 - I2)*(p3+1)/(A1*A2)
-            + R_break2**(p3+1)
-        )**(1/(p3+1))
-        )
-    x[mask4] = (
-        (x[mask4]/Norm2*(p4+1) + R_min**(p4+1))**(1/(p4+1))
-        )
-    x[mask5] = (
-        (
-            (x[mask5]/Norm2 - I4)*(p5+1)/A3
-            + R_break1**(p5+1)
-        )**(1/(p5+1))
-        )
-    x[mask6] = (
-        (
-            (x[mask6]/Norm2 - I4 - I5)*(p6+1)/(A3*A4)
-            + R_break2**(p6+1)
-        )**(1/(p6+1))
-        )
-    return x
+        mask1 = (
+            (x <= Norm1*I1)
+            & (M_s > 0.45)
+            )
+        mask2 = (
+            (x > Norm1*I1)
+            & (x <= Norm1*(I1+I2))
+            & (M_s > 0.45)
+            )
+        mask3 = (
+            (x > Norm1*(I1+I2))
+            & (x <= Norm1*(I1+I2+I3))
+            & (M_s > 0.45)
+            )
+        mask4 = (
+            (x <= Norm2*I4)
+            & (M_s <= 0.45)
+            )
+        mask5 = (
+            (x > Norm2*I4)
+            & (x <= Norm2*(I4+I5))
+            & (M_s <= 0.45)
+            )
+        mask6 = (
+            (x > Norm2*(I4+I5))
+            & (x <= Norm2*(I4+I5+I6))
+            & (M_s <= 0.45)
+            )
+        x[mask1] = (
+            (x[mask1]/Norm1*(p1+1) + R_min**(p1+1))**(1/(p1+1))
+            )
+        x[mask2] = (
+            (
+                (x[mask2]/Norm1 - I1)*(p2+1)/A1
+                + R_break1**(p2+1)
+            )**(1/(p2+1))
+            )
+        x[mask3] = (
+            (
+                (x[mask3]/Norm1 - I1 - I2)*(p3+1)/(A1*A2)
+                + R_break2**(p3+1)
+            )**(1/(p3+1))
+            )
+        x[mask4] = (
+            (x[mask4]/Norm2*(p4+1) + R_min**(p4+1))**(1/(p4+1))
+            )
+        x[mask5] = (
+            (
+                (x[mask5]/Norm2 - I4)*(p5+1)/A3
+                + R_break1**(p5+1)
+            )**(1/(p5+1))
+            )
+        x[mask6] = (
+            (
+                (x[mask6]/Norm2 - I4 - I5)*(p6+1)/(A3*A4)
+                + R_break2**(p6+1)
+            )**(1/(p6+1))
+            )
+        return x
+    elif flatpriors == True:
+        A = 1/19.5
+        r = x/A + 0.5
+        return r
 
 
 def sample_inc(x, lower=0, upper=90):
@@ -474,7 +479,7 @@ def lnprior_Mstar_binary(M_s: np.array):
     return 0.0
 
 
-def lnprior_Porb_planet(P_orb: float):
+def lnprior_Porb_planet(P_orb: float, flatpriors):
     """
     Calculates probability of a planet with a given
     orbital period < 50 days.
@@ -484,31 +489,48 @@ def lnprior_Porb_planet(P_orb: float):
         lnprior_Porb (float): Log probability of planet having an
                               orbital period P_orb +/- 0.1 days.
     """
-    P_break = 10
-    P_min = 0.1
-    P_max = 50
-    p1 = 1.5
-    p2 = 0.0
-    A = P_break**p1 / P_break**p2
-    I1 = (P_break**(p1+1) - P_min**(p1+1))/(p1+1)
-    I2 = A*(P_max**(p2+1) - P_break**(p2+1))/(p2+1)
-    Norm = 1/(I1+I2)
+    if flatpriors == False:
+        P_break = 10
+        P_min = 0.1
+        P_max = 50
+        p1 = 1.5
+        p2 = 0.0
+        A = P_break**p1 / P_break**p2
+        I1 = (P_break**(p1+1) - P_min**(p1+1))/(p1+1)
+        I2 = A*(P_max**(p2+1) - P_break**(p2+1))/(p2+1)
+        Norm = 1/(I1+I2)
 
-    if P_orb < P_min+0.1:
-        P_orb = P_min+0.1
-    elif P_orb > P_max-0.1:
-        P_orb = P_max-0.1
+        if P_orb < P_min+0.1:
+            P_orb = P_min+0.1
+        elif P_orb > P_max-0.1:
+            P_orb = P_max-0.1
 
-    if P_orb <= P_break-0.1:
+        if P_orb <= P_break-0.1:
+            I1 = ((P_orb+0.1)**(p1+1) - (P_orb-0.1)**(p1+1))/(p1+1)
+            prob = Norm * I1
+        elif P_orb >= P_break+0.1:
+            I1 = A*((P_orb+0.1)**(p2+1) - (P_orb-0.1)**(p2+1))/(p2+1)
+            prob = Norm * I1
+        else:
+            I1 = (P_break**(p1+1) - (P_orb-0.1)**(p1+1))/(p1+1)
+            I2 = A*((P_orb+0.1)**(p2+1) - P_break**(p2+1))/(p2+1)
+            prob = Norm * (I1+I2)
+
+    elif flatpriors == True:
+        P_min = 0.1
+        P_max = 50
+        p1 = 0.0
+
+        I1 = (P_max**(p1+1) - P_min**(p1+1))/(p1+1)
+        Norm = 1/I1
+
+        if P_orb < P_min+0.1:
+            P_orb = P_min+0.1
+        elif P_orb > P_max-0.1:
+            P_orb = P_max-0.1
+
         I1 = ((P_orb+0.1)**(p1+1) - (P_orb-0.1)**(p1+1))/(p1+1)
         prob = Norm * I1
-    elif P_orb >= P_break+0.1:
-        I1 = A*((P_orb+0.1)**(p2+1) - (P_orb-0.1)**(p2+1))/(p2+1)
-        prob = Norm * I1
-    else:
-        I1 = (P_break**(p1+1) - (P_orb-0.1)**(p1+1))/(p1+1)
-        I2 = A*((P_orb+0.1)**(p2+1) - P_break**(p2+1))/(p2+1)
-        prob = Norm * (I1+I2)
 
     lnprior_Porb = np.log(prob)
     return lnprior_Porb

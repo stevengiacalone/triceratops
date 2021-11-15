@@ -589,7 +589,7 @@ class target:
                    contrast_curve_file: str = None, filt: str = "TESS",
                    N: int = 1000000, parallel: bool = False,
                    drop_scenario: list = [],
-                   verbose: int = 1):
+                   verbose: int = 1, flatpriors: bool = False):
         """
         Calculates the relative probability of each scenario.
         Args:
@@ -694,7 +694,8 @@ class target:
                         res = lnZ_TTP(
                             time, flux, flux_err, P_orb,
                             M_s, R_s, Teff, Z,
-                            N, parallel, self.mission
+                            N, parallel, self.mission,
+                            flatpriors
                             )
                         # self.res_TTP = res
                         j = 0
@@ -738,7 +739,8 @@ class target:
                         res, res_twin = lnZ_TEB(
                             time, flux, flux_err, P_orb,
                             M_s, R_s, Teff, Z,
-                            N, parallel, self.mission
+                            N, parallel, self.mission,
+                            flatpriors
                             )
                         # self.res_TEB = res
                         j = 1
@@ -799,7 +801,8 @@ class target:
                             M_s, R_s, Teff, Z,
                             plx, contrast_curve_file,
                             filt,
-                            N, parallel, self.mission
+                            N, parallel, self.mission,
+                            flatpriors
                             )
                         # self.res_PTP = res
                         j = 3
@@ -845,7 +848,8 @@ class target:
                             M_s, R_s, Teff, Z,
                             plx, contrast_curve_file,
                             filt,
-                            N, parallel, self.mission
+                            N, parallel, self.mission,
+                            flatpriors
                             )
                         # self.res_PEB = res
                         j = 4
@@ -906,7 +910,8 @@ class target:
                             M_s, R_s, Teff, Z,
                             plx, contrast_curve_file,
                             filt,
-                            N, parallel, self.mission
+                            N, parallel, self.mission,
+                            flatpriors
                             )
                         # self.res_STP = res
                         j = 6
@@ -952,7 +957,8 @@ class target:
                             M_s, R_s, Teff, Z,
                             plx, contrast_curve_file,
                             filt,
-                            N, parallel, self.mission
+                            N, parallel, self.mission,
+                            flatpriors
                             )
                         # self.res_SEB = res
                         j = 7
@@ -1014,7 +1020,8 @@ class target:
                             Tmag, Jmag, Hmag, Kmag,
                             output_url,
                             contrast_curve_file, filt,
-                            N, parallel, self.mission
+                            N, parallel, self.mission,
+                            flatpriors
                             )
                         # self.res_DTP = res
                         j = 9
@@ -1060,7 +1067,8 @@ class target:
                             Tmag, Jmag, Hmag, Kmag,
                             output_url,
                             contrast_curve_file, filt,
-                            N, parallel, self.mission
+                            N, parallel, self.mission,
+                            flatpriors
                             )
                         # self.res_DEB = res
                         j = 10
@@ -1122,7 +1130,8 @@ class target:
                             Tmag, Jmag, Hmag, Kmag,
                             output_url,
                             contrast_curve_file, filt,
-                            N, parallel, self.mission
+                            N, parallel, self.mission,
+                            flatpriors
                             )
                         # self.res_BTP = res
                         j = 12
@@ -1169,7 +1178,8 @@ class target:
                             Tmag, Jmag, Hmag, Kmag,
                             output_url,
                             contrast_curve_file, filt,
-                            N, parallel, self.mission
+                            N, parallel, self.mission,
+                            flatpriors
                             )
                         # self.res_BEB = res
                         j = 13
@@ -1230,7 +1240,8 @@ class target:
                 res = lnZ_TTP(
                     time, flux, flux_err, P_orb,
                     M_s, R_s, Teff, Z,
-                    N, parallel, self.mission
+                    N, parallel, self.mission,
+                    flatpriors
                     )
                 j = 15 + 3*(i-1)
                 targets[j] = ID
@@ -1255,7 +1266,8 @@ class target:
                 res, res_twin = lnZ_TEB(
                     time, flux, flux_err, P_orb,
                     M_s, R_s, Teff, Z,
-                    N, parallel, self.mission
+                    N, parallel, self.mission,
+                    flatpriors
                     )
                 j = 16 + 3*(i-1)
                 targets[j] = ID
