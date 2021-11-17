@@ -293,7 +293,7 @@ class target:
         self.stars.loc[idx, [param]] = value
         return
 
-    def plot_field(self, sector: int = None, ap_pixels=None,
+    def plot_field(self, sector: int = None, ap_pixels = None,
                    ap_color: str = "red", save: bool = False,
                    fname: str = None):
         """
@@ -491,7 +491,7 @@ class target:
             plt.savefig(fname+".pdf")
         return
 
-    def calc_depths(self, tdepth: float, all_ap_pixels):
+    def calc_depths(self, tdepth: float, all_ap_pixels = None):
         """
         Calculates the transit depth each source near the target would
         have if it were the source of the transit.
@@ -502,6 +502,24 @@ class target:
             all_ap_pixels (list of numpy arrays): Apertures used to
                                                   extract light curve.
         """
+        if all_ap_pixels is None:
+            print("No apertures provided, assuming 5x5 centered on target.")
+            all_ap_pixels = []
+            for i in range(len(self.pix_coords)):
+                target_pixel = np.round(self.pix_coords[i][0])
+                this_ap = np.array([
+                    np.repeat(
+                        np.arange(
+                            target_pixel[0] - 2, target_pixel[0] + 3, 1
+                            ), 5
+                        ),
+                    np.tile(
+                        np.arange(
+                            target_pixel[1] - 2, target_pixel[1] + 3, 1
+                            ), 5
+                        )
+                    ]).T
+                all_ap_pixels.append(this_ap)
         # for each aperture, calculate contribution due to each star
         rel_flux_per_aperture = np.zeros([
             len(all_ap_pixels),
