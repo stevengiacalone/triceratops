@@ -38,7 +38,8 @@ ldc_K_u2s = np.array(ldc_K.b, dtype=float)
 def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Z: float, N: int = 1000000, parallel: bool = False,
-            mission: str = "TESS", flatpriors: bool = False):
+            mission: str = "TESS", flatpriors: bool = False,
+            exptime: float = 0.00139, nsamples: int = 20):
     """
     Calculates the marginal likelihood of the TTP scenario.
     Args:
@@ -55,6 +56,9 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
         mission (str): TESS, Kepler, or K2.
+        flatpriors (bool): Assume flat Rp and Porb planet priors?
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
@@ -125,7 +129,8 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb, incs[mask], a_arr[mask], R_s_arr[mask],
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
-                    companion_fluxratio=companion_fluxratio[mask]
+                    companion_fluxratio=companion_fluxratio[mask],
+                    exptime=exptime, nsamples=nsamples
                     )
     else:
         for i in range(N):
@@ -137,7 +142,8 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
                     time, flux, sigma, rps[i],
                     P_orb, incs[i], a, R_s, u1, u2,
-                    eccs[i], argps[i]
+                    eccs[i], argps[i],
+                    exptime=exptime, nsamples=nsamples
                     )
 
     N_samples = 100
@@ -169,7 +175,8 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Z: float, N: int = 1000000, parallel: bool = False,
-            mission: str = "TESS", flatpriors: bool = False):
+            mission: str = "TESS", flatpriors: bool = False,
+            exptime: float = 0.00139, nsamples: int = 20):
     """
     Calculates the marginal likelihood of the TEB scenario.
     Args:
@@ -186,6 +193,9 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
         mission (str): TESS, Kepler, or K2.
+        flatpriors (bool): Assume flat Rp and Porb planet priors?
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -274,7 +284,8 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb, incs[mask], a[mask], R_s_arr[mask],
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
-                    companion_fluxratio=companion_fluxratio[mask]
+                    companion_fluxratio=companion_fluxratio[mask],
+                    exptime=exptime, nsamples=nsamples
                     )
         # q >= 0.95
         # find minimum inclination each planet can have while transiting
@@ -294,7 +305,8 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                     2*P_orb, incs[mask], a_twin[mask], R_s_arr[mask],
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
-                    companion_fluxratio=companion_fluxratio[mask]
+                    companion_fluxratio=companion_fluxratio[mask],
+                    exptime=exptime, nsamples=nsamples
                     )
     else:
         for i in range(N):
@@ -307,7 +319,8 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
                     time, flux, sigma, radii[i], fluxratios[i],
                     P_orb, incs[i], a[i], R_s, u1, u2,
-                    eccs[i], argps[i]
+                    eccs[i], argps[i],
+                    exptime=exptime, nsamples=nsamples
                     )
             # q >= 0.95 and 2xP_orb
             if Ptra_twin[i] <= 1:
@@ -319,7 +332,8 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                 lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
                     time, flux, sigma, radii[i], fluxratios[i],
                     2*P_orb, incs[i], a_twin[i], R_s, u1, u2,
-                    eccs[i], argps[i]
+                    eccs[i], argps[i],
+                    exptime=exptime, nsamples=nsamples
                     )
 
     # results for q < 0.95
@@ -378,7 +392,8 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             Z: float, plx: float, contrast_curve_file: str = None,
             filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
-            mission: str = "TESS", flatpriors: bool = False):
+            mission: str = "TESS", flatpriors: bool = False,
+            exptime: float = 0.00139, nsamples: int = 20):
     """
     Calculates the marginal likelihood of the PTP scenario.
     Args:
@@ -399,6 +414,9 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
         mission (str): TESS, Kepler, or K2.
+        flatpriors (bool): Assume flat Rp and Porb planet priors?
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
@@ -510,7 +528,8 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[mask],
-                    companion_is_host=False
+                    companion_is_host=False,
+                    exptime=exptime, nsamples=nsamples
                     )
     else:
         for i in range(N):
@@ -524,7 +543,8 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb, incs[i], a, R_s, u1, u2,
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[i],
-                    companion_is_host=False
+                    companion_is_host=False,
+                    exptime=exptime, nsamples=nsamples
                     )
 
     N_samples = 100
@@ -560,7 +580,8 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             Z: float, plx: float, contrast_curve_file: str = None,
             filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
-            mission: str = "TESS", flatpriors: bool = False):
+            mission: str = "TESS", flatpriors: bool = False,
+            exptime: float = 0.00139, nsamples: int = 20):
     """
     Calculates the marginal likelihood of the PEB scenario.
     Args:
@@ -581,6 +602,9 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
         mission (str): TESS, Kepler, or K2.
+        flatpriors (bool): Assume flat Rp and Porb planet priors?
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -708,7 +732,8 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[mask],
-                    companion_is_host=False
+                    companion_is_host=False,
+                    exptime=exptime, nsamples=nsamples
                     )
         # q >= 0.95
         # find minimum inclination each planet can have while transiting
@@ -728,7 +753,8 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[mask],
-                    companion_is_host=False
+                    companion_is_host=False,
+                    exptime=exptime, nsamples=nsamples
                     )
     else:
         for i in range(N):
@@ -743,7 +769,8 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb, incs[i], a[i], R_s, u1, u2,
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[i],
-                    companion_is_host=False
+                    companion_is_host=False,
+                    exptime=exptime, nsamples=nsamples
                     )
             # q >= 0.95 and 2xP_orb
             if Ptra_twin[i] <= 1:
@@ -756,7 +783,8 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                     2*P_orb, incs[i], a_twin[i], R_s, u1, u2,
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[i],
-                    companion_is_host=False
+                    companion_is_host=False,
+                    exptime=exptime, nsamples=nsamples
                     )
 
     # results for q < 0.95
@@ -819,7 +847,8 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
             plx: float, contrast_curve_file: str = None,
             filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
-            mission: str = "TESS", flatpriors: bool = False):
+            mission: str = "TESS", flatpriors: bool = False,
+            exptime: float = 0.00139, nsamples: int = 20):
     """
     Calculates the marginal likelihood of the STP scenario.
     Args:
@@ -840,6 +869,9 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
         mission (str): TESS, Kepler, or K2.
+        flatpriors (bool): Assume flat Rp and Porb planet priors?
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -963,7 +995,8 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
                     u1s_comp[mask], u2s_comp[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[mask],
-                    companion_is_host=True
+                    companion_is_host=True,
+                    exptime=exptime, nsamples=nsamples
                     )
     else:
         for i in range(N):
@@ -978,7 +1011,8 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
                     u1s_comp[i], u2s_comp[i],
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[i],
-                    companion_is_host=True
+                    companion_is_host=True,
+                    exptime=exptime, nsamples=nsamples
                     )
 
     N_samples = 100
@@ -1014,7 +1048,8 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             Z: float, plx: float, contrast_curve_file: str = None,
             filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
-            mission: str = "TESS", flatpriors: bool = False):
+            mission: str = "TESS", flatpriors: bool = False,
+            exptime: float = 0.00139, nsamples: int = 20):
     """
     Calculates the marginal likelihood of the SEB scenario.
     Args:
@@ -1035,6 +1070,9 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
         mission (str): TESS, Kepler, or K2.
+        flatpriors (bool): Assume flat Rp and Porb planet priors?
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -1187,7 +1225,8 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                     u1s_comp[mask], u2s_comp[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[mask],
-                    companion_is_host=True
+                    companion_is_host=True,
+                    exptime=exptime, nsamples=nsamples
                     )
         # q >= 0.95
         # find minimum inclination each planet can have while transiting
@@ -1204,7 +1243,8 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                     u1s_comp[mask], u2s_comp[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[mask],
-                    companion_is_host=True
+                    companion_is_host=True,
+                    exptime=exptime, nsamples=nsamples
                     )
     else:
         for i in range(N):
@@ -1220,7 +1260,8 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                     u1s_comp[i], u2s_comp[i],
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[i],
-                    companion_is_host=True
+                    companion_is_host=True,
+                    exptime=exptime, nsamples=nsamples
                     )
             # q >= 0.95 and 2xP_orb
             if Ptra_twin[i] <= 1:
@@ -1235,7 +1276,8 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                     u1s_comp[i], u2s_comp[i],
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[i],
-                    companion_is_host=True
+                    companion_is_host=True,
+                    exptime=exptime, nsamples=nsamples
                     )
 
     # results for q < 0.95
@@ -1299,7 +1341,8 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             Kmag: float, output_url: str,
             contrast_curve_file: str = None, filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
-            mission: str = "TESS", flatpriors: bool = False):
+            mission: str = "TESS", flatpriors: bool = False,
+            exptime: float = 0.00139, nsamples: int = 20):
     """
     Calculates the marginal likelihood of the DTP scenario.
     Args:
@@ -1324,6 +1367,9 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
         mission (str): TESS, Kepler, or K2.
+        flatpriors (bool): Assume flat Rp and Porb planet priors?
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
@@ -1437,7 +1483,8 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[idxs[mask]],
-                    companion_is_host=False
+                    companion_is_host=False,
+                    exptime=exptime, nsamples=nsamples
                     )
     else:
         for i in range(N):
@@ -1451,7 +1498,8 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb, incs[i], a, R_s, u1, u2,
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[idxs[i]],
-                    companion_is_host=False
+                    companion_is_host=False,
+                    exptime=exptime, nsamples=nsamples
                     )
 
     N_samples = 100
@@ -1488,7 +1536,8 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             Kmag: float, output_url: str,
             contrast_curve_file: str = None, filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
-            mission: str = "TESS", flatpriors: bool = False):
+            mission: str = "TESS", flatpriors: bool = False,
+            exptime: float = 0.00139, nsamples: int = 20):
     """
     Calculates the marginal likelihood of the DEB scenario.
     Args:
@@ -1513,6 +1562,9 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
         mission (str): TESS, Kepler, or K2.
+        flatpriors (bool): Assume flat Rp and Porb planet priors?
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -1644,7 +1696,8 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[idxs[mask]],
-                    companion_is_host=False
+                    companion_is_host=False,
+                    exptime=exptime, nsamples=nsamples
                     )
         # q >= 0.95
         # find minimum inclination each planet can have while transiting
@@ -1664,7 +1717,8 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[idxs[mask]],
-                    companion_is_host=False
+                    companion_is_host=False,
+                    exptime=exptime, nsamples=nsamples
                     )
     else:
         for i in range(N):
@@ -1679,7 +1733,8 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb, incs[i], a[i], R_s, u1, u2,
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[idxs[i]],
-                    companion_is_host=False
+                    companion_is_host=False,
+                    exptime=exptime, nsamples=nsamples
                     )
             # q >= 0.95 and 2xP_orb
             if Ptra_twin[i] <= 1:
@@ -1693,7 +1748,8 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                     2*P_orb, incs[i], a_twin[i], R_s, u1, u2,
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[idxs[i]],
-                    companion_is_host=False
+                    companion_is_host=False,
+                    exptime=exptime, nsamples=nsamples
                     )
 
     # results for q < 0.95
@@ -1757,7 +1813,8 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             output_url: str,
             contrast_curve_file: str = None, filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
-            mission: str = "TESS", flatpriors: bool = False):
+            mission: str = "TESS", flatpriors: bool = False,
+            exptime: float = 0.00139, nsamples: int = 20):
     """
     Calculates the marginal likelihood of the BTP scenario.
     Args:
@@ -1781,6 +1838,9 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
         mission (str): TESS, Kepler, or K2.
+        flatpriors (bool): Assume flat Rp and Porb planet priors?
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
@@ -1899,7 +1959,8 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
                     u1s_comp[idxs[mask]], u2s_comp[idxs[mask]],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[idxs[mask]],
-                    companion_is_host=True
+                    companion_is_host=True,
+                    exptime=exptime, nsamples=nsamples
                     )
     else:
         for i in range(N):
@@ -1915,7 +1976,8 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
                     u1s_comp[idxs[i]], u2s_comp[idxs[i]],
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[idxs[i]],
-                    companion_is_host=True
+                    companion_is_host=True,
+                    exptime=exptime, nsamples=nsamples
                     )
 
     N_samples = 100
@@ -1952,7 +2014,8 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             output_url: str,
             contrast_curve_file: str = None, filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
-            mission: str = "TESS", flatpriors: bool = False):
+            mission: str = "TESS", flatpriors: bool = False,
+            exptime: float = 0.00139, nsamples: int = 20):
     """
     Calculates the marginal likelihood of the BEB scenario.
     Args:
@@ -1976,6 +2039,9 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
         mission (str): TESS, Kepler, or K2.
+        flatpriors (bool): Assume flat Rp and Porb planet priors?
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -2157,7 +2223,8 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                     u1s_comp[idxs[mask]], u2s_comp[idxs[mask]],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[idxs[mask]],
-                    companion_is_host=True
+                    companion_is_host=True,
+                    exptime=exptime, nsamples=nsamples
                     )
         # q >= 0.95
         # find minimum inclination each planet can have while transiting
@@ -2180,7 +2247,8 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                     u1s_comp[idxs[mask]], u2s_comp[idxs[mask]],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[idxs[mask]],
-                    companion_is_host=True
+                    companion_is_host=True,
+                    exptime=exptime, nsamples=nsamples
                     )
     else:
         for i in range(N):
@@ -2199,7 +2267,8 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                     u1s_comp[idxs[i]], u2s_comp[idxs[i]],
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[idxs[i]],
-                    companion_is_host=True
+                    companion_is_host=True,
+                    exptime=exptime, nsamples=nsamples
                     )
             # q >= 0.95 and 2xP_orb
             if Ptra_twin[i] <= 1:
@@ -2216,7 +2285,8 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                     u1s_comp[idxs[i]], u2s_comp[idxs[i]],
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[idxs[i]],
-                    companion_is_host=True
+                    companion_is_host=True,
+                    exptime=exptime, nsamples=nsamples
                     )
 
     # results for q < 0.95
@@ -2277,7 +2347,8 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb: float, Tmag: float, output_url: str,
                     N: int = 1000000, parallel: bool = False,
-                    mission: str = "TESS", flatpriors: bool = False):
+                    mission: str = "TESS", flatpriors: bool = False,
+                    exptime: float = 0.00139, nsamples: int = 20):
     """
     Calculates the marginal likelihood of the NTP scenario for
     a star of unknown properties.
@@ -2293,6 +2364,9 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
         mission (str): TESS, Kepler, or K2.
+        flatpriors (bool): Assume flat Rp and Porb planet priors?
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
@@ -2415,7 +2489,8 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
                     u1s_possible[idxs[mask]],
                     u2s_possible[idxs[mask]],
                     eccs[mask], argps[mask],
-                    companion_fluxratio=companion_fluxratio[mask]
+                    companion_fluxratio=companion_fluxratio[mask],
+                    exptime=exptime, nsamples=nsamples
                     )
     else:
         for i in range(N):
@@ -2430,7 +2505,8 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
                     time, flux, sigma, rps[i],
                     P_orb, incs[i], a[i], radii_possible[idxs[i]],
                     u1s_possible[idxs[i]], u2s_possible[idxs[i]],
-                    eccs[i], argps[i]
+                    eccs[i], argps[i],
+                    exptime=exptime, nsamples=nsamples
                     )
 
     N_samples = 100
@@ -2462,7 +2538,8 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb: float, Tmag: float, output_url: str,
                     N: int = 1000000, parallel: bool = False,
-                    mission: str = "TESS", flatpriors: bool = False):
+                    mission: str = "TESS", flatpriors: bool = False,
+                    exptime: float = 0.00139, nsamples: int = 20):
     """
     Calculates the marginal likelihood of the NEB scenario for a star
     of unknown properties.
@@ -2478,6 +2555,9 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
         mission (str): TESS, Kepler, or K2.
+        flatpriors (bool): Assume flat Rp and Porb planet priors?
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -2624,7 +2704,8 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
                     radii_possible[idxs[mask]],
                     u1s_possible[idxs[mask]], u2s_possible[idxs[mask]],
                     eccs[mask], argps[mask],
-                    companion_fluxratio=companion_fluxratio[mask]
+                    companion_fluxratio=companion_fluxratio[mask],
+                    exptime=exptime, nsamples=nsamples
                     )
         # q >= 0.95
         # find minimum inclination each planet can have while transiting
@@ -2648,7 +2729,8 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
                     radii_possible[idxs[mask]],
                     u1s_possible[idxs[mask]], u2s_possible[idxs[mask]],
                     eccs[mask], argps[mask],
-                    companion_fluxratio=companion_fluxratio[mask]
+                    companion_fluxratio=companion_fluxratio[mask],
+                    exptime=exptime, nsamples=nsamples
                     )
     else:
         for i in range(N):
@@ -2665,7 +2747,8 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
                     time, flux, sigma, radii[i], fluxratios[i],
                     P_orb, incs[i], a[i], radii_possible[idxs[i]],
                     u1s_possible[idxs[i]], u2s_possible[idxs[i]],
-                    eccs[i], argps[i]
+                    eccs[i], argps[i],
+                    exptime=exptime, nsamples=nsamples
                     )
             # q >= 0.95 and 2xP_orb
             if Ptra_twin[i] <= 1:
@@ -2680,7 +2763,8 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
                     time, flux, sigma, radii[i], fluxratios[i],
                     2*P_orb, incs[i], a_twin[i], radii_possible[idxs[i]],
                     u1s_possible[idxs[i]], u2s_possible[idxs[i]],
-                    eccs[i], argps[i]
+                    eccs[i], argps[i],
+                    exptime=exptime, nsamples=nsamples
                     )
 
     # results for q < 0.95
@@ -2737,7 +2821,8 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb: float, R_s: float, Teff: float, Z: float,
                     N: int = 1000000, parallel: bool = False,
-                    mission: str = "TESS", flatpriors: bool = False):
+                    mission: str = "TESS", flatpriors: bool = False,
+                    exptime: float = 0.00139, nsamples: int = 20):
     """
     Calculates the marginal likelihood of the NTP scenario for
     subgiant stars.
@@ -2754,6 +2839,9 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
         mission (str): TESS, Kepler, or K2.
+        flatpriors (bool): Assume flat Rp and Porb planet priors?
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
@@ -2826,7 +2914,8 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb, incs[mask], a_arr[mask], R_s_arr[mask],
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
-                    companion_fluxratio=companion_fluxratio[mask]
+                    companion_fluxratio=companion_fluxratio[mask],
+                    exptime=exptime, nsamples=nsamples
                     )
     else:
         for i in range(N):
@@ -2838,7 +2927,8 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
                     time, flux, sigma, rps[i],
                     P_orb, incs[i], a, R_s, u1, u2,
-                    eccs[i], argps[i]
+                    eccs[i], argps[i],
+                    exptime=exptime, nsamples=nsamples
                     )
 
     N_samples = 100
@@ -2870,7 +2960,8 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb: float, R_s: float, Teff: float, Z: float,
                     N: int = 1000000, parallel: bool = False,
-                    mission: str = "TESS", flatpriors: bool = False):
+                    mission: str = "TESS", flatpriors: bool = False,
+                    exptime: float = 0.00139, nsamples: int = 20):
     """
     Calculates the marginal likelihood of the NEB scenario
     for subgiant stars.
@@ -2887,6 +2978,9 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
         mission (str): TESS, Kepler, or K2.
+        flatpriors (bool): Assume flat Rp and Porb planet priors?
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
@@ -2976,7 +3070,8 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
                     P_orb, incs[mask], a[mask], R_s_arr[mask],
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
-                    companion_fluxratio=companion_fluxratio[mask]
+                    companion_fluxratio=companion_fluxratio[mask],
+                    exptime=exptime, nsamples=nsamples
                     )
         # q >= 0.95
         # find minimum inclination each planet can have while transiting
@@ -2996,7 +3091,8 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
                     2*P_orb, incs[mask], a_twin[mask], R_s_arr[mask],
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
-                    companion_fluxratio=companion_fluxratio[mask]
+                    companion_fluxratio=companion_fluxratio[mask],
+                    exptime=exptime, nsamples=nsamples
                     )
     else:
         for i in range(N):
@@ -3010,7 +3106,8 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
                     time, flux, sigma, radii[i], fluxratios[i],
                     P_orb, incs[i], a[i], R_s, u1, u2,
-                    eccs[i], argps[i]
+                    eccs[i], argps[i],
+                    exptime=exptime, nsamples=nsamples
                     )
             # q >= 0.95 and 2xP_orb
             if Ptra_twin[i] <= 1:
@@ -3022,7 +3119,8 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
                 lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
                     time, flux, sigma, R_s, fluxratios[i],
                     2*P_orb, incs[i], a_twin[i], R_s, u1, u2,
-                    eccs[i], argps[i]
+                    eccs[i], argps[i],
+                    exptime=exptime, nsamples=nsamples
                     )
 
     # results for q < 0.95

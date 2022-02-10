@@ -607,7 +607,8 @@ class target:
                    contrast_curve_file: str = None, filt: str = "TESS",
                    N: int = 1000000, parallel: bool = False,
                    drop_scenario: list = [],
-                   verbose: int = 1, flatpriors: bool = False):
+                   verbose: int = 1, flatpriors: bool = False,
+                   exptime: float = 0.00139, nsamples: int = 20):
         """
         Calculates the relative probability of each scenario.
         Args:
@@ -628,6 +629,8 @@ class target:
             drop_scenario (list of strings): Scenarios to ignore
                                              (e.g., ["TEB", "PEB"]).
             verbose (int): 1 to print progress, 0 to print nothing.
+            exptime (float): Exposure time of observations [days].
+            nsamples (int): Sampling rate for supersampling.
         """
         # remove nans from light curve
         mask = ~np.isnan(time) & ~np.isnan(flux_0)
@@ -713,7 +716,8 @@ class target:
                             time, flux, flux_err, P_orb,
                             M_s, R_s, Teff, Z,
                             N, parallel, self.mission,
-                            flatpriors
+                            flatpriors,
+                            exptime, nsamples
                             )
                         # self.res_TTP = res
                         j = 0
@@ -758,7 +762,8 @@ class target:
                             time, flux, flux_err, P_orb,
                             M_s, R_s, Teff, Z,
                             N, parallel, self.mission,
-                            flatpriors
+                            flatpriors,
+                            exptime, nsamples
                             )
                         # self.res_TEB = res
                         j = 1
@@ -820,7 +825,8 @@ class target:
                             plx, contrast_curve_file,
                             filt,
                             N, parallel, self.mission,
-                            flatpriors
+                            flatpriors,
+                            exptime, nsamples
                             )
                         # self.res_PTP = res
                         j = 3
@@ -867,7 +873,8 @@ class target:
                             plx, contrast_curve_file,
                             filt,
                             N, parallel, self.mission,
-                            flatpriors
+                            flatpriors,
+                            exptime, nsamples
                             )
                         # self.res_PEB = res
                         j = 4
@@ -929,7 +936,8 @@ class target:
                             plx, contrast_curve_file,
                             filt,
                             N, parallel, self.mission,
-                            flatpriors
+                            flatpriors,
+                            exptime, nsamples
                             )
                         # self.res_STP = res
                         j = 6
@@ -976,7 +984,8 @@ class target:
                             plx, contrast_curve_file,
                             filt,
                             N, parallel, self.mission,
-                            flatpriors
+                            flatpriors,
+                            exptime, nsamples
                             )
                         # self.res_SEB = res
                         j = 7
@@ -1039,7 +1048,8 @@ class target:
                             output_url,
                             contrast_curve_file, filt,
                             N, parallel, self.mission,
-                            flatpriors
+                            flatpriors,
+                            exptime, nsamples
                             )
                         # self.res_DTP = res
                         j = 9
@@ -1086,7 +1096,8 @@ class target:
                             output_url,
                             contrast_curve_file, filt,
                             N, parallel, self.mission,
-                            flatpriors
+                            flatpriors,
+                            exptime, nsamples
                             )
                         # self.res_DEB = res
                         j = 10
@@ -1149,7 +1160,8 @@ class target:
                             output_url,
                             contrast_curve_file, filt,
                             N, parallel, self.mission,
-                            flatpriors
+                            flatpriors,
+                            exptime, nsamples
                             )
                         # self.res_BTP = res
                         j = 12
@@ -1197,7 +1209,8 @@ class target:
                             output_url,
                             contrast_curve_file, filt,
                             N, parallel, self.mission,
-                            flatpriors
+                            flatpriors,
+                            exptime, nsamples
                             )
                         # self.res_BEB = res
                         j = 13
@@ -1259,7 +1272,8 @@ class target:
                     time, flux, flux_err, P_orb,
                     M_s, R_s, Teff, Z,
                     N, parallel, self.mission,
-                    flatpriors
+                    flatpriors,
+                    exptime, nsamples
                     )
                 j = 15 + 3*(i-1)
                 targets[j] = ID
@@ -1285,7 +1299,8 @@ class target:
                     time, flux, flux_err, P_orb,
                     M_s, R_s, Teff, Z,
                     N, parallel, self.mission,
-                    flatpriors
+                    flatpriors,
+                    exptime, nsamples
                     )
                 j = 16 + 3*(i-1)
                 targets[j] = ID

@@ -16,7 +16,9 @@ def simulate_TP_transit(time: np.ndarray, R_p: float, P_orb: float,
                         inc: float, a: float, R_s: float, u1: float,
                         u2: float, ecc: float, argp: float,
                         companion_fluxratio: float = 0.0,
-                        companion_is_host: bool = False):
+                        companion_is_host: bool = False,
+                        exptime: float = 0.00139,
+                        nsamples: int = 20):
     """
     Simulates a transiting planet light curve using PyTransit.
     Args:
@@ -36,13 +38,15 @@ def simulate_TP_transit(time: np.ndarray, R_p: float, P_orb: float,
         companion_is_host (bool): True if the transit is around the
                                   unresolved companion and False if
                                   it is not.
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         m.light_curve (numpy array): Normalized flux at eat time given.
     """
     F_target = 1
     F_comp = companion_fluxratio/(1-companion_fluxratio)
     # step 1: simulate light curve assuming only the host star exists
-    tm.set_data(time)
+    tm.set_data(time, exptime=exptime, nsamples=nsamples)
     flux = tm.evaluate_ps(
         k=R_p*Rearth/(R_s*Rsun),
         ldc=[float(u1), float(u2)],
@@ -69,7 +73,9 @@ def simulate_EB_transit(time: np.ndarray, R_EB: float,
                         a: float, R_s: float, u1: float, u2: float,
                         ecc: float, argp: float,
                         companion_fluxratio: float = 0.0,
-                        companion_is_host: bool = False):
+                        companion_is_host: bool = False,
+                        exptime: float = 0.00139,
+                        nsamples: int = 20):
     """
     Simulates an eclipsing binary light curve using PyTransit.
     Args:
@@ -89,6 +95,8 @@ def simulate_EB_transit(time: np.ndarray, R_EB: float,
         companion_is_host (bool): True if the transit is around the
                                   unresolved companion and False if it
                                   is not.
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         m.light_curve (numpy array): Normalized flux at eat time given.
     """
@@ -97,7 +105,7 @@ def simulate_EB_transit(time: np.ndarray, R_EB: float,
     F_EB = EB_fluxratio/(1 - EB_fluxratio)
     # step 1: simulate light curve assuming only the host star exists
     # calculate primary eclipse
-    tm.set_data(time)
+    tm.set_data(time, exptime=exptime, nsamples=nsamples)
     k = R_EB/R_s
     if abs(k - 1.0) < 1e-6:
         k *= 0.999
@@ -145,7 +153,9 @@ def lnL_TP(time: np.ndarray, flux: np.ndarray, sigma: float, R_p: float,
            P_orb: float, inc: float, a: float, R_s: float,
            u1: float, u2: float, ecc: float, argp: float,
            companion_fluxratio: float = 0.0,
-           companion_is_host: bool = False):
+           companion_is_host: bool = False,
+           exptime: float = 0.00139,
+           nsamples: int = 20):
     """
     Calculates the log likelihood of a transiting planet scenario by
     comparing a simulated light curve and the TESS light curve.
@@ -168,13 +178,16 @@ def lnL_TP(time: np.ndarray, flux: np.ndarray, sigma: float, R_p: float,
         companion_is_host (bool): True if the transit is around the
                                   unresolved companion and False if
                                   it is not.
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         Log likelihood (float).
     """
     model = simulate_TP_transit(
         time, R_p, P_orb, inc, a, R_s, u1, u2,
         ecc, argp,
-        companion_fluxratio, companion_is_host
+        companion_fluxratio, companion_is_host,
+        exptime, nsamples
         )
     return 0.5*(np.sum((flux-model)**2 / sigma**2))
 
@@ -184,7 +197,9 @@ def lnL_EB(time: np.ndarray, flux: np.ndarray, sigma: float,
            a: float, R_s: float, u1: float, u2: float,
            ecc: float, argp: float,
            companion_fluxratio: float = 0.0,
-           companion_is_host: bool = False):
+           companion_is_host: bool = False,
+           exptime: float = 0.00139,
+           nsamples: int = 20):
     """
     Calculates the log likelihood of an eclipsing binary scenario with
     q < 0.95 by comparing a simulated light curve and the
@@ -209,13 +224,16 @@ def lnL_EB(time: np.ndarray, flux: np.ndarray, sigma: float,
         companion_is_host (bool): True if the transit is around the
                                   unresolved companion and False if
                                   it is not.
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         Log likelihood (float).
     """
     model, secdepth = simulate_EB_transit(
         time, R_EB, EB_fluxratio, P_orb, inc, a, R_s, u1, u2,
         ecc, argp,
-        companion_fluxratio, companion_is_host
+        companion_fluxratio, companion_is_host,
+        exptime, nsamples
         )
     if secdepth < 1.5*sigma:
         return 0.5*(np.sum((flux-model)**2 / sigma**2))
@@ -228,7 +246,9 @@ def lnL_EB_twin(time: np.ndarray, flux: np.ndarray, sigma: float,
                 inc: float, a: float, R_s: float, u1: float, u2: float,
                 ecc:float, argp: float,
                 companion_fluxratio: float = 0.0,
-                companion_is_host: bool = False):
+                companion_is_host: bool = False,
+                exptime: float = 0.00139,
+                nsamples: int = 20):
     """
     Calculates the log likelihood of an eclipsing binary scenario with
     q >= 0.95 and 2xP_orb by comparing a simulated light curve
@@ -253,13 +273,16 @@ def lnL_EB_twin(time: np.ndarray, flux: np.ndarray, sigma: float,
         companion_is_host (bool): True if the transit is around the
                                   unresolved companion and False
                                   if it is not.
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         Log likelihood (float).
     """
     model, secdepth = simulate_EB_transit(
         time, R_EB, EB_fluxratio, P_orb, inc, a, R_s, u1, u2,
         ecc, argp,
-        companion_fluxratio, companion_is_host
+        companion_fluxratio, companion_is_host,
+        exptime, nsamples
         )
     return 0.5*(np.sum((flux-model)**2 / sigma**2))
 
@@ -270,7 +293,9 @@ def simulate_TP_transit_p(time: np.ndarray, R_p: np.ndarray,
                           u1: np.ndarray, u2: np.ndarray,
                           ecc: np.ndarray, argp: np.ndarray,
                           companion_fluxratio: np.ndarray,
-                          companion_is_host: bool = False):
+                          companion_is_host: bool = False,
+                          exptime: float = 0.00139,
+                          nsamples: int = 20):
     """
     Simulates a transiting planet light curve using PyTransit.
     Calculates light curves in parallel.
@@ -291,6 +316,8 @@ def simulate_TP_transit_p(time: np.ndarray, R_p: np.ndarray,
         companion_is_host (bool): True if the transit is around the
                                   unresolved companion and False if
                                   it is not.
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         flux (numpy array): Flux for all simulated light curves.
     """
@@ -306,7 +333,7 @@ def simulate_TP_transit_p(time: np.ndarray, R_p: np.ndarray,
     w = (90-argp)*(pi/180.)
     pvp = np.array([k, t0, P_orb, a, inc, ecc, w]).T
     ldc = np.array([u1, u2]).T
-    tm.set_data(time)
+    tm.set_data(time, exptime=exptime, nsamples=nsamples)
     flux = tm.evaluate_pv(pvp=pvp, ldc=ldc)
     # step 2: adjust the light curve to account for flux dilution
     # from non-host star
@@ -326,7 +353,9 @@ def simulate_EB_transit_p(time: np.ndarray, R_EB: np.ndarray,
                           u1: np.ndarray, u2: np.ndarray,
                           ecc: np.ndarray, argp: np.ndarray,
                           companion_fluxratio: np.ndarray,
-                          companion_is_host: bool = False):
+                          companion_is_host: bool = False,
+                          exptime: float = 0.00139,
+                          nsamples: int = 20):
     """
     Simulates an eclipsing binary light curve using PyTransit.
     Calculates light curves in parallel.
@@ -347,6 +376,8 @@ def simulate_EB_transit_p(time: np.ndarray, R_EB: np.ndarray,
         companion_is_host (bool): True if the transit is around the
                                   unresolved companion and False if it
                                   is not.
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         flux (numpy array): Flux for all simulated light curves.
         sec_depth (numpy array): Max secondary depth for all simulated
@@ -368,7 +399,7 @@ def simulate_EB_transit_p(time: np.ndarray, R_EB: np.ndarray,
     w = (90-argp)*(pi/180.)
     pvp = np.array([k, t0, P_orb, a, inc, ecc, w]).T
     ldc = np.array([u1, u2]).T
-    tm.set_data(time)
+    tm.set_data(time, exptime=exptime, nsamples=nsamples)
     flux = tm.evaluate_pv(pvp=pvp, ldc=ldc)
     # calculate secondary eclipse depth
     k = R_s/R_EB
@@ -403,7 +434,9 @@ def lnL_TP_p(time: np.ndarray, flux: np.ndarray, sigma: float,
              u1: np.ndarray, u2: np.ndarray,
              ecc: np.ndarray, argp: np.ndarray,
              companion_fluxratio: np.ndarray,
-             companion_is_host: bool = False):
+             companion_is_host: bool = False,
+             exptime: float = 0.00139,
+             nsamples: int = 20):
     """
     Calculates the log likelihood of a transiting planet scenario by
     comparing a simulated light curve and the TESS light curve.
@@ -427,13 +460,16 @@ def lnL_TP_p(time: np.ndarray, flux: np.ndarray, sigma: float,
         companion_is_host (bool): True if the transit is around the
                                   unresolved companion and False if
                                   it is not.
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         lnL (numpy array): Log likelihood.
     """
     model = simulate_TP_transit_p(
         time, R_p, P_orb, inc, a, R_s, u1, u2,
         ecc, argp,
-        companion_fluxratio, companion_is_host
+        companion_fluxratio, companion_is_host,
+        exptime, nsamples
         )
     lnL = 0.5*(np.sum((flux-model)**2 / sigma**2, axis=1))
     return lnL
@@ -446,7 +482,9 @@ def lnL_EB_p(time: np.ndarray, flux: np.ndarray, sigma: float,
              u1: np.ndarray, u2: np.ndarray,
              ecc: np.ndarray, argp: np.ndarray,
              companion_fluxratio: np.ndarray,
-             companion_is_host: bool = False):
+             companion_is_host: bool = False,
+             exptime: float = 0.00139,
+             nsamples: int = 20):
     """
     Calculates the log likelihood of an eclipsing binary scenario with
     q < 0.95 by comparing a simulated light curve and the
@@ -470,13 +508,16 @@ def lnL_EB_p(time: np.ndarray, flux: np.ndarray, sigma: float,
         companion_is_host (bool): True if the transit is around the
                                   unresolved companion and False if
                                   it is not.
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         lnL (numpy array): Log likelihood.
     """
     model, secdepth = simulate_EB_transit_p(
         time, R_EB, EB_fluxratio, P_orb, inc, a, R_s, u1, u2,
         ecc, argp,
-        companion_fluxratio, companion_is_host
+        companion_fluxratio, companion_is_host,
+        exptime, nsamples
         )
     lnL = np.zeros(R_EB.shape[0])
     mask = (secdepth < 1.5*sigma)
@@ -493,7 +534,9 @@ def lnL_EB_twin_p(time: np.ndarray, flux: np.ndarray, sigma: float,
                   u1: np.ndarray, u2: np.ndarray,
                   ecc: np.ndarray, argp: np.ndarray,
                   companion_fluxratio: np.ndarray,
-                  companion_is_host: bool = False):
+                  companion_is_host: bool = False,
+                  exptime: float = 0.00139,
+                  nsamples: int = 20):
     """
     Calculates the log likelihood of an eclipsing binary scenario with
     q >= 0.95 and 2xP_orb by comparing a simulated light curve
@@ -517,13 +560,16 @@ def lnL_EB_twin_p(time: np.ndarray, flux: np.ndarray, sigma: float,
         companion_is_host (bool): True if the transit is around the
                                   unresolved companion and False
                                   if it is not.
+        exptime (float): Exposure time of observations [days].
+        nsamples (int): Sampling rate for supersampling.
     Returns:
         Log likelihood (float).
     """
     model, secdepth = simulate_EB_transit_p(
         time, R_EB, EB_fluxratio, P_orb, inc, a, R_s, u1, u2,
         ecc, argp,
-        companion_fluxratio, companion_is_host
+        companion_fluxratio, companion_is_host,
+        exptime, nsamples
         )
     lnL = 0.5*(np.sum((flux-model)**2 / sigma**2, axis=1))
     return lnL
