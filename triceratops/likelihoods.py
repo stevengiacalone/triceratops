@@ -46,7 +46,7 @@ def simulate_TP_transit(time: np.ndarray, R_p: float, P_orb: float,
     F_target = 1
     F_comp = companion_fluxratio/(1-companion_fluxratio)
     # step 1: simulate light curve assuming only the host star exists
-    tm.set_data(time, exptime=exptime, nsamples=nsamples)
+    tm.set_data(time, exptimes=exptime, nsamples=nsamples)
     flux = tm.evaluate_ps(
         k=R_p*Rearth/(R_s*Rsun),
         ldc=[float(u1), float(u2)],
@@ -105,7 +105,7 @@ def simulate_EB_transit(time: np.ndarray, R_EB: float,
     F_EB = EB_fluxratio/(1 - EB_fluxratio)
     # step 1: simulate light curve assuming only the host star exists
     # calculate primary eclipse
-    tm.set_data(time, exptime=exptime, nsamples=nsamples)
+    tm.set_data(time, exptimes=exptime, nsamples=nsamples)
     k = R_EB/R_s
     if abs(k - 1.0) < 1e-6:
         k *= 0.999
@@ -333,7 +333,7 @@ def simulate_TP_transit_p(time: np.ndarray, R_p: np.ndarray,
     w = (90-argp)*(pi/180.)
     pvp = np.array([k, t0, P_orb, a, inc, ecc, w]).T
     ldc = np.array([u1, u2]).T
-    tm.set_data(time, exptime=exptime, nsamples=nsamples)
+    tm.set_data(time, exptimes=exptime, nsamples=nsamples)
     flux = tm.evaluate_pv(pvp=pvp, ldc=ldc)
     # step 2: adjust the light curve to account for flux dilution
     # from non-host star
@@ -399,7 +399,7 @@ def simulate_EB_transit_p(time: np.ndarray, R_EB: np.ndarray,
     w = (90-argp)*(pi/180.)
     pvp = np.array([k, t0, P_orb, a, inc, ecc, w]).T
     ldc = np.array([u1, u2]).T
-    tm.set_data(time, exptime=exptime, nsamples=nsamples)
+    tm.set_data(time, exptimes=exptime, nsamples=nsamples)
     flux = tm.evaluate_pv(pvp=pvp, ldc=ldc)
     # calculate secondary eclipse depth
     k = R_s/R_EB
