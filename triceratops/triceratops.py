@@ -124,7 +124,7 @@ class target:
             cutout_coord = SkyCoord(ra[0], dec[0], unit="deg")
             if mission == "TESS":
                 cutout_hdu = Tesscut.get_cutouts(
-                    cutout_coord,
+                    coordinates=cutout_coord,
                     size=self.N_pix,
                     sector=sector
                     )[0]
@@ -608,7 +608,8 @@ class target:
                    N: int = 1000000, parallel: bool = False,
                    drop_scenario: list = [],
                    verbose: int = 1, flatpriors: bool = False,
-                   exptime: float = 0.00139, nsamples: int = 20):
+                   exptime: float = 0.00139, nsamples: int = 20,
+                   molusc_file: str = None):
         """
         Calculates the relative probability of each scenario.
         Args:
@@ -631,6 +632,8 @@ class target:
             verbose (int): 1 to print progress, 0 to print nothing.
             exptime (float): Exposure time of observations [days].
             nsamples (int): Sampling rate for supersampling.
+            molusc_file (str): Path to MOLUSC output with stellar 
+                               binary properties.
         """
         # remove nans from light curve
         mask = ~np.isnan(time) & ~np.isnan(flux_0)
@@ -826,7 +829,8 @@ class target:
                             filt,
                             N, parallel, self.mission,
                             flatpriors,
-                            exptime, nsamples
+                            exptime, nsamples,
+                            molusc_file
                             )
                         # self.res_PTP = res
                         j = 3
@@ -874,7 +878,8 @@ class target:
                             filt,
                             N, parallel, self.mission,
                             flatpriors,
-                            exptime, nsamples
+                            exptime, nsamples,
+                            molusc_file
                             )
                         # self.res_PEB = res
                         j = 4
@@ -937,7 +942,8 @@ class target:
                             filt,
                             N, parallel, self.mission,
                             flatpriors,
-                            exptime, nsamples
+                            exptime, nsamples,
+                            molusc_file
                             )
                         # self.res_STP = res
                         j = 6
@@ -985,7 +991,8 @@ class target:
                             filt,
                             N, parallel, self.mission,
                             flatpriors,
-                            exptime, nsamples
+                            exptime, nsamples,
+                            molusc_file
                             )
                         # self.res_SEB = res
                         j = 7

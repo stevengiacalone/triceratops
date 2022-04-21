@@ -393,7 +393,8 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
             mission: str = "TESS", flatpriors: bool = False,
-            exptime: float = 0.00139, nsamples: int = 20):
+            exptime: float = 0.00139, nsamples: int = 20,
+            molusc_file: str = None):
     """
     Calculates the marginal likelihood of the PTP scenario.
     Args:
@@ -447,7 +448,16 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
 
     # sample from q prior distributions
-    qs_comp = sample_q_companion(np.random.rand(N), M_s)
+    if molusc_file is None:
+        qs_comp = sample_q_companion(np.random.rand(N), M_s)
+    else:
+        molusc_df = read_csv(molusc_file)
+        molusc_a = molusc_df["semi-major axis(AU)"].values
+        molusc_e = molusc_df["eccentricity"].values
+        molusc_df2 = molusc_df[molusc_a*(1-molusc_e) > 10]
+        qs_comp = molusc_df2["mass ratio"].values
+        qs_comp[qs_comp < 0.1/M_s] = 0.1/M_s
+        qs_comp = np.pad(qs_comp, (0, N - len(qs_comp)))
 
     # calculate properties of the drawn companions
     masses_comp = qs_comp*M_s
@@ -461,31 +471,39 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         )
 
     # calculate priors for companions
-    if contrast_curve_file is None:
-        # use TESS/Vis band flux ratios
-        delta_mags = 2.5*np.log10(fluxratios_comp/(1-fluxratios_comp))
-        lnprior_companion = lnprior_bound_TP(
-            M_s, plx, np.abs(delta_mags),
-            np.array([2.2]), np.array([1.0])
-            )
-        lnprior_companion[lnprior_companion > 0.0] = 0.0
-        lnprior_companion[delta_mags > 0.0] = -np.inf
+    if molusc_file is None:
+        if contrast_curve_file is None:
+            # use TESS/Vis band flux ratios
+            delta_mags = 2.5*np.log10(
+                fluxratios_comp/(1-fluxratios_comp)
+                )
+            lnprior_companion = lnprior_bound_TP(
+                M_s, plx, np.abs(delta_mags),
+                np.array([2.2]), np.array([1.0])
+                )
+            lnprior_companion[lnprior_companion > 0.0] = 0.0
+            lnprior_companion[delta_mags > 0.0] = -np.inf
+        else:
+            # use flux ratio of contrast curve filter
+            fluxratios_comp_cc = (
+                flux_relation(masses_comp, filt)
+                / (flux_relation(masses_comp, filt)
+                    + flux_relation(np.array([M_s]), filt))
+                )
+            delta_mags = 2.5*np.log10(
+                fluxratios_comp_cc/(1-fluxratios_comp_cc)
+                )
+            separations, contrasts = file_to_contrast_curve(
+                contrast_curve_file
+                )
+            lnprior_companion = lnprior_bound_TP(
+                M_s, plx, np.abs(delta_mags), separations, contrasts
+                )
+            lnprior_companion[lnprior_companion > 0.0] = 0.0
+            lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
-        # use flux ratio of contrast curve filter
-        fluxratios_comp_cc = (
-            flux_relation(masses_comp, filt)
-            / (flux_relation(masses_comp, filt)
-                + flux_relation(np.array([M_s]), filt))
-            )
-        delta_mags = 2.5*np.log10(fluxratios_comp_cc/(1-fluxratios_comp_cc))
-        separations, contrasts = file_to_contrast_curve(
-            contrast_curve_file
-            )
-        lnprior_companion = lnprior_bound_TP(
-            M_s, plx, np.abs(delta_mags), separations, contrasts
-            )
-        lnprior_companion[lnprior_companion > 0.0] = 0.0
-        lnprior_companion[delta_mags > 0.0] = -np.inf
+        lnprior_companion = np.zeros(N)
+
 
     # calculate short-period planet prior for star of mass M_s
     lnprior_Mstar = lnprior_Mstar_planet(np.array([M_s]))
@@ -516,7 +534,7 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         inc_min = np.full(N, 90.)
         inc_min[Ptra <= 1.] = np.arccos(Ptra[Ptra <= 1.]) * 180./pi
         # filter out systems that do not transit or have a collision
-        mask = (incs >= inc_min) & (coll == False)
+        mask = (incs >= inc_min) & (coll == False) & (qs_comp != 0.0)
         # calculate lnL for transiting systems
         a_arr = np.full(N, a)
         R_s_arr = np.full(N, R_s)
@@ -537,7 +555,8 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
                 inc_min = np.arccos(Ptra[i]) * 180/pi
             else:
                 continue
-            if (incs[i] >= inc_min) & (coll[i] == False):
+            if ((incs[i] >= inc_min) & (coll[i] == False) 
+                & (qs_comp[i] != 0.0)):
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
                     time, flux, sigma, rps[i],
                     P_orb, incs[i], a, R_s, u1, u2,
@@ -581,7 +600,8 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
             mission: str = "TESS", flatpriors: bool = False,
-            exptime: float = 0.00139, nsamples: int = 20):
+            exptime: float = 0.00139, nsamples: int = 20,
+            molusc_file: str = None):
     """
     Calculates the marginal likelihood of the PEB scenario.
     Args:
@@ -637,9 +657,18 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # sample from prior distributions
     incs = sample_inc(np.random.rand(N))
     qs = sample_q(np.random.rand(N), M_s)
-    qs_comp = sample_q_companion(np.random.rand(N), M_s)
     eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=P_orb)
     argps = sample_w(np.random.rand(N))
+    if molusc_file is None:
+        qs_comp = sample_q_companion(np.random.rand(N), M_s)
+    else:
+        molusc_df = read_csv(molusc_file)
+        molusc_a = molusc_df["semi-major axis(AU)"].values
+        molusc_e = molusc_df["eccentricity"].values
+        molusc_df2 = molusc_df[molusc_a*(1-molusc_e) > 10]
+        qs_comp = molusc_df2["mass ratio"].values
+        qs_comp[qs_comp < 0.1/M_s] = 0.1/M_s
+        qs_comp = np.pad(qs_comp, (0, N - len(qs_comp)))
 
     # calculate properties of the drawn EBs
     masses = qs*M_s
@@ -664,31 +693,38 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         )
 
     # calculate priors for companions
-    if contrast_curve_file is None:
-        # use TESS/Vis band flux ratios
-        delta_mags = 2.5*np.log10(fluxratios_comp/(1-fluxratios_comp))
-        lnprior_companion = lnprior_bound_EB(
-            M_s, plx, np.abs(delta_mags),
-            np.array([2.2]), np.array([1.0])
-            )
-        lnprior_companion[lnprior_companion > 0.0] = 0.0
-        lnprior_companion[delta_mags > 0.0] = -np.inf
+    if molusc_file is None:
+        if contrast_curve_file is None:
+            # use TESS/Vis band flux ratios
+            delta_mags = 2.5*np.log10(
+                fluxratios_comp/(1-fluxratios_comp)
+                )
+            lnprior_companion = lnprior_bound_EB(
+                M_s, plx, np.abs(delta_mags),
+                np.array([2.2]), np.array([1.0])
+                )
+            lnprior_companion[lnprior_companion > 0.0] = 0.0
+            lnprior_companion[delta_mags > 0.0] = -np.inf
+        else:
+            # use flux ratio of contrast curve filter
+            fluxratios_comp_cc = (
+                flux_relation(masses_comp, filt)
+                / (flux_relation(masses_comp, filt)
+                    + flux_relation(np.array([M_s]), filt))
+                )
+            delta_mags = 2.5*np.log10(
+                fluxratios_comp_cc/(1-fluxratios_comp_cc)
+                )
+            separations, contrasts = file_to_contrast_curve(
+                contrast_curve_file
+                )
+            lnprior_companion = lnprior_bound_EB(
+                M_s, plx, np.abs(delta_mags), separations, contrasts
+                )
+            lnprior_companion[lnprior_companion > 0.0] = 0.0
+            lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
-        # use flux ratio of contrast curve filter
-        fluxratios_comp_cc = (
-            flux_relation(masses_comp, filt)
-            / (flux_relation(masses_comp, filt)
-                + flux_relation(np.array([M_s]), filt))
-            )
-        delta_mags = 2.5*np.log10(fluxratios_comp_cc/(1-fluxratios_comp_cc))
-        separations, contrasts = file_to_contrast_curve(
-            contrast_curve_file
-            )
-        lnprior_companion = lnprior_bound_EB(
-            M_s, plx, np.abs(delta_mags), separations, contrasts
-            )
-        lnprior_companion[lnprior_companion > 0.0] = 0.0
-        lnprior_companion[delta_mags > 0.0] = -np.inf
+        lnprior_companion = np.zeros(N)
 
     # calculate short-period binary prior for star of mass M_s
     lnprior_Mstar = lnprior_Mstar_binary(np.array([M_s]))
@@ -721,7 +757,8 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         inc_min = np.full(N, 90.)
         inc_min[Ptra <= 1.] = np.arccos(Ptra[Ptra <= 1.]) * 180./pi
         # filter out systems that do not transit or have a collision
-        mask = (incs >= inc_min) & (coll == False) & (qs < 0.95)
+        mask = ((incs >= inc_min) & (coll == False)
+            & (qs < 0.95) & (qs_comp != 0.0))
         # calculate lnL for transiting systems
         R_s_arr = np.full(N, R_s)
         u1_arr = np.full(N, u1)
@@ -742,7 +779,8 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             Ptra_twin[Ptra_twin <= 1.]
             ) * 180./pi
         # filter out systems that do not transit or have a collision
-        mask = (incs >= inc_min) & (coll_twin == False) & (qs >= 0.95)
+        mask = ((incs >= inc_min) & (coll_twin == False) 
+            & (qs >= 0.95) & (qs_comp != 0.0))
         # calculate lnL for transiting systems
         R_s_arr = np.full(N, R_s)
         u1_arr = np.full(N, u1)
@@ -763,7 +801,8 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                 inc_min = np.arccos(Ptra[i]) * 180/pi
             else:
                 continue
-            if (incs[i] >= inc_min) & (qs[i] < 0.95) & (coll[i] == False):
+            if ((incs[i] >= inc_min) & (qs[i] < 0.95) 
+                & (coll[i] == False) & (qs_comp[i] != 0)):
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
                     time, flux, sigma, radii[i], fluxratios[i],
                     P_orb, incs[i], a[i], R_s, u1, u2,
@@ -777,7 +816,8 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                 inc_min = np.arccos(Ptra_twin[i]) * 180/pi
             else:
                 continue
-            if (incs[i] >= inc_min) & (qs[i] >= 0.95) & (coll_twin[i] == False):
+            if ((incs[i] >= inc_min) & (qs[i] >= 0.95) 
+                & (coll_twin[i] == False) & (qs_comp[i] != 0)):
                 lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
                     time, flux, sigma, radii[i], fluxratios[i],
                     2*P_orb, incs[i], a_twin[i], R_s, u1, u2,
@@ -848,7 +888,8 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
             filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
             mission: str = "TESS", flatpriors: bool = False,
-            exptime: float = 0.00139, nsamples: int = 20):
+            exptime: float = 0.00139, nsamples: int = 20,
+            molusc_file: str = None):
     """
     Calculates the marginal likelihood of the STP scenario.
     Args:
@@ -879,7 +920,16 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
     lnsigma = np.log(sigma)
 
     # sample from q prior distribution
-    qs_comp = sample_q_companion(np.random.rand(N), M_s)
+    if molusc_file is None:
+        qs_comp = sample_q_companion(np.random.rand(N), M_s)
+    else:
+        molusc_df = read_csv(molusc_file)
+        molusc_a = molusc_df["semi-major axis(AU)"].values
+        molusc_e = molusc_df["eccentricity"].values
+        molusc_df2 = molusc_df[molusc_a*(1-molusc_e) > 10]
+        qs_comp = molusc_df2["mass ratio"].values
+        qs_comp[qs_comp < 0.1/M_s] = 0.1/M_s
+        qs_comp = np.pad(qs_comp, (0, N - len(qs_comp)))
 
     # calculate properties of the drawn companions
     masses_comp = qs_comp*M_s
@@ -930,31 +980,34 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
         u1s_comp[i], u2s_comp[i] = u1s_at_Z[mask], u2s_at_Z[mask]
 
     # calculate priors for companions
-    if contrast_curve_file is None:
-        # use TESS/Vis band flux ratios
-        delta_mags = 2.5*np.log10(fluxratios_comp/(1-fluxratios_comp))
-        lnprior_companion = lnprior_bound_TP(
-            M_s, plx, np.abs(delta_mags),
-            np.array([2.2]), np.array([1.0])
-            )
-        lnprior_companion[lnprior_companion > 0.0] = 0.0
-        lnprior_companion[delta_mags > 0.0] = -np.inf
+    if molusc_file is None:
+        if contrast_curve_file is None:
+            # use TESS/Vis band flux ratios
+            delta_mags = 2.5*np.log10(fluxratios_comp/(1-fluxratios_comp))
+            lnprior_companion = lnprior_bound_TP(
+                M_s, plx, np.abs(delta_mags),
+                np.array([2.2]), np.array([1.0])
+                )
+            lnprior_companion[lnprior_companion > 0.0] = 0.0
+            lnprior_companion[delta_mags > 0.0] = -np.inf
+        else:
+            # use flux ratio of contrast curve filter
+            fluxratios_comp_cc = (
+                flux_relation(masses_comp, filt)
+                / (flux_relation(masses_comp, filt)
+                    + flux_relation(np.array([M_s]), filt))
+                )
+            delta_mags = 2.5*np.log10(fluxratios_comp_cc/(1-fluxratios_comp_cc))
+            separations, contrasts = file_to_contrast_curve(
+                contrast_curve_file
+                )
+            lnprior_companion = lnprior_bound_TP(
+                M_s, plx, np.abs(delta_mags), separations, contrasts
+                )
+            lnprior_companion[lnprior_companion > 0.0] = 0.0
+            lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
-        # use flux ratio of contrast curve filter
-        fluxratios_comp_cc = (
-            flux_relation(masses_comp, filt)
-            / (flux_relation(masses_comp, filt)
-                + flux_relation(np.array([M_s]), filt))
-            )
-        delta_mags = 2.5*np.log10(fluxratios_comp_cc/(1-fluxratios_comp_cc))
-        separations, contrasts = file_to_contrast_curve(
-            contrast_curve_file
-            )
-        lnprior_companion = lnprior_bound_TP(
-            M_s, plx, np.abs(delta_mags), separations, contrasts
-            )
-        lnprior_companion[lnprior_companion > 0.0] = 0.0
-        lnprior_companion[delta_mags > 0.0] = -np.inf
+        lnprior_companion = np.zeros(N)
 
     # calculate short-period planet prior for stars
     # with masses masses_comp
@@ -987,7 +1040,7 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
         inc_min = np.full(N, 90.)
         inc_min[Ptra <= 1.] = np.arccos(Ptra[Ptra <= 1.]) * 180./pi
         # filter out systems that do not transit or have a collision
-        mask = (incs >= inc_min) & (coll == False)
+        mask = (incs >= inc_min) & (coll == False) & (qs_comp != 0.0)
         # calculate lnL for transiting systems
         lnL[mask] = -0.5*ln2pi - lnsigma - lnL_TP_p(
                     time, flux, sigma, rps[mask],
@@ -1004,7 +1057,8 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
                 inc_min = np.arccos(Ptra[i]) * 180/pi
             else:
                 continue
-            if (incs[i] >= inc_min) & (coll[i] == False):
+            if ((incs[i] >= inc_min) & (coll[i] == False)
+                & (qs_comp[i] != 0.0)):
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
                     time, flux, sigma, rps[i],
                     P_orb, incs[i], a[i], radii_comp[i],
@@ -1049,7 +1103,8 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
             mission: str = "TESS", flatpriors: bool = False,
-            exptime: float = 0.00139, nsamples: int = 20):
+            exptime: float = 0.00139, nsamples: int = 20,
+            molusc_file: str = None):
     """
     Calculates the marginal likelihood of the SEB scenario.
     Args:
@@ -1082,9 +1137,18 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # sample from prior distributions
     incs = sample_inc(np.random.rand(N))
     qs = sample_q(np.random.rand(N), M_s)
-    qs_comp = sample_q_companion(np.random.rand(N), M_s)
     eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=P_orb)
     argps = sample_w(np.random.rand(N))
+    if molusc_file is None:
+        qs_comp = sample_q_companion(np.random.rand(N), M_s)
+    else:
+        molusc_df = read_csv(molusc_file)
+        molusc_a = molusc_df["semi-major axis(AU)"].values
+        molusc_e = molusc_df["eccentricity"].values
+        molusc_df2 = molusc_df[molusc_a*(1-molusc_e) > 10]
+        qs_comp = molusc_df2["mass ratio"].values
+        qs_comp[qs_comp < 0.1/M_s] = 0.1/M_s
+        qs_comp = np.pad(qs_comp, (0, N - len(qs_comp)))   
 
     # calculate properties of the drawn companions
     masses_comp = qs_comp*M_s
@@ -1144,42 +1208,45 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         )
 
     # calculate priors for companions
-    if contrast_curve_file is None:
-        # use TESS/Vis band flux ratios
-        delta_mags = 2.5*np.log10(
-            (fluxratios_comp/(1-fluxratios_comp))
-            + (fluxratios/(1-fluxratios))
-            )
-        lnprior_companion = lnprior_bound_EB(
-            M_s, plx, np.abs(delta_mags),
-            np.array([2.2]), np.array([1.0])
-            )
-        lnprior_companion[lnprior_companion > 0.0] = 0.0
-        lnprior_companion[delta_mags > 0.0] = -np.inf
+    if molusc_file is None:
+        if contrast_curve_file is None:
+            # use TESS/Vis band flux ratios
+            delta_mags = 2.5*np.log10(
+                (fluxratios_comp/(1-fluxratios_comp))
+                + (fluxratios/(1-fluxratios))
+                )
+            lnprior_companion = lnprior_bound_EB(
+                M_s, plx, np.abs(delta_mags),
+                np.array([2.2]), np.array([1.0])
+                )
+            lnprior_companion[lnprior_companion > 0.0] = 0.0
+            lnprior_companion[delta_mags > 0.0] = -np.inf
+        else:
+            # use flux ratio of contrast curve filter
+            fluxratios_cc = (
+                flux_relation(masses, filt)
+                / (flux_relation(masses, filt)
+                    + flux_relation(np.array([M_s]), filt))
+                )
+            fluxratios_comp_cc = (
+                flux_relation(masses_comp, filt)
+                / (flux_relation(masses_comp, filt)
+                    + flux_relation(np.array([M_s]), filt))
+                )
+            delta_mags = 2.5*np.log10(
+                (fluxratios_comp_cc/(1-fluxratios_comp_cc))
+                + (fluxratios_cc/(1-fluxratios_cc))
+                )
+            separations, contrasts = file_to_contrast_curve(
+                contrast_curve_file
+                )
+            lnprior_companion = lnprior_bound_EB(
+                M_s, plx, np.abs(delta_mags), separations, contrasts
+                )
+            lnprior_companion[lnprior_companion > 0.0] = 0.0
+            lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
-        # use flux ratio of contrast curve filter
-        fluxratios_cc = (
-            flux_relation(masses, filt)
-            / (flux_relation(masses, filt)
-                + flux_relation(np.array([M_s]), filt))
-            )
-        fluxratios_comp_cc = (
-            flux_relation(masses_comp, filt)
-            / (flux_relation(masses_comp, filt)
-                + flux_relation(np.array([M_s]), filt))
-            )
-        delta_mags = 2.5*np.log10(
-            (fluxratios_comp_cc/(1-fluxratios_comp_cc))
-            + (fluxratios_cc/(1-fluxratios_cc))
-            )
-        separations, contrasts = file_to_contrast_curve(
-            contrast_curve_file
-            )
-        lnprior_companion = lnprior_bound_EB(
-            M_s, plx, np.abs(delta_mags), separations, contrasts
-            )
-        lnprior_companion[lnprior_companion > 0.0] = 0.0
-        lnprior_companion[delta_mags > 0.0] = -np.inf
+        lnprior_companion = np.zeros(N)
 
     # calculate short-period binary prior for stars
     # with masses masses_comp
@@ -1217,7 +1284,8 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         inc_min = np.full(N, 90.)
         inc_min[Ptra <= 1.] = np.arccos(Ptra[Ptra <= 1.]) * 180./pi
         # filter out systems that do not transit or have a collision
-        mask = (incs >= inc_min) & (coll == False) & (qs < 0.95)
+        mask = ((incs >= inc_min) & (coll == False) 
+            & (qs < 0.95) & (qs_comp != 0.0))
         # calculate lnL for transiting systems
         lnL[mask] = -0.5*ln2pi - lnsigma - lnL_EB_p(
                     time, flux, sigma, radii[mask], fluxratios[mask],
@@ -1235,7 +1303,8 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             Ptra_twin[Ptra_twin <= 1.]
             ) * 180./pi
         # filter out systems that do not transit or have a collision
-        mask = (incs >= inc_min) & (coll_twin == False) & (qs >= 0.95)
+        mask = ((incs >= inc_min) & (coll_twin == False) 
+            & (qs >= 0.95) & (qs_comp != 0.0))
         # calculate lnL for transiting systems
         lnL_twin[mask] = -0.5*ln2pi - lnsigma - lnL_EB_twin_p(
                     time, flux, sigma, radii[mask], fluxratios[mask],
@@ -1253,7 +1322,8 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                 inc_min = np.arccos(Ptra[i]) * 180/pi
             else:
                 continue
-            if (incs[i] >= inc_min) & (qs[i] < 0.95) & (coll[i] == False):
+            if ((incs[i] >= inc_min) & (qs[i] < 0.95) 
+                & (coll[i] == False) & (qs_comp[i] != 0.0)):
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
                     time, flux, sigma, radii[i], fluxratios[i],
                     P_orb, incs[i], a[i], radii_comp[i],
@@ -1269,7 +1339,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             else:
                 continue
             if ((incs[i] >= inc_min) & (qs[i] >= 0.95)
-                & (coll_twin[i] == False)):
+                & (coll_twin[i] == False) & (qs_comp[i] != 0.0)):
                 lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
                     time, flux, sigma, radii[i], fluxratios[i],
                     2*P_orb, incs[i], a_twin[i], radii_comp[i],
