@@ -113,6 +113,7 @@ class target:
                 verbose=0
                 )
             self.trilegal_url = output_url
+            self.trilegal_fname = None
         else:
             self.trilegal_fname = trilegal_fname
 
@@ -613,7 +614,8 @@ class target:
                    drop_scenario: list = [],
                    verbose: int = 1, flatpriors: bool = False,
                    exptime: float = 0.00139, nsamples: int = 20,
-                   molusc_file: str = None):
+                   molusc_file: str = None,
+                   trilegal_fname: str = None):
         """
         Calculates the relative probability of each scenario.
         Args:

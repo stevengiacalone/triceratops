@@ -68,7 +68,7 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             low=P_orb[0], high=P_orb[-1], size=N
             )
     else:
-        P_orb = np.full_like(N, P_orb)
+        P_orb = np.full(N, P_orb)
 
     lnsigma = np.log(sigma)
     a = ((G*M_s*Msun)/(4*pi**2)*(P_orb*86400)**2)**(1/3)
@@ -208,7 +208,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             low=P_orb[0], high=P_orb[-1], size=N
             )
     else:
-        P_orb = np.full_like(N, P_orb)
+        P_orb = np.full(N, P_orb)
 
     lnsigma = np.log(sigma)
     logg = np.log10(G*(M_s*Msun)/(R_s*Rsun)**2)
@@ -431,7 +431,7 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             low=P_orb[0], high=P_orb[-1], size=N
             )
     else:
-        P_orb = np.full_like(N, P_orb)
+        P_orb = np.full(N, P_orb)
 
     lnsigma = np.log(sigma)
     a = ((G*M_s*Msun)/(4*pi**2)*(P_orb*86400)**2)**(1/3)
@@ -640,7 +640,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             low=P_orb[0], high=P_orb[-1], size=N
             )
     else:
-        P_orb = np.full_like(N, P_orb)
+        P_orb = np.full(N, P_orb)
 
     lnsigma = np.log(sigma)
     logg = np.log10(G*(M_s*Msun)/(R_s*Rsun)**2)
@@ -930,7 +930,7 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
             low=P_orb[0], high=P_orb[-1], size=N
             )
     else:
-        P_orb = np.full_like(N, P_orb)
+        P_orb = np.full(N, P_orb)
 
     lnsigma = np.log(sigma)
 
@@ -1146,7 +1146,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             low=P_orb[0], high=P_orb[-1], size=N
             )
     else:
-        P_orb = np.full_like(N, P_orb)
+        P_orb = np.full(N, P_orb)
 
     lnsigma = np.log(sigma)
 
@@ -1458,7 +1458,7 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             low=P_orb[0], high=P_orb[-1], size=N
             )
     else:
-        P_orb = np.full_like(N, P_orb)
+        P_orb = np.full(N, P_orb)
 
     lnsigma = np.log(sigma)
     a = ((G*M_s*Msun)/(4*pi**2)*(P_orb*86400)**2)**(1/3)
@@ -1656,7 +1656,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             low=P_orb[0], high=P_orb[-1], size=N
             )
     else:
-        P_orb = np.full_like(N, P_orb)
+        P_orb = np.full(N, P_orb)
 
     lnsigma = np.log(sigma)
     logg = np.log10(G*(M_s*Msun)/(R_s*Rsun)**2)
@@ -1933,7 +1933,7 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             low=P_orb[0], high=P_orb[-1], size=N
             )
     else:
-        P_orb = np.full_like(N, P_orb)
+        P_orb = np.full(N, P_orb)
 
     lnsigma = np.log(sigma)
 
@@ -2137,7 +2137,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             low=P_orb[0], high=P_orb[-1], size=N
             )
     else:
-        P_orb = np.full_like(N, P_orb)
+        P_orb = np.full(N, P_orb)
 
     lnsigma = np.log(sigma)
 
@@ -2462,7 +2462,7 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
             low=P_orb[0], high=P_orb[-1], size=N
             )
     else:
-        P_orb = np.full_like(N, P_orb)
+        P_orb = np.full(N, P_orb)
 
     lnsigma = np.log(sigma)
 
@@ -2655,7 +2655,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
             low=P_orb[0], high=P_orb[-1], size=N
             )
     else:
-        P_orb = np.full_like(N, P_orb)
+        P_orb = np.full(N, P_orb)
 
     lnsigma = np.log(sigma)
 
@@ -2939,7 +2939,7 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
             low=P_orb[0], high=P_orb[-1], size=N
             )
     else:
-        P_orb = np.full_like(N, P_orb)
+        P_orb = np.full(N, P_orb)
 
     lnsigma = np.log(sigma)
     logg = 3.0
@@ -3080,7 +3080,7 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
             low=P_orb[0], high=P_orb[-1], size=N
             )
     else:
-        P_orb = np.full_like(N, P_orb)
+        P_orb = np.full(N, P_orb)
 
     lnsigma = np.log(sigma)
     logg = 3.0
