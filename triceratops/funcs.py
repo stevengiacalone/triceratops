@@ -1,5 +1,5 @@
 import numpy as np
-from pandas import read_csv, to_csv
+from pandas import read_csv
 from astropy import constants
 from scipy.interpolate import InterpolatedUnivariateSpline
 from mechanicalsoup import StatefulBrowser

@@ -8,7 +8,7 @@ import astropy.units as u
 import numpy as np
 from astroquery.vizier import Vizier
 from scipy.integrate import dblquad
-from pandas import DataFrame, read_csv, to_csv
+from pandas import DataFrame, read_csv
 from math import floor, ceil
 import matplotlib.pyplot as plt
 from matplotlib import cm, ticker
