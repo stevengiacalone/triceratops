@@ -8,7 +8,7 @@ import astropy.units as u
 import numpy as np
 from astroquery.vizier import Vizier
 from scipy.integrate import dblquad
-from pandas import DataFrame, read_csv
+from pandas import DataFrame, read_csv, to_csv
 from math import floor, ceil
 import matplotlib.pyplot as plt
 from matplotlib import cm, ticker
@@ -19,6 +19,7 @@ from mpl_toolkits.axes_grid1.anchored_artists import (
 from .likelihoods import (simulate_TP_transit,
                          simulate_EB_transit)
 from .funcs import (Gauss2D,
+                   save_trilegal,
                    query_TRILEGAL,
                    renorm_flux,
                    stellar_relations)
@@ -36,7 +37,7 @@ ln2pi = np.log(2*pi)
 class target:
     def __init__(self, ID: int, sectors: np.ndarray,
                  search_radius: int = 10, mission: str = "TESS",
-                 lightkurve_cache_dir=None):
+                 lightkurve_cache_dir=None, trilegal_fname=None):
         """
         Queries TIC for sources near the target and obtains a cutout
         of the pixels enclosing the target.
@@ -104,13 +105,16 @@ class target:
             ]
         stars = new_df.to_pandas()
 
-        # start TRILEGAL query
-        output_url = query_TRILEGAL(
-            stars["ra"].values[0],
-            stars["dec"].values[0],
-            verbose=0
-            )
-        self.trilegal_url = output_url
+        # start TRILEGAL query if needed
+        if trilegal_fname is None:
+            output_url = query_TRILEGAL(
+                stars["ra"].values[0],
+                stars["dec"].values[0],
+                verbose=0
+                )
+            self.trilegal_url = output_url
+        else:
+            self.trilegal_fname = trilegal_fname
 
         TESS_images = []
         col0s, row0s = [], []
@@ -603,7 +607,7 @@ class target:
         return
 
     def calc_probs(self, time: np.ndarray, flux_0: np.ndarray,
-                   flux_err_0: float, P_orb: float,
+                   flux_err_0: float, P_orb,
                    contrast_curve_file: str = None, filt: str = "TESS",
                    N: int = 1000000, parallel: bool = False,
                    drop_scenario: list = [],
@@ -617,7 +621,9 @@ class target:
                                 [days from transit midpoint].
             flux_0 (numpy array): Normalized flux of each data point.
             flux_err_0 (float): Uncertainty of flux.
-            P_orb (float): Orbital period [days].
+            P_orb (float or numpy array): Orbital period [days] OR
+                                          min and max periods to consider
+                                          (i.e., [P_min, P_max]).
             contrast_curve_file (str): Path to contrast curve text file.
                                        File should contain column with
                                        separations (in arcsec) followed
@@ -681,8 +687,12 @@ class target:
             ra = filtered_stars["ra"].values[i]
             dec = filtered_stars["dec"].values[i]
 
-            # get url to TRILEGAL results
-            output_url = self.trilegal_url
+            # get url to TRILEGAL results and save
+            if self.trilegal_fname is None: 
+                output_url = self.trilegal_url
+                trilegal_fname = save_trilegal(output_url, self.ID)
+            else:
+                trilegal_fname = self.trilegal_fname
 
             # target star
             if i == 0:
@@ -1052,7 +1062,7 @@ class target:
                             time, flux, flux_err, P_orb,
                             M_s, R_s, Teff, Z,
                             Tmag, Jmag, Hmag, Kmag,
-                            output_url,
+                            trilegal_fname,
                             contrast_curve_file, filt,
                             N, parallel, self.mission,
                             flatpriors,
@@ -1100,7 +1110,7 @@ class target:
                             time, flux, flux_err, P_orb,
                             M_s, R_s, Teff, Z,
                             Tmag, Jmag, Hmag, Kmag,
-                            output_url,
+                            trilegal_fname,
                             contrast_curve_file, filt,
                             N, parallel, self.mission,
                             flatpriors,
@@ -1164,7 +1174,7 @@ class target:
                             time, flux, flux_err, P_orb,
                             M_s, R_s, Teff,
                             Tmag, Jmag, Hmag, Kmag,
-                            output_url,
+                            trilegal_fname,
                             contrast_curve_file, filt,
                             N, parallel, self.mission,
                             flatpriors,
@@ -1213,7 +1223,7 @@ class target:
                             time, flux, flux_err, P_orb,
                             M_s, R_s, Teff,
                             Tmag, Jmag, Hmag, Kmag,
-                            output_url,
+                            trilegal_fname,
                             contrast_curve_file, filt,
                             N, parallel, self.mission,
                             flatpriors,

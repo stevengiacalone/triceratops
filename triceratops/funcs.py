@@ -1,5 +1,5 @@
 import numpy as np
-from pandas import read_csv
+from pandas import read_csv, to_csv
 from astropy import constants
 from scipy.interpolate import InterpolatedUnivariateSpline
 from mechanicalsoup import StatefulBrowser
@@ -286,23 +286,14 @@ def query_TRILEGAL(RA: float, Dec: float, verbose: int = 1):
         return output_url
 
 
-def trilegal_results(output_url, Tmag: float):
+def save_trilegal(output_url, ID: int):
     """
-    Retrieves arrays of stars from trilegal query.
+    Saves results of trilegal query to a csv.
     Args:
         output_url (str): URL of page with query results.
-        Tmag (float): TESS magnitude of the star.
+        ID (int): ID of the target.
     Returns:
-        Tmags (numpy array): TESS magnitude of all stars
-                             fainter than the target.
-        Masses (numpy array): Masses of all stars fainter than the
-                              target [Solar masses].
-        loggs (numpy array): loggs of all stars fainter than the
-                             target [log10(cm/s^2)].
-        Teffs (numpy array): Teffs of all stars fainter than the
-                             target [K].
-        Zs (numpy array): Metallicities of all stars fainter than the
-                          target [dex].
+        fname (str): File name of csv containing trilegal results. 
     """
     if output_url is None:
         print(
@@ -318,55 +309,77 @@ def trilegal_results(output_url, Tmag: float):
                 sleep(10)
             elif last.values[0, 0] == "#TRILEGAL normally terminated":
                 break
-        # find number of stars fainter than target
-        df = read_csv(output_url, delim_whitespace=True)[:-2]
-        Masses = df["Mact"].values
-        loggs = df["logg"].values
-        Teffs = 10**df["logTe"].values
-        Zs = np.array(df["[M/H]"], dtype=float)
-        Tmags = df["TESS"].values
-        Jmags = df["J"].values
-        Hmags = df["H"].values
-        Kmags = df["Ks"].values
-        headers = np.array(list(df))
-        # if able to use TRILEGAL v1.6 and get TESS mags, use them
-        if "TESS" in headers:
-            mask = (Tmags >= Tmag)
-            Masses = Masses[mask]
-            loggs = loggs[mask]
-            Teffs = Teffs[mask]
-            Zs = Zs[mask]
-            Tmags = Tmags[mask]
-            Jmags = Jmags[mask]
-            Hmags = Hmags[mask]
-            Kmags = Kmags[mask]
-        # otherwise, use 2mass mags from TRILEGAL v1.5 and convert
-        # to T mags using the relations from section 2.2.1.1 of
-        # Stassun et al. 2018
-        else:
-            Tmags = np.zeros(df.shape[0])
-            for i, (J, Ks) in enumerate(zip(Jmags, Kmags)):
-                if (-0.1 <= J-Ks <= 0.70):
-                    Tmags[i] = (
-                        J + 1.22163*(J-Ks)**3
-                        - 1.74299*(J-Ks)**2 + 1.89115*(J-Ks) + 0.0563
-                        )
-                elif (0.7 < J-Ks <= 1.0):
-                    Tmags[i] = (
-                        J - 269.372*(J-Ks)**3
-                        + 668.453*(J-Ks)**2 - 545.64*(J-Ks) + 147.811
-                        )
-                elif (J-Ks < -0.1):
-                    Tmags[i] = J + 0.5
-                elif (J-Ks > 1.0):
-                    Tmags[i] = J + 1.75
-            mask = (Tmags >= Tmag)
-            Masses = Masses[mask]
-            loggs = loggs[mask]
-            Teffs = Teffs[mask]
-            Zs = Zs[mask]
-            Tmags = Tmags[mask]
-            Jmags = Jmags[mask]
-            Hmags = Hmags[mask]
-            Kmags = Kmags[mask]
-        return Tmags, Masses, loggs, Teffs, Zs, Jmags, Hmags, Kmags
+        df = read_csv(output_url, delim_whitespace=True)
+        fname = str(ID) + "_TRILEGAL.csv"
+        df.to_csv(fname)
+        return fname
+
+def trilegal_results(trilegal_fname: str, Tmag: float):
+    """
+    Retrieves arrays of stars from trilegal query.
+    Args:
+        trilegal_fname (str): File containing query results.
+        Tmag (float): TESS magnitude of the star.
+    Returns:
+        Tmags (numpy array): TESS magnitude of all stars
+                             fainter than the target.
+        Masses (numpy array): Masses of all stars fainter than the
+                              target [Solar masses].
+        loggs (numpy array): loggs of all stars fainter than the
+                             target [log10(cm/s^2)].
+        Teffs (numpy array): Teffs of all stars fainter than the
+                             target [K].
+        Zs (numpy array): Metallicities of all stars fainter than the
+                          target [dex].
+    """
+    df = read_csv(trilegal_fname, delim_whitespace=True)[:-2]
+    Masses = df["Mact"].values
+    loggs = df["logg"].values
+    Teffs = 10**df["logTe"].values
+    Zs = np.array(df["[M/H]"], dtype=float)
+    Tmags = df["TESS"].values
+    Jmags = df["J"].values
+    Hmags = df["H"].values
+    Kmags = df["Ks"].values
+    headers = np.array(list(df))
+    # if able to use TRILEGAL v1.6 and get TESS mags, use them
+    if "TESS" in headers:
+        mask = (Tmags >= Tmag)
+        Masses = Masses[mask]
+        loggs = loggs[mask]
+        Teffs = Teffs[mask]
+        Zs = Zs[mask]
+        Tmags = Tmags[mask]
+        Jmags = Jmags[mask]
+        Hmags = Hmags[mask]
+        Kmags = Kmags[mask]
+    # otherwise, use 2mass mags from TRILEGAL v1.5 and convert
+    # to T mags using the relations from section 2.2.1.1 of
+    # Stassun et al. 2018
+    else:
+        Tmags = np.zeros(df.shape[0])
+        for i, (J, Ks) in enumerate(zip(Jmags, Kmags)):
+            if (-0.1 <= J-Ks <= 0.70):
+                Tmags[i] = (
+                    J + 1.22163*(J-Ks)**3
+                    - 1.74299*(J-Ks)**2 + 1.89115*(J-Ks) + 0.0563
+                    )
+            elif (0.7 < J-Ks <= 1.0):
+                Tmags[i] = (
+                    J - 269.372*(J-Ks)**3
+                    + 668.453*(J-Ks)**2 - 545.64*(J-Ks) + 147.811
+                    )
+            elif (J-Ks < -0.1):
+                Tmags[i] = J + 0.5
+            elif (J-Ks > 1.0):
+                Tmags[i] = J + 1.75
+        mask = (Tmags >= Tmag)
+        Masses = Masses[mask]
+        loggs = loggs[mask]
+        Teffs = Teffs[mask]
+        Zs = Zs[mask]
+        Tmags = Tmags[mask]
+        Jmags = Jmags[mask]
+        Hmags = Hmags[mask]
+        Kmags = Kmags[mask]
+    return Tmags, Masses, loggs, Teffs, Zs, Jmags, Hmags, Kmags

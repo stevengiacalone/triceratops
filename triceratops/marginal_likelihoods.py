@@ -62,6 +62,14 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
+    # sample orbital periods if range is given
+    if type(P_orb) not in [float,int]:
+        P_orb = np.random.uniform(
+            low=P_orb[0], high=P_orb[-1], size=N
+            )
+    else:
+        P_orb = np.full_like(N, P_orb)
+
     lnsigma = np.log(sigma)
     a = ((G*M_s*Msun)/(4*pi**2)*(P_orb*86400)**2)**(1/3)
     logg = np.log10(G*(M_s*Msun)/(R_s*Rsun)**2)
@@ -87,12 +95,6 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         & (ldc_loggs == this_logg)
         )
     u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
-
-    # calculate short-period planet prior for star of mass M_s
-    lnprior_Mstar = lnprior_Mstar_planet(np.array([M_s]))
-
-    # calculate orbital period prior
-    lnprior_Porb = lnprior_Porb_planet(P_orb, flatpriors)
 
     # sample from prior distributions
     rps = sample_rp(np.random.rand(N), np.full_like(N, M_s), flatpriors)
@@ -126,7 +128,7 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         companion_fluxratio = np.zeros(N)
         lnL[mask] = -0.5*ln2pi - lnsigma - lnL_TP_p(
                     time, flux, sigma, rps[mask],
-                    P_orb, incs[mask], a_arr[mask], R_s_arr[mask],
+                    P_orb[mask], incs[mask], a_arr[mask], R_s_arr[mask],
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=companion_fluxratio[mask],
@@ -141,7 +143,7 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             if (incs[i] >= inc_min) & (coll[i] == False):
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
                     time, flux, sigma, rps[i],
-                    P_orb, incs[i], a, R_s, u1, u2,
+                    P_orb[i], incs[i], a, R_s, u1, u2,
                     eccs[i], argps[i],
                     exptime=exptime, nsamples=nsamples
                     )
@@ -149,7 +151,7 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     N_samples = 100
     idx = (-lnL).argsort()[:N_samples]
     Z = np.mean(np.nan_to_num(
-        np.exp(lnL + lnprior_Mstar + lnprior_Porb + 600)
+        np.exp(lnL + 600)
         ))
     lnZ = np.log(Z)
     res = {
@@ -157,7 +159,7 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         'R_s': np.full(N_samples, R_s),
         'u1': np.full(N_samples, u1),
         'u2': np.full(N_samples, u2),
-        'P_orb': np.full(N_samples, P_orb),
+        'P_orb': P_orb[idx],
         'inc': incs[idx],
         'b': b[idx],
         'R_p': rps[idx],
@@ -200,6 +202,14 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
     """
+    # sample orbital periods if range is given
+    if type(P_orb) not in [float,int]:
+        P_orb = np.random.uniform(
+            low=P_orb[0], high=P_orb[-1], size=N
+            )
+    else:
+        P_orb = np.full_like(N, P_orb)
+
     lnsigma = np.log(sigma)
     logg = np.log10(G*(M_s*Msun)/(R_s*Rsun)**2)
     # determine target star limb darkening coefficients
@@ -242,12 +252,6 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         / (flux_relation(masses) + flux_relation(np.array([M_s])))
         )
 
-    # calculate short-period binary prior for star of mass M_s
-    lnprior_Mstar = lnprior_Mstar_binary(np.array([M_s]))
-
-    # calculate orbital period prior
-    lnprior_Porb = lnprior_Porb_binary(P_orb)
-
     # calculate transit probability for each instance
     e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
     a = ((G*(M_s+masses)*Msun)/(4*pi**2)*(P_orb*86400)**2)**(1/3)
@@ -281,7 +285,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         companion_fluxratio = np.zeros(N)
         lnL[mask] = -0.5*ln2pi - lnsigma - lnL_EB_p(
                     time, flux, sigma, radii[mask], fluxratios[mask],
-                    P_orb, incs[mask], a[mask], R_s_arr[mask],
+                    P_orb[mask], incs[mask], a[mask], R_s_arr[mask],
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=companion_fluxratio[mask],
@@ -302,7 +306,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         companion_fluxratio = np.zeros(N)
         lnL_twin[mask] = -0.5*ln2pi - lnsigma - lnL_EB_twin_p(
                     time, flux, sigma, radii[mask], fluxratios[mask],
-                    2*P_orb, incs[mask], a_twin[mask], R_s_arr[mask],
+                    2*P_orb[mask], incs[mask], a_twin[mask], R_s_arr[mask],
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=companion_fluxratio[mask],
@@ -318,7 +322,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             if (incs[i] >= inc_min) & (qs[i] < 0.95) & (coll[i] == False):
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
                     time, flux, sigma, radii[i], fluxratios[i],
-                    P_orb, incs[i], a[i], R_s, u1, u2,
+                    P_orb[i], incs[i], a[i], R_s, u1, u2,
                     eccs[i], argps[i],
                     exptime=exptime, nsamples=nsamples
                     )
@@ -331,7 +335,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                 & (coll_twin[i] == False)):
                 lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
                     time, flux, sigma, radii[i], fluxratios[i],
-                    2*P_orb, incs[i], a_twin[i], R_s, u1, u2,
+                    2*P_orb[i], incs[i], a_twin[i], R_s, u1, u2,
                     eccs[i], argps[i],
                     exptime=exptime, nsamples=nsamples
                     )
@@ -340,7 +344,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     N_samples = 100
     idx = (-lnL).argsort()[:N_samples]
     Z = np.mean(np.nan_to_num(
-        np.exp(lnL + lnprior_Mstar + lnprior_Porb + 600)
+        np.exp(lnL + 600)
         ))
     lnZ = np.log(Z)
     res = {
@@ -348,7 +352,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         'R_s': np.full(N_samples, R_s),
         'u1': np.full(N_samples, u1),
         'u2': np.full(N_samples, u2),
-        'P_orb': np.full(N_samples, P_orb),
+        'P_orb': P_orb[idx],
         'inc': incs[idx],
         'b': b[idx],
         'R_p': np.zeros(N_samples),
@@ -364,7 +368,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     N_samples = 100
     idx = (-lnL_twin).argsort()[:N_samples]
     Z = np.mean(np.nan_to_num(
-        np.exp(lnL_twin + lnprior_Mstar + lnprior_Porb + 600)
+        np.exp(lnL_twin + 600)
         ))
     lnZ = np.log(Z)
     res_twin = {
@@ -372,7 +376,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         'R_s': np.full(N_samples, R_s),
         'u1': np.full(N_samples, u1),
         'u2': np.full(N_samples, u2),
-        'P_orb': np.full(N_samples, 2*P_orb),
+        'P_orb': 2*P_orb[idx],
         'inc': incs[idx],
         'b': b_twin[idx],
         'R_p': np.zeros(N_samples),
@@ -421,6 +425,14 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
+    # sample orbital periods if range is given
+    if type(P_orb) not in [float,int]:
+        P_orb = np.random.uniform(
+            low=P_orb[0], high=P_orb[-1], size=N
+            )
+    else:
+        P_orb = np.full_like(N, P_orb)
+
     lnsigma = np.log(sigma)
     a = ((G*M_s*Msun)/(4*pi**2)*(P_orb*86400)**2)**(1/3)
     logg = np.log10(G*(M_s*Msun)/(R_s*Rsun)**2)
@@ -504,13 +516,6 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     else:
         lnprior_companion = np.zeros(N)
 
-
-    # calculate short-period planet prior for star of mass M_s
-    lnprior_Mstar = lnprior_Mstar_planet(np.array([M_s]))
-
-    # calculate orbital period prior
-    lnprior_Porb = lnprior_Porb_planet(P_orb, flatpriors)
-
     # sample from prior distributions
     rps = sample_rp(np.random.rand(N), np.full_like(N, M_s), flatpriors)
     incs = sample_inc(np.random.rand(N))
@@ -542,7 +547,7 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         u2_arr = np.full(N, u2)
         lnL[mask] = -0.5*ln2pi - lnsigma - lnL_TP_p(
                     time, flux, sigma, rps[mask],
-                    P_orb, incs[mask], a_arr[mask], R_s_arr[mask],
+                    P_orb[mask], incs[mask], a_arr[mask], R_s_arr[mask],
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[mask],
@@ -559,7 +564,7 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
                 & (qs_comp[i] != 0.0)):
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
                     time, flux, sigma, rps[i],
-                    P_orb, incs[i], a, R_s, u1, u2,
+                    P_orb[i], incs[i], a, R_s, u1, u2,
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[i],
                     companion_is_host=False,
@@ -570,7 +575,7 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     idx = (-lnL).argsort()[:N_samples]
     Z = np.mean(
         np.nan_to_num(
-            np.exp(lnL+lnprior_companion+lnprior_Mstar+lnprior_Porb+600)
+            np.exp(lnL+lnprior_companion+600)
             )
         )
     lnZ = np.log(Z)
@@ -579,7 +584,7 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         'R_s': np.full(N_samples, R_s),
         'u1': np.full(N_samples, u1),
         'u2': np.full(N_samples, u2),
-        'P_orb': np.full(N_samples, P_orb),
+        'P_orb': P_orb[idx],
         'inc': incs[idx],
         'b': b[idx],
         'R_p': rps[idx],
@@ -629,6 +634,14 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
     """
+    # sample orbital periods if range is given
+    if type(P_orb) not in [float,int]:
+        P_orb = np.random.uniform(
+            low=P_orb[0], high=P_orb[-1], size=N
+            )
+    else:
+        P_orb = np.full_like(N, P_orb)
+
     lnsigma = np.log(sigma)
     logg = np.log10(G*(M_s*Msun)/(R_s*Rsun)**2)
     # determine target star limb darkening coefficients
@@ -726,12 +739,6 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     else:
         lnprior_companion = np.zeros(N)
 
-    # calculate short-period binary prior for star of mass M_s
-    lnprior_Mstar = lnprior_Mstar_binary(np.array([M_s]))
-
-    # calculate orbital period prior
-    lnprior_Porb = lnprior_Porb_binary(P_orb)
-
     # calculate transit probability for each instance
     e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
     a = ((G*(M_s+masses)*Msun)/(4*pi**2)*(P_orb*86400)**2)**(1/3)
@@ -765,7 +772,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         u2_arr = np.full(N, u2)
         lnL[mask] = -0.5*ln2pi - lnsigma - lnL_EB_p(
                     time, flux, sigma, radii[mask], fluxratios[mask],
-                    P_orb, incs[mask], a[mask], R_s_arr[mask],
+                    P_orb[mask], incs[mask], a[mask], R_s_arr[mask],
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[mask],
@@ -787,7 +794,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         u2_arr = np.full(N, u2)
         lnL_twin[mask] = -0.5*ln2pi - lnsigma - lnL_EB_twin_p(
                     time, flux, sigma, radii[mask], fluxratios[mask],
-                    2*P_orb, incs[mask], a_twin[mask], R_s_arr[mask],
+                    2*P_orb[mask], incs[mask], a_twin[mask], R_s_arr[mask],
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[mask],
@@ -805,7 +812,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                 & (coll[i] == False) & (qs_comp[i] != 0)):
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
                     time, flux, sigma, radii[i], fluxratios[i],
-                    P_orb, incs[i], a[i], R_s, u1, u2,
+                    P_orb[i], incs[i], a[i], R_s, u1, u2,
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[i],
                     companion_is_host=False,
@@ -820,7 +827,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                 & (coll_twin[i] == False) & (qs_comp[i] != 0)):
                 lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
                     time, flux, sigma, radii[i], fluxratios[i],
-                    2*P_orb, incs[i], a_twin[i], R_s, u1, u2,
+                    2*P_orb[i], incs[i], a_twin[i], R_s, u1, u2,
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[i],
                     companion_is_host=False,
@@ -832,7 +839,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     idx = (-lnL).argsort()[:N_samples]
     Z = np.mean(
         np.nan_to_num(
-            np.exp(lnL+lnprior_companion+lnprior_Mstar+lnprior_Porb+600)
+            np.exp(lnL+lnprior_companion+600)
             )
         )
     lnZ = np.log(Z)
@@ -841,7 +848,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         'R_s': np.full(N_samples, R_s),
         'u1': np.full(N_samples, u1),
         'u2': np.full(N_samples, u2),
-        'P_orb': np.full(N_samples, P_orb),
+        'P_orb': P_orb[idx],
         'inc': incs[idx],
         'b': b[idx],
         'R_p': np.zeros(N_samples),
@@ -858,7 +865,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     idx = (-lnL_twin).argsort()[:N_samples]
     Z = np.mean(
         np.nan_to_num(
-            np.exp(lnL_twin+lnprior_companion+lnprior_Mstar+lnprior_Porb+600)
+            np.exp(lnL_twin+lnprior_companion+600)
             )
         )
     lnZ = np.log(Z)
@@ -867,7 +874,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         'R_s': np.full(N_samples, R_s),
         'u1': np.full(N_samples, u1),
         'u2': np.full(N_samples, u2),
-        'P_orb': np.full(N_samples, 2*P_orb),
+        'P_orb': 2*P_orb[idx],
         'inc': incs[idx],
         'b': b_twin[idx],
         'R_p': np.zeros(N_samples),
@@ -917,6 +924,14 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
     """
+    # sample orbital periods if range is given
+    if type(P_orb) not in [float,int]:
+        P_orb = np.random.uniform(
+            low=P_orb[0], high=P_orb[-1], size=N
+            )
+    else:
+        P_orb = np.full_like(N, P_orb)
+
     lnsigma = np.log(sigma)
 
     # sample from q prior distribution
@@ -1009,13 +1024,6 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
     else:
         lnprior_companion = np.zeros(N)
 
-    # calculate short-period planet prior for stars
-    # with masses masses_comp
-    lnprior_Mstar = lnprior_Mstar_planet(masses_comp)
-
-    # calculate orbital period prior
-    lnprior_Porb = lnprior_Porb_planet(P_orb, flatpriors)
-
     # sample from prior distributions
     rps = sample_rp(np.random.rand(N), masses_comp, flatpriors)
     incs = sample_inc(np.random.rand(N))
@@ -1044,7 +1052,7 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
         # calculate lnL for transiting systems
         lnL[mask] = -0.5*ln2pi - lnsigma - lnL_TP_p(
                     time, flux, sigma, rps[mask],
-                    P_orb, incs[mask], a[mask], radii_comp[mask],
+                    P_orb[mask], incs[mask], a[mask], radii_comp[mask],
                     u1s_comp[mask], u2s_comp[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[mask],
@@ -1061,7 +1069,7 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
                 & (qs_comp[i] != 0.0)):
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
                     time, flux, sigma, rps[i],
-                    P_orb, incs[i], a[i], radii_comp[i],
+                    P_orb[i], incs[i], a[i], radii_comp[i],
                     u1s_comp[i], u2s_comp[i],
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[i],
@@ -1073,7 +1081,7 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
     idx = (-lnL).argsort()[:N_samples]
     Z = np.mean(
         np.nan_to_num(
-            np.exp(lnL+lnprior_companion+lnprior_Mstar+lnprior_Porb+600)
+            np.exp(lnL+lnprior_companion+600)
             )
         )
     lnZ = np.log(Z)
@@ -1082,7 +1090,7 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
      'R_s': radii_comp[idx],
      'u1': u1s_comp[idx],
      'u2': u2s_comp[idx],
-     'P_orb': np.full(N_samples, P_orb),
+     'P_orb': P_orb[idx],
      'inc': incs[idx],
      'b': b[idx],
      'R_p': rps[idx],
@@ -1132,6 +1140,14 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
     """
+    # sample orbital periods if range is given
+    if type(P_orb) not in [float,int]:
+        P_orb = np.random.uniform(
+            low=P_orb[0], high=P_orb[-1], size=N
+            )
+    else:
+        P_orb = np.full_like(N, P_orb)
+
     lnsigma = np.log(sigma)
 
     # sample from prior distributions
@@ -1248,13 +1264,6 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     else:
         lnprior_companion = np.zeros(N)
 
-    # calculate short-period binary prior for stars
-    # with masses masses_comp
-    lnprior_Mstar = lnprior_Mstar_binary(masses_comp)
-
-    # calculate orbital period prior
-    lnprior_Porb = lnprior_Porb_binary(P_orb)
-
     # calculate transit probability for each instance
     e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
     a = (
@@ -1289,7 +1298,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         # calculate lnL for transiting systems
         lnL[mask] = -0.5*ln2pi - lnsigma - lnL_EB_p(
                     time, flux, sigma, radii[mask], fluxratios[mask],
-                    P_orb, incs[mask], a[mask], radii_comp[mask],
+                    P_orb[mask], incs[mask], a[mask], radii_comp[mask],
                     u1s_comp[mask], u2s_comp[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[mask],
@@ -1308,7 +1317,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         # calculate lnL for transiting systems
         lnL_twin[mask] = -0.5*ln2pi - lnsigma - lnL_EB_twin_p(
                     time, flux, sigma, radii[mask], fluxratios[mask],
-                    2*P_orb, incs[mask], a_twin[mask], radii_comp[mask],
+                    2*P_orb[mask], incs[mask], a_twin[mask], radii_comp[mask],
                     u1s_comp[mask], u2s_comp[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[mask],
@@ -1326,7 +1335,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                 & (coll[i] == False) & (qs_comp[i] != 0.0)):
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
                     time, flux, sigma, radii[i], fluxratios[i],
-                    P_orb, incs[i], a[i], radii_comp[i],
+                    P_orb[i], incs[i], a[i], radii_comp[i],
                     u1s_comp[i], u2s_comp[i],
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[i],
@@ -1342,7 +1351,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                 & (coll_twin[i] == False) & (qs_comp[i] != 0.0)):
                 lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
                     time, flux, sigma, radii[i], fluxratios[i],
-                    2*P_orb, incs[i], a_twin[i], radii_comp[i],
+                    2*P_orb[i], incs[i], a_twin[i], radii_comp[i],
                     u1s_comp[i], u2s_comp[i],
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[i],
@@ -1355,7 +1364,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     idx = (-lnL).argsort()[:N_samples]
     Z = np.mean(
         np.nan_to_num(
-            np.exp(lnL + lnprior_companion + lnprior_Mstar + lnprior_Porb + 600)
+            np.exp(lnL + lnprior_companion + 600)
             )
         )
     lnZ = np.log(Z)
@@ -1364,7 +1373,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
      'R_s': radii_comp[idx],
      'u1': u1s_comp[idx],
      'u2': u2s_comp[idx],
-     'P_orb': np.full(N_samples, P_orb),
+     'P_orb': P_orb[idx],
      'inc': incs[idx],
      'b': b[idx],
      'R_p': np.zeros(N_samples),
@@ -1381,7 +1390,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     idx = (-lnL_twin).argsort()[:N_samples]
     Z = np.mean(
         np.nan_to_num(
-            np.exp(lnL_twin+lnprior_companion+lnprior_Mstar+lnprior_Porb+600)
+            np.exp(lnL_twin+lnprior_companion+600)
             )
         )
     lnZ = np.log(Z)
@@ -1390,7 +1399,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
      'R_s': radii_comp[idx],
      'u1': u1s_comp[idx],
      'u2': u2s_comp[idx],
-     'P_orb': np.full(N_samples, 2*P_orb),
+     'P_orb': 2*P_orb[idx],
      'inc': incs[idx],
      'b': b_twin[idx],
      'R_p': np.zeros(N_samples),
@@ -1408,7 +1417,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Z: float, Tmag: float, Jmag: float, Hmag: float,
-            Kmag: float, output_url: str,
+            Kmag: float, trilegal_fname: str,
             contrast_curve_file: str = None, filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
             mission: str = "TESS", flatpriors: bool = False,
@@ -1429,7 +1438,7 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         Jmag (float): Target star J magnitude.
         Hmag (float): Target star H magnitude.
         Kmag (float): Target star K magnitude.
-        output_url (string): Link to trilegal query results.
+        trilegal_fname (string): File containing trilegal query results.
         contrast_curve_file (string): Contrast curve file.
         filt (string): Photometric filter of contrast curve. Options
                          are TESS, Vis, J, H, and K.
@@ -1443,6 +1452,14 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
+    # sample orbital periods if range is given
+    if type(P_orb) not in [float,int]:
+        P_orb = np.random.uniform(
+            low=P_orb[0], high=P_orb[-1], size=N
+            )
+    else:
+        P_orb = np.full_like(N, P_orb)
+
     lnsigma = np.log(sigma)
     a = ((G*M_s*Msun)/(4*pi**2)*(P_orb*86400)**2)**(1/3)
     logg = np.log10(G*(M_s*Msun)/(R_s*Rsun)**2)
@@ -1472,7 +1489,7 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     # determine background star population properties
     (Tmags_comp, masses_comp, loggs_comp, Teffs_comp, Zs_comp,
         Jmags_comp, Hmags_comp, Kmags_comp) = (
-        trilegal_results(output_url, Tmag)
+        trilegal_results(trilegal_fname, Tmag)
         )
     delta_mags = Tmag - Tmags_comp
     delta_Jmags = Jmag - Jmags_comp
@@ -1512,12 +1529,6 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
 
-    # calculate short-period planet prior for star of mass M_s
-    lnprior_Mstar = lnprior_Mstar_planet(np.array([M_s]))
-
-    # calculate orbital period prior
-    lnprior_Porb = lnprior_Porb_planet(P_orb, flatpriors)
-
     # sample from R_p and inc prior distributions
     rps = sample_rp(np.random.rand(N), np.full_like(N, M_s), flatpriors)
     incs = sample_inc(np.random.rand(N))
@@ -1549,7 +1560,7 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         u2_arr = np.full(N, u2)
         lnL[mask] = -0.5*ln2pi - lnsigma - lnL_TP_p(
                     time, flux, sigma, rps[mask],
-                    P_orb, incs[mask], a_arr[mask], R_s_arr[mask],
+                    P_orb[mask], incs[mask], a_arr[mask], R_s_arr[mask],
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[idxs[mask]],
@@ -1565,7 +1576,7 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             if (incs[i] >= inc_min) & (coll[i] == False):
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
                     time, flux, sigma, rps[i],
-                    P_orb, incs[i], a, R_s, u1, u2,
+                    P_orb[i], incs[i], a, R_s, u1, u2,
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[idxs[i]],
                     companion_is_host=False,
@@ -1576,7 +1587,7 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     idx = (-lnL).argsort()[:N_samples]
     Z = np.mean(
         np.nan_to_num(
-            np.exp(lnL+lnprior_companion+lnprior_Mstar+lnprior_Porb+600)
+            np.exp(lnL+lnprior_companion+600)
             )
         )
     lnZ = np.log(Z)
@@ -1585,7 +1596,7 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         'R_s': np.full(N_samples, R_s),
         'u1': np.full(N_samples, u1),
         'u2': np.full(N_samples, u2),
-        'P_orb': np.full(N_samples, P_orb),
+        'P_orb': P_orb[idx],
         'inc': incs[idx],
         'b': b[idx],
         'R_p': rps[idx],
@@ -1603,7 +1614,7 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Z: float, Tmag: float, Jmag: float, Hmag: float,
-            Kmag: float, output_url: str,
+            Kmag: float, trilegal_fname: str,
             contrast_curve_file: str = None, filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
             mission: str = "TESS", flatpriors: bool = False,
@@ -1624,7 +1635,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         Jmag (float): Target star J magnitude.
         Hmag (float): Target star H magnitude.
         Kmag (float): Target star K magnitude.
-        output_url (string): Link to trilegal query results.
+        trilegal_fname (string): File containing trilegal query results.
         contrast_curve_file (string): Path to contrast curve file.
         filt (string): Photometric filter of contrast curve. Options
                          are TESS, Vis, J, H, and K.
@@ -1639,6 +1650,14 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
     """
+    # sample orbital periods if range is given
+    if type(P_orb) not in [float,int]:
+        P_orb = np.random.uniform(
+            low=P_orb[0], high=P_orb[-1], size=N
+            )
+    else:
+        P_orb = np.full_like(N, P_orb)
+
     lnsigma = np.log(sigma)
     logg = np.log10(G*(M_s*Msun)/(R_s*Rsun)**2)
     # determine target star limb darkening coefficients
@@ -1684,7 +1703,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # determine background star population properties
     (Tmags_comp, masses_comp, loggs_comp, Teffs_comp, Zs_comp,
         Jmags_comp, Hmags_comp, Kmags_comp) = (
-        trilegal_results(output_url, Tmag)
+        trilegal_results(trilegal_fname, Tmag)
         )
     delta_mags = Tmag - Tmags_comp
     delta_Jmags = Jmag - Jmags_comp
@@ -1724,12 +1743,6 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
 
-    # calculate short-period binary prior for star of mass M_s
-    lnprior_Mstar = lnprior_Mstar_binary(np.array([M_s]))
-
-    # calculate orbital period prior
-    lnprior_Porb = lnprior_Porb_binary(P_orb)
-
     # calculate transit probability for each instance
     e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
     a = ((G*(M_s+masses)*Msun)/(4*pi**2)*(P_orb*86400)**2)**(1/3)
@@ -1762,7 +1775,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         u2_arr = np.full(N, u2)
         lnL[mask] = -0.5*ln2pi - lnsigma - lnL_EB_p(
                     time, flux, sigma, radii[mask], fluxratios[mask],
-                    P_orb, incs[mask], a[mask], R_s_arr[mask],
+                    P_orb[mask], incs[mask], a[mask], R_s_arr[mask],
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[idxs[mask]],
@@ -1783,7 +1796,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         u2_arr = np.full(N, u2)
         lnL_twin[mask] = -0.5*ln2pi - lnsigma - lnL_EB_twin_p(
                     time, flux, sigma, radii[mask], fluxratios[mask],
-                    2*P_orb, incs[mask], a_twin[mask], R_s_arr[mask],
+                    2*P_orb[mask], incs[mask], a_twin[mask], R_s_arr[mask],
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[idxs[mask]],
@@ -1800,7 +1813,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             if (incs[i] >= inc_min) & (qs[i] < 0.95) & (coll[i] == False):
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
                     time, flux, sigma, radii[i], fluxratios[i],
-                    P_orb, incs[i], a[i], R_s, u1, u2,
+                    P_orb[i], incs[i], a[i], R_s, u1, u2,
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[idxs[i]],
                     companion_is_host=False,
@@ -1815,7 +1828,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                 & (coll_twin[i] == False)):
                 lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
                     time, flux, sigma, radii[i], fluxratios[i],
-                    2*P_orb, incs[i], a_twin[i], R_s, u1, u2,
+                    2*P_orb[i], incs[i], a_twin[i], R_s, u1, u2,
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[idxs[i]],
                     companion_is_host=False,
@@ -1827,7 +1840,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     idx = (-lnL).argsort()[:N_samples]
     Z = np.mean(
         np.nan_to_num(
-            np.exp(lnL+lnprior_companion+lnprior_Mstar+lnprior_Porb+600)
+            np.exp(lnL+lnprior_companion+600)
             )
         )
     lnZ = np.log(Z)
@@ -1836,7 +1849,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         'R_s': np.full(N_samples, R_s),
         'u1': np.full(N_samples, u1),
         'u2': np.full(N_samples, u2),
-        'P_orb': np.full(N_samples, P_orb),
+        'P_orb': P_orb[idx],
         'inc': incs[idx],
         'b': b[idx],
         'R_p': np.zeros(N_samples),
@@ -1853,7 +1866,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     idx = (-lnL_twin).argsort()[:N_samples]
     Z = np.mean(
         np.nan_to_num(
-            np.exp(lnL_twin+lnprior_companion+lnprior_Mstar+lnprior_Porb+600)
+            np.exp(lnL_twin+lnprior_companion+600)
             )
         )
     lnZ = np.log(Z)
@@ -1862,7 +1875,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         'R_s': np.full(N_samples, R_s),
         'u1': np.full(N_samples, u1),
         'u2': np.full(N_samples, u2),
-        'P_orb': np.full(N_samples, 2*P_orb),
+        'P_orb': 2*P_orb[idx],
         'inc': incs[idx],
         'b': b_twin[idx],
         'R_p': np.zeros(N_samples),
@@ -1880,7 +1893,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Tmag: float, Jmag: float, Hmag: float, Kmag: float,
-            output_url: str,
+            trilegal_fname: str,
             contrast_curve_file: str = None, filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
             mission: str = "TESS", flatpriors: bool = False,
@@ -1900,7 +1913,7 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         Jmag (float): Target star J magnitude.
         Hmag (float): Target star H magnitude.
         Kmag (float): Target star K magnitude.
-        output_url (string): Link to trilegal query results.
+        trilegal_fname (string): File containing trilegal query results.
         contrast_curve_file (string): Path to contrast curve file.
         filt (string): Photometric filter of contrast curve. Options
                          are TESS, Vis, J, H, and K.
@@ -1914,12 +1927,20 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
+    # sample orbital periods if range is given
+    if type(P_orb) not in [float,int]:
+        P_orb = np.random.uniform(
+            low=P_orb[0], high=P_orb[-1], size=N
+            )
+    else:
+        P_orb = np.full_like(N, P_orb)
+
     lnsigma = np.log(sigma)
 
     # determine background star population properties
     (Tmags_comp, masses_comp, loggs_comp, Teffs_comp, Zs_comp,
         Jmags_comp, Hmags_comp, Kmags_comp) = (
-        trilegal_results(output_url, Tmag)
+        trilegal_results(trilegal_fname, Tmag)
         )
     radii_comp = np.sqrt(G*masses_comp*Msun / 10**loggs_comp) / Rsun
     delta_mags = Tmag - Tmags_comp
@@ -1986,12 +2007,6 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
 
-    # calculate short-prior planet prior for stars of masses masses_comp
-    lnprior_Mstar = lnprior_Mstar_planet(masses_comp[idxs])
-
-    # calculate orbital period prior
-    lnprior_Porb = lnprior_Porb_planet(P_orb, flatpriors)
-
     # sample from inc and R_p prior distributions
     rps = sample_rp(np.random.rand(N), masses_comp[idxs], flatpriors)
     incs = sample_inc(np.random.rand(N))
@@ -2025,7 +2040,7 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         # calculate lnL for transiting systems
         lnL[mask] = -0.5*ln2pi - lnsigma - lnL_TP_p(
                     time, flux, sigma, rps[mask],
-                    P_orb, incs[mask], a[mask], radii_comp[idxs[mask]],
+                    P_orb[mask], incs[mask], a[mask], radii_comp[idxs[mask]],
                     u1s_comp[idxs[mask]], u2s_comp[idxs[mask]],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[idxs[mask]],
@@ -2042,7 +2057,7 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
                     & (Teffs_comp[idxs[i]] <= 10000) & (coll[i] == False)):
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
                     time, flux, sigma, rps[i],
-                    P_orb, incs[i], a[i], radii_comp[idxs[i]],
+                    P_orb[i], incs[i], a[i], radii_comp[idxs[i]],
                     u1s_comp[idxs[i]], u2s_comp[idxs[i]],
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[idxs[i]],
@@ -2054,7 +2069,7 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     idx = (-lnL).argsort()[:N_samples]
     Z = np.mean(
         np.nan_to_num(
-            np.exp(lnL+lnprior_companion+lnprior_Mstar+lnprior_Porb+600)
+            np.exp(lnL+lnprior_companion+600)
             )
         )
     lnZ = np.log(Z)
@@ -2063,7 +2078,7 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         'R_s': radii_comp[idxs[idx]],
         'u1': u1s_comp[idxs[idx]],
         'u2': u2s_comp[idxs[idx]],
-        'P_orb': np.full(N_samples, P_orb),
+        'P_orb': P_orb[idx],
         'inc': incs[idx],
         'b': b[idx],
         'R_p': rps[idx],
@@ -2081,7 +2096,7 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Tmag: float, Jmag:float, Hmag: float, Kmag: float,
-            output_url: str,
+            trilegal_fname: str,
             contrast_curve_file: str = None, filt: str = "TESS",
             N: int = 1000000, parallel: bool = False,
             mission: str = "TESS", flatpriors: bool = False,
@@ -2101,7 +2116,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         Jmag (float): Target star J magnitude.
         Hmag (float): Target star H magnitude.
         Kmag (float): Target star K magnitude.
-        output_url (string): Link to trilegal query results.
+        trilegal_fname (string): File containing trilegal query results.
         contrast_curve_file (string): Path to contrast curve file.
         filt (string): Photometric filter of contrast curve. Options
                          are TESS, Vis, J, H, and K.
@@ -2116,6 +2131,14 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
     """
+    # sample orbital periods if range is given
+    if type(P_orb) not in [float,int]:
+        P_orb = np.random.uniform(
+            low=P_orb[0], high=P_orb[-1], size=N
+            )
+    else:
+        P_orb = np.full_like(N, P_orb)
+
     lnsigma = np.log(sigma)
 
     # sample from prior distributions
@@ -2128,7 +2151,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # determine background star population properties
     (Tmags_comp, masses_comp, loggs_comp, Teffs_comp, Zs_comp,
         Jmags_comp, Hmags_comp, Kmags_comp) = (
-        trilegal_results(output_url, Tmag)
+        trilegal_results(trilegal_fname, Tmag)
         )
     radii_comp = np.sqrt(G*masses_comp*Msun / 10**loggs_comp) / Rsun
     delta_mags = Tmag - Tmags_comp
@@ -2243,13 +2266,6 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
 
-    # calculate short-period binary prior for stars
-    # with masses masses_comp
-    lnprior_Mstar = lnprior_Mstar_binary(masses_comp[idxs])
-
-    # calculate orbital period prior
-    lnprior_Porb = lnprior_Porb_binary(P_orb)
-
     # calculate transit probability for each instance
     e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
     a = (
@@ -2289,7 +2305,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         # calculate lnL for transiting systems
         lnL[mask] = -0.5*ln2pi - lnsigma - lnL_EB_p(
                     time, flux, sigma, radii[mask], fluxratios[mask],
-                    P_orb, incs[mask], a[mask], radii_comp[idxs[mask]],
+                    P_orb[mask], incs[mask], a[mask], radii_comp[idxs[mask]],
                     u1s_comp[idxs[mask]], u2s_comp[idxs[mask]],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[idxs[mask]],
@@ -2313,7 +2329,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         # calculate lnL for transiting systems
         lnL_twin[mask] = -0.5*ln2pi - lnsigma - lnL_EB_twin_p(
                     time, flux, sigma, radii[mask], fluxratios[mask],
-                    2*P_orb, incs[mask], a_twin[mask], radii_comp[idxs[mask]],
+                    2*P_orb[mask], incs[mask], a_twin[mask], radii_comp[idxs[mask]],
                     u1s_comp[idxs[mask]], u2s_comp[idxs[mask]],
                     eccs[mask], argps[mask],
                     companion_fluxratio=fluxratios_comp[idxs[mask]],
@@ -2333,7 +2349,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                     & (coll[i] == False)):
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
                     time, flux, sigma, radii[i], fluxratios[i],
-                    P_orb, incs[i], a[i], radii_comp[idxs[i]],
+                    P_orb[i], incs[i], a[i], radii_comp[idxs[i]],
                     u1s_comp[idxs[i]], u2s_comp[idxs[i]],
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[idxs[i]],
@@ -2351,7 +2367,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                     & (coll_twin[i] == False)):
                 lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
                     time, flux, sigma, radii[i], fluxratios[i],
-                    2*P_orb, incs[i], a_twin[i], radii_comp[idxs[i]],
+                    2*P_orb[i], incs[i], a_twin[i], radii_comp[idxs[i]],
                     u1s_comp[idxs[i]], u2s_comp[idxs[i]],
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[idxs[i]],
@@ -2364,7 +2380,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     idx = (-lnL).argsort()[:N_samples]
     Z = np.mean(
         np.nan_to_num(
-            np.exp(lnL+lnprior_companion+lnprior_Mstar+lnprior_Porb+600)
+            np.exp(lnL+lnprior_companion+600)
             )
         )
     lnZ = np.log(Z)
@@ -2373,7 +2389,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         'R_s': radii_comp[idxs[idx]],
         'u1': u1s_comp[idxs[idx]],
         'u2': u2s_comp[idxs[idx]],
-        'P_orb': np.full(N_samples, P_orb),
+        'P_orb': P_orb[idx],
         'inc': incs[idx],
         'b': b[idx],
         'R_p': np.zeros(N_samples),
@@ -2390,7 +2406,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     idx = (-lnL_twin).argsort()[:N_samples]
     Z = np.mean(
         np.nan_to_num(
-            np.exp(lnL_twin+lnprior_companion+lnprior_Mstar+lnprior_Porb+600)
+            np.exp(lnL_twin+lnprior_companion+600)
             )
         )
     lnZ = np.log(Z)
@@ -2399,7 +2415,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         'R_s': radii_comp[idxs[idx]],
         'u1': u1s_comp[idxs[idx]],
         'u2': u2s_comp[idxs[idx]],
-        'P_orb': np.full(N_samples, 2*P_orb),
+        'P_orb': 2*P_orb[idx],
         'inc': incs[idx],
         'b': b_twin[idx],
         'R_p': np.zeros(N_samples),
@@ -2415,7 +2431,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 
 
 def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
-                    P_orb: float, Tmag: float, output_url: str,
+                    P_orb: float, Tmag: float, trilegal_fname: str,
                     N: int = 1000000, parallel: bool = False,
                     mission: str = "TESS", flatpriors: bool = False,
                     exptime: float = 0.00139, nsamples: int = 20):
@@ -2429,7 +2445,7 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         sigma (float): Normalized flux uncertainty.
         P_orb (float): Orbital period [days].
         Tmag (float): Target star TESS magnitude.
-        output_url (string): Link to trilegal query results.
+        trilegal_fname (string): File containing trilegal query results.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
@@ -2440,12 +2456,20 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
+    # sample orbital periods if range is given
+    if type(P_orb) not in [float,int]:
+        P_orb = np.random.uniform(
+            low=P_orb[0], high=P_orb[-1], size=N
+            )
+    else:
+        P_orb = np.full_like(N, P_orb)
+
     lnsigma = np.log(sigma)
 
     # determine properties of possible stars
     (Tmags_nearby, masses_nearby, loggs_nearby, Teffs_nearby,
         Zs_nearby, Jmags_nearby, Hmags_nearby, Kmags_nearby) = (
-        trilegal_results(output_url, Tmag)
+        trilegal_results(trilegal_fname, Tmag)
         )
     mask = (Tmag-1 < Tmags_nearby) & (Tmags_nearby < Tmag+1)
     Tmags_possible = Tmags_nearby[mask]
@@ -2498,7 +2522,7 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
             'R_s': 0,
             'u1': 0,
             'u2': 0,
-            'P_orb': P_orb,
+            'P_orb': 0,
             'inc': 0,
             'R_p': 0,
             'ecc': 0,
@@ -2510,13 +2534,6 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
             'lnZ': -np.inf
         }
         return res
-
-    # calculate short-prior planet prior for stars
-    # with masses masses_comp
-    lnprior_Mstar = lnprior_Mstar_planet(masses_possible[idxs])
-
-    # calculate orbital period prior
-    lnprior_Porb = lnprior_Porb_planet(P_orb, flatpriors)
 
     # sample from inc and R_p prior distributions
     rps = sample_rp(np.random.rand(N), masses_possible[idxs], flatpriors)
@@ -2554,7 +2571,7 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         companion_fluxratio = np.zeros(N)
         lnL[mask] = -0.5*ln2pi - lnsigma - lnL_TP_p(
                     time, flux, sigma, rps[mask],
-                    P_orb, incs[mask], a[mask],
+                    P_orb[mask], incs[mask], a[mask],
                     radii_possible[idxs[mask]],
                     u1s_possible[idxs[mask]],
                     u2s_possible[idxs[mask]],
@@ -2573,7 +2590,7 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
                     & (coll[i] == False)):
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
                     time, flux, sigma, rps[i],
-                    P_orb, incs[i], a[i], radii_possible[idxs[i]],
+                    P_orb[i], incs[i], a[i], radii_possible[idxs[i]],
                     u1s_possible[idxs[i]], u2s_possible[idxs[i]],
                     eccs[i], argps[i],
                     exptime=exptime, nsamples=nsamples
@@ -2582,7 +2599,7 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
     N_samples = 100
     idx = (-lnL).argsort()[:N_samples]
     Z = np.mean(np.nan_to_num(
-        np.exp(lnL+lnprior_Mstar+lnprior_Porb+600)
+        np.exp(lnL+600)
         ))
     lnZ = np.log(Z)
     res = {
@@ -2590,7 +2607,7 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         'R_s': radii_possible[idxs[idx]],
         'u1': u1s_possible[idxs[idx]],
         'u2': u2s_possible[idxs[idx]],
-        'P_orb': np.full(N_samples, P_orb),
+        'P_orb': P_orb[idx],
         'inc': incs[idx],
         'b': b[idx],
         'R_p': rps[idx],
@@ -2606,7 +2623,7 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
 
 
 def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
-                    P_orb: float, Tmag: float, output_url: str,
+                    P_orb: float, Tmag: float, trilegal_fname: str,
                     N: int = 1000000, parallel: bool = False,
                     mission: str = "TESS", flatpriors: bool = False,
                     exptime: float = 0.00139, nsamples: int = 20):
@@ -2620,7 +2637,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         sigma (float): Normalized flux uncertainty.
         P_orb (float): Orbital period [days].
         Tmag (float): Target star TESS magnitude.
-        output_url (string): Link to trilegal query results.
+        trilegal_fname (string): File containing trilegal query results.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
@@ -2632,6 +2649,14 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
     """
+    # sample orbital periods if range is given
+    if type(P_orb) not in [float,int]:
+        P_orb = np.random.uniform(
+            low=P_orb[0], high=P_orb[-1], size=N
+            )
+    else:
+        P_orb = np.full_like(N, P_orb)
+
     lnsigma = np.log(sigma)
 
     # sample from prior distributions
@@ -2643,7 +2668,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
     # determine properties of possible stars
     (Tmags_nearby, masses_nearby, loggs_nearby, Teffs_nearby,
         Zs_nearby, Jmags_nearby, Hmags_nearby, Kmags_nearby) = (
-        trilegal_results(output_url, Tmag)
+        trilegal_results(trilegal_fname, Tmag)
         )
     mask = (Tmag-1 < Tmags_nearby) & (Tmags_nearby < Tmag+1)
     Tmags_possible = Tmags_nearby[mask]
@@ -2696,7 +2721,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
             'R_s': 0,
             'u1': 0,
             'u2': 0,
-            'P_orb': P_orb,
+            'P_orb': 0,
             'inc': 0,
             'b': 0,
             'R_p': 0,
@@ -2720,13 +2745,6 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         flux_relation(masses)
         / (flux_relation(masses) + flux_relation(masses_possible[idxs]))
         )
-
-    # calculate short-period binary prior for stars
-    # with masses masses_comp
-    lnprior_Mstar = lnprior_Mstar_binary(masses_possible[idxs])
-
-    # calculate orbital period prior
-    lnprior_Porb = lnprior_Porb_binary(P_orb)
 
     # calculate transit probability for each instance
     e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
@@ -2770,7 +2788,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         companion_fluxratio = np.zeros(N)
         lnL[mask] = -0.5*ln2pi - lnsigma - lnL_EB_p(
                     time, flux, sigma, radii[mask], fluxratios[mask],
-                    P_orb, incs[mask], a[mask],
+                    P_orb[mask], incs[mask], a[mask],
                     radii_possible[idxs[mask]],
                     u1s_possible[idxs[mask]], u2s_possible[idxs[mask]],
                     eccs[mask], argps[mask],
@@ -2795,7 +2813,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         companion_fluxratio = np.zeros(N)
         lnL_twin[mask] = -0.5*ln2pi - lnsigma - lnL_EB_twin_p(
                     time, flux, sigma, radii[mask], fluxratios[mask],
-                    2*P_orb, incs[mask], a_twin[mask],
+                    2*P_orb[mask], incs[mask], a_twin[mask],
                     radii_possible[idxs[mask]],
                     u1s_possible[idxs[mask]], u2s_possible[idxs[mask]],
                     eccs[mask], argps[mask],
@@ -2815,7 +2833,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
                     & (coll[i] == False)):
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
                     time, flux, sigma, radii[i], fluxratios[i],
-                    P_orb, incs[i], a[i], radii_possible[idxs[i]],
+                    P_orb[i], incs[i], a[i], radii_possible[idxs[i]],
                     u1s_possible[idxs[i]], u2s_possible[idxs[i]],
                     eccs[i], argps[i],
                     exptime=exptime, nsamples=nsamples
@@ -2831,7 +2849,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
                     & (coll_twin[i] == False)):
                 lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
                     time, flux, sigma, radii[i], fluxratios[i],
-                    2*P_orb, incs[i], a_twin[i], radii_possible[idxs[i]],
+                    2*P_orb[i], incs[i], a_twin[i], radii_possible[idxs[i]],
                     u1s_possible[idxs[i]], u2s_possible[idxs[i]],
                     eccs[i], argps[i],
                     exptime=exptime, nsamples=nsamples
@@ -2841,7 +2859,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
     N_samples = 100
     idx = (-lnL).argsort()[:N_samples]
     Z = np.mean(np.nan_to_num(
-        np.exp(lnL+lnprior_Mstar+lnprior_Porb+600)
+        np.exp(lnL+600)
         ))
     lnZ = np.log(Z)
     res = {
@@ -2849,7 +2867,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         'R_s': radii_possible[idxs[idx]],
         'u1': u1s_possible[idxs[idx]],
         'u2': u2s_possible[idxs[idx]],
-        'P_orb': np.full(N_samples, P_orb),
+        'P_orb': P_orb[idx],
         'inc': incs[idx],
         'b': b[idx],
         'R_p': np.zeros(N_samples),
@@ -2865,7 +2883,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
     N_samples = 100
     idx = (-lnL_twin).argsort()[:N_samples]
     Z = np.mean(np.nan_to_num(
-        np.exp(lnL_twin+lnprior_Mstar+lnprior_Porb+600)
+        np.exp(lnL_twin+600)
         ))
     lnZ = np.log(Z)
     res_twin = {
@@ -2873,7 +2891,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
         'R_s': radii_possible[idxs[idx]],
         'u1': u1s_possible[idxs[idx]],
         'u2': u2s_possible[idxs[idx]],
-        'P_orb': np.full(N_samples, 2*P_orb),
+        'P_orb': 2*P_orb[idx],
         'inc': incs[idx],
         'b': b_twin[idx],
         'R_p': np.zeros(N_samples),
@@ -2915,6 +2933,14 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     Returns:
         res (dict): Best-fit properties and marginal likelihood.
     """
+    # sample orbital periods if range is given
+    if type(P_orb) not in [float,int]:
+        P_orb = np.random.uniform(
+            low=P_orb[0], high=P_orb[-1], size=N
+            )
+    else:
+        P_orb = np.full_like(N, P_orb)
+
     lnsigma = np.log(sigma)
     logg = 3.0
     M_s = (10**logg)*(R_s*Rsun)**2 / G / Msun
@@ -2940,13 +2966,6 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
         & (ldc_loggs == this_logg)
         )
     u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
-
-    # calculate short-prior planet prior for stars
-    # with masses masses_comp
-    lnprior_Mstar = lnprior_Mstar_planet(np.array([M_s]))
-
-    # calculate orbital period prior
-    lnprior_Porb = lnprior_Porb_planet(P_orb, flatpriors)
 
     # sample from inc and R_p prior distributions
     rps = sample_rp(np.random.rand(N), np.full_like(N, M_s), flatpriors)
@@ -2981,7 +3000,7 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
         companion_fluxratio = np.zeros(N)
         lnL[mask] = -0.5*ln2pi - lnsigma - lnL_TP_p(
                     time, flux, sigma, rps[mask],
-                    P_orb, incs[mask], a_arr[mask], R_s_arr[mask],
+                    P_orb[mask], incs[mask], a_arr[mask], R_s_arr[mask],
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=companion_fluxratio[mask],
@@ -2996,7 +3015,7 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
             if (incs[i] >= inc_min) & (coll[i] == False):
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
                     time, flux, sigma, rps[i],
-                    P_orb, incs[i], a, R_s, u1, u2,
+                    P_orb[i], incs[i], a, R_s, u1, u2,
                     eccs[i], argps[i],
                     exptime=exptime, nsamples=nsamples
                     )
@@ -3004,7 +3023,7 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     N_samples = 100
     idx = (-lnL).argsort()[:N_samples]
     Z = np.mean(np.nan_to_num(
-        np.exp(lnL+lnprior_Mstar+lnprior_Porb+600)
+        np.exp(lnL+600)
         ))
     lnZ = np.log(Z)
     res = {
@@ -3012,7 +3031,7 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
         'R_s': np.full(N_samples, R_s),
         'u1': np.full(N_samples, u1),
         'u2': np.full(N_samples, u2),
-        'P_orb': np.full(N_samples, P_orb),
+        'P_orb': P_orb[idx],
         'inc': incs[idx],
         'b': b[idx],
         'R_p': rps[idx],
@@ -3055,6 +3074,14 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
         res (dict): Best-fit properties and marginal likelihood.
         res_twin (dict): Best-fit properties and marginal likelihood.
     """
+    # sample orbital periods if range is given
+    if type(P_orb) not in [float,int]:
+        P_orb = np.random.uniform(
+            low=P_orb[0], high=P_orb[-1], size=N
+            )
+    else:
+        P_orb = np.full_like(N, P_orb)
+
     lnsigma = np.log(sigma)
     logg = 3.0
     M_s = (10**logg)*(R_s*Rsun)**2 / G / Msun
@@ -3097,13 +3124,6 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
         / (flux_relation(masses) + flux_relation(np.array([M_s])))
         )
 
-    # calculate short-period binary prior for stars
-    # with masses masses_comp
-    lnprior_Mstar = lnprior_Mstar_binary(np.array([M_s]))
-
-    # calculate orbital period prior
-    lnprior_Porb = lnprior_Porb_binary(P_orb)
-
     # calculate transit probability for each instance
     e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
     a = ((G*(M_s+masses)*Msun)/(4*pi**2)*(P_orb*86400)**2)**(1/3)
@@ -3137,7 +3157,7 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
         companion_fluxratio = np.zeros(N)
         lnL[mask] = -0.5*ln2pi - lnsigma - lnL_EB_p(
                     time, flux, sigma, radii[mask], fluxratios[mask],
-                    P_orb, incs[mask], a[mask], R_s_arr[mask],
+                    P_orb[mask], incs[mask], a[mask], R_s_arr[mask],
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=companion_fluxratio[mask],
@@ -3158,7 +3178,7 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
         companion_fluxratio = np.zeros(N)
         lnL_twin[mask] = -0.5*ln2pi - lnsigma - lnL_EB_twin_p(
                     time, flux, sigma, R_s, fluxratios[mask],
-                    2*P_orb, incs[mask], a_twin[mask], R_s_arr[mask],
+                    2*P_orb[mask], incs[mask], a_twin[mask], R_s_arr[mask],
                     u1_arr[mask], u2_arr[mask],
                     eccs[mask], argps[mask],
                     companion_fluxratio=companion_fluxratio[mask],
@@ -3175,7 +3195,7 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
                     & (coll[i] == False)):
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_EB(
                     time, flux, sigma, radii[i], fluxratios[i],
-                    P_orb, incs[i], a[i], R_s, u1, u2,
+                    P_orb[i], incs[i], a[i], R_s, u1, u2,
                     eccs[i], argps[i],
                     exptime=exptime, nsamples=nsamples
                     )
@@ -3188,7 +3208,7 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
                     & (coll_twin[i] == False)):
                 lnL_twin[i] = -0.5*ln2pi - lnsigma - lnL_EB_twin(
                     time, flux, sigma, R_s, fluxratios[i],
-                    2*P_orb, incs[i], a_twin[i], R_s, u1, u2,
+                    2*P_orb[i], incs[i], a_twin[i], R_s, u1, u2,
                     eccs[i], argps[i],
                     exptime=exptime, nsamples=nsamples
                     )
@@ -3197,7 +3217,7 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     N_samples = 100
     idx = (-lnL).argsort()[:N_samples]
     Z = np.mean(np.nan_to_num(
-        np.exp(lnL + lnprior_Mstar + lnprior_Porb + 600)
+        np.exp(lnL + 600)
         ))
     lnZ = np.log(Z)
     res = {
@@ -3205,7 +3225,7 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
         'R_s': np.full(N_samples, R_s),
         'u1': np.full(N_samples, u1),
         'u2': np.full(N_samples, u2),
-        'P_orb': np.full(N_samples, P_orb),
+        'P_orb': P_orb[idx],
         'inc': incs[idx],
         'b': b[idx],
         'R_p': np.zeros(N_samples),
@@ -3221,7 +3241,7 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     N_samples = 100
     idx = (-lnL_twin).argsort()[:N_samples]
     Z = np.mean(np.nan_to_num(
-        np.exp(lnL_twin+lnprior_Mstar+lnprior_Porb+600)
+        np.exp(lnL_twin+600)
         ))
     lnZ = np.log(Z)
     res_twin = {
@@ -3229,7 +3249,7 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
         'R_s': np.full(N_samples, R_s),
         'u1': np.full(N_samples, u1),
         'u2': np.full(N_samples, u2),
-        'P_orb': np.full(N_samples, 2*P_orb),
+        'P_orb': 2*P_orb[idx],
         'inc': incs[idx],
         'b': b_twin[idx],
         'R_p': np.zeros(N_samples),
