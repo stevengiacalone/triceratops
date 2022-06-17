@@ -116,6 +116,7 @@ class target:
             self.trilegal_fname = None
         else:
             self.trilegal_fname = trilegal_fname
+            self.trilegal_url = None
 
         TESS_images = []
         col0s, row0s = [], []
