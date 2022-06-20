@@ -97,9 +97,9 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
 
     # sample from prior distributions
-    rps = sample_rp(np.random.rand(N), np.full_like(N, M_s), flatpriors)
+    rps = sample_rp(np.random.rand(N), np.full(N, M_s), flatpriors)
     incs = sample_inc(np.random.rand(N))
-    eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=P_orb)
+    eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=np.mean(P_orb))
     argps = sample_w(np.random.rand(N))
 
     # calculate impact parameter
@@ -238,7 +238,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # sample from prior distributions
     incs = sample_inc(np.random.rand(N))
     qs = sample_q(np.random.rand(N), M_s)
-    eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=P_orb)
+    eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=np.mean(P_orb))
     argps = sample_w(np.random.rand(N))
 
     # calculate properties of the drawn EBs
@@ -517,9 +517,9 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion = np.zeros(N)
 
     # sample from prior distributions
-    rps = sample_rp(np.random.rand(N), np.full_like(N, M_s), flatpriors)
+    rps = sample_rp(np.random.rand(N), np.full(N, M_s), flatpriors)
     incs = sample_inc(np.random.rand(N))
-    eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=P_orb)
+    eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=np.mean(P_orb))
     argps = sample_w(np.random.rand(N))
 
     # calculate impact parameter
@@ -670,7 +670,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # sample from prior distributions
     incs = sample_inc(np.random.rand(N))
     qs = sample_q(np.random.rand(N), M_s)
-    eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=P_orb)
+    eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=np.mean(P_orb))
     argps = sample_w(np.random.rand(N))
     if molusc_file is None:
         qs_comp = sample_q_companion(np.random.rand(N), M_s)
@@ -1027,7 +1027,7 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
     # sample from prior distributions
     rps = sample_rp(np.random.rand(N), masses_comp, flatpriors)
     incs = sample_inc(np.random.rand(N))
-    eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=P_orb)
+    eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=np.mean(P_orb))
     argps = sample_w(np.random.rand(N))
 
     # calculate transit probability for each instance
@@ -1153,7 +1153,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # sample from prior distributions
     incs = sample_inc(np.random.rand(N))
     qs = sample_q(np.random.rand(N), M_s)
-    eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=P_orb)
+    eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=np.mean(P_orb))
     argps = sample_w(np.random.rand(N))
     if molusc_file is None:
         qs_comp = sample_q_companion(np.random.rand(N), M_s)
@@ -1530,9 +1530,9 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[delta_mags > 0.0] = -np.inf
 
     # sample from R_p and inc prior distributions
-    rps = sample_rp(np.random.rand(N), np.full_like(N, M_s), flatpriors)
+    rps = sample_rp(np.random.rand(N), np.full(N, M_s), flatpriors)
     incs = sample_inc(np.random.rand(N))
-    eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=P_orb)
+    eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=np.mean(P_orb))
     argps = sample_w(np.random.rand(N))
 
     # calculate impact parameter
@@ -1686,7 +1686,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # sample from inc and q prior distributions
     incs = sample_inc(np.random.rand(N))
     qs = sample_q(np.random.rand(N), M_s)
-    eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=P_orb)
+    eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=np.mean(P_orb))
     argps = sample_w(np.random.rand(N))
 
     # calculate properties of the drawn EBs
@@ -2010,7 +2010,7 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     # sample from inc and R_p prior distributions
     rps = sample_rp(np.random.rand(N), masses_comp[idxs], flatpriors)
     incs = sample_inc(np.random.rand(N))
-    eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=P_orb)
+    eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=np.mean(P_orb))
     argps = sample_w(np.random.rand(N))
 
     # calculate transit probability for each instance
@@ -2145,7 +2145,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     incs = sample_inc(np.random.rand(N))
     qs = sample_q(np.random.rand(N), M_s)
     qs_comp = sample_q_companion(np.random.rand(N), M_s)
-    eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=P_orb)
+    eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=np.mean(P_orb))
     argps = sample_w(np.random.rand(N))
 
     # determine background star population properties
@@ -2538,7 +2538,7 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
     # sample from inc and R_p prior distributions
     rps = sample_rp(np.random.rand(N), masses_possible[idxs], flatpriors)
     incs = sample_inc(np.random.rand(N))
-    eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=P_orb)
+    eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=np.mean(P_orb))
     argps = sample_w(np.random.rand(N))
 
     # calculate transit probability for each instance
@@ -2662,7 +2662,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
     # sample from prior distributions
     incs = sample_inc(np.random.rand(N))
     qs = sample_q(np.random.rand(N), 1.0)
-    eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=P_orb)
+    eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=np.mean(P_orb))
     argps = sample_w(np.random.rand(N))
 
     # determine properties of possible stars
@@ -2968,9 +2968,9 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
 
     # sample from inc and R_p prior distributions
-    rps = sample_rp(np.random.rand(N), np.full_like(N, M_s), flatpriors)
+    rps = sample_rp(np.random.rand(N), np.full(N, M_s), flatpriors)
     incs = sample_inc(np.random.rand(N))
-    eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=P_orb)
+    eccs = sample_ecc(np.random.rand(N), planet=True, P_orb=np.mean(P_orb))
     argps = sample_w(np.random.rand(N))
 
     # calculate transit probability for each instance
@@ -3111,7 +3111,7 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     # sample from inc and q prior distributions
     incs = sample_inc(np.random.rand(N))
     qs = sample_q(np.random.rand(N), 1.0)
-    eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=P_orb)
+    eccs = sample_ecc(np.random.rand(N), planet=False, P_orb=np.mean(P_orb))
     argps = sample_w(np.random.rand(N))
 
     # calculate properties of the drawn EBs
