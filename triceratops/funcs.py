@@ -332,7 +332,7 @@ def trilegal_results(trilegal_fname: str, Tmag: float):
         Zs (numpy array): Metallicities of all stars fainter than the
                           target [dex].
     """
-    df = read_csv(trilegal_fname, delim_whitespace=True)[:-2]
+    df = read_csv(trilegal_fname)[:-2]
     Masses = df["Mact"].values
     loggs = df["logg"].values
     Teffs = 10**df["logTe"].values
