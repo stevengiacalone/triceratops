@@ -23,7 +23,7 @@ You can install the most recently released version of this tool via PyPI::
 Usage
 -------------
 
-``triceratops`` can be easily used with jupyter notebook (with Python 3.6 or higher). See the notebook in the examples/ directory for a brief tutorial.
+``triceratops`` can be easily used with jupyter notebook (with Python 3.6 or higher). See the notebook in the examples/ directory for a brief tutorial or check out the `documentation <docs.exoplanet.codes>`_.
 
 Attribution
 -------------
