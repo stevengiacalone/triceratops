@@ -37,19 +37,23 @@ ln2pi = np.log(2*pi)
 class target:
     def __init__(self, ID: int, sectors: np.ndarray,
                  search_radius: int = 10, mission: str = "TESS",
-                 lightkurve_cache_dir=None, trilegal_fname=None):
-        """
+                 lightkurve_cache_dir = None, trilegal_fname = None):
+        """Initializes TRICERATOPS.
+
         Queries TIC for sources near the target and obtains a cutout
         of the pixels enclosing the target.
+
         Args:
             ID (int): TIC ID of the target.
             sectors (numpy array): Sectors in which the target
-                                   has been observed. If Kepler or K2
-                                   selected, sectors corresponds to
-                                   quarter or campaign, respectively.
+                has been observed. If Kepler or K2 selected, sectors 
+                corresponds to quarter or campaign, respectively.
             search_radius (int): Number of pixels from the target
-                                 star to search.
+                star to search.
             mission (str): "TESS", "Kepler", or "K2".
+            lightkurve_cache_dir (str): Path to lightkurve cache
+                directory.
+            trilegal_fname (str): Path to trilegal table.
         """
         self.ID = ID
         self.mission = mission
@@ -243,14 +247,16 @@ class target:
         return
 
     def add_star(self, ID: int, Tmag: float, bound: bool):
-        """
+        """For adding newly identified stars.
+
         Adds an additional star (e.g., an unresolved star identified
-        with follow up) to the table of stars.
+        with follow up) to the .stars dataframe.
+
         Args:
             ID (int): Arbitrary ID for the new star.
             Tmag (float): Estimated TESS magnitude of the new star.
             bound (bool): True if new star is physically bound to
-                          target star, False if new star is unbound.
+                target star, False if new star is unbound.
         """
         # if bound, use same parallax as target star
         if bound:
@@ -276,19 +282,23 @@ class target:
         return
 
     def remove_star(self, drop_stars: np.ndarray):
-        """
+        """For removing stars ruled out from being NTPs or NEBs.
+
         Drops stars from .stars dataframe so that they are
         excluded from validation analysis.
+
         Args:
             drop_stars (numpy array): Array of (int) TIC IDs
-                                      for stars to drop.
+                for stars to drop.
         """
         self.stars = self.stars[~self.stars["ID"].isin(drop_stars)]
         return
 
     def update_star(self, ID: int, param: str, value: float):
-        """
-        UPdate parameters of a star in .stars dataframe.
+        """For updating the properties of a star.
+
+        Updates parameters of a star in .stars dataframe.
+
         Args:
             ID (int): ID of star to edit.
             param (str): Name of parameter to edit
@@ -302,12 +312,15 @@ class target:
     def plot_field(self, sector: int = None, ap_pixels = None,
                    ap_color: str = "red", save: bool = False,
                    fname: str = None):
-        """
-        Plots the field of stars and pixels around the target.
+        """For visualizing the field of stars.
+
+        Plots the field of stars and pixels around the target to 
+        show their positions relative to the TESS pixels.
+
         Args:
             sector (int): Sector to plot.
             ap_pixels (numpy array): Aperture used to
-                                     extract light curve.
+                extract light curve.
             ap_color (str): Color of aperture outline.
             save (bool): Whether or not to save plot as pdf.
             fname (str): File name of pdf.
@@ -498,15 +511,17 @@ class target:
         return
 
     def calc_depths(self, tdepth: float, all_ap_pixels = None):
-        """
+        """Calculates required transit depth of each star. 
+
         Calculates the transit depth each source near the target would
         have if it were the source of the transit.
         This is done by modeling the PSF of each source as a circular
         Gaussian with a standard deviation of 0.75 pixels.
+
         Args:
             tdepth (float): Reported transit depth [ppm].
             all_ap_pixels (list of numpy arrays): Apertures used to
-                                                  extract light curve.
+                extract light curve.
         """
         if all_ap_pixels is None:
             print("No apertures provided, assuming 5x5 centered on target.")
@@ -615,34 +630,33 @@ class target:
                    drop_scenario: list = [],
                    verbose: int = 1, flatpriors: bool = False,
                    exptime: float = 0.00139, nsamples: int = 20,
-                   molusc_file: str = None,
-                   trilegal_fname: str = None):
-        """
+                   molusc_file: str = None):
+        """Run to calculate FPP and NFPP.
+        
         Calculates the relative probability of each scenario.
+
         Args:
             time (numpy array): Time of each data point
-                                [days from transit midpoint].
+                [days from transit midpoint].
             flux_0 (numpy array): Normalized flux of each data point.
             flux_err_0 (float): Uncertainty of flux.
             P_orb (float or numpy array): Orbital period [days] OR
-                                          min and max periods to consider
-                                          (i.e., [P_min, P_max]).
+                min and max periods to consider (i.e., [P_min, P_max]).
             contrast_curve_file (str): Path to contrast curve text file.
-                                       File should contain column with
-                                       separations (in arcsec) followed
-                                       by column with Delta_mags.
+                File should contain column with separations (in arcsec)
+                followed by column with Delta_mags.   
             filt (str): Photometric filter of contrast curve. Options are
-                        TESS, Vis, J, H, and K.
+                TESS, Vis, J, H, and K.
             N (int): Number of draws for MC.
             parallel (bool): Whether or not to simulate light curves
-                             in parallel.
+                in parallel.
             drop_scenario (list of strings): Scenarios to ignore
-                                             (e.g., ["TEB", "PEB"]).
+                (e.g., ["TEB", "PEB"]).
             verbose (int): 1 to print progress, 0 to print nothing.
             exptime (float): Exposure time of observations [days].
             nsamples (int): Sampling rate for supersampling.
             molusc_file (str): Path to MOLUSC output with stellar 
-                               binary properties.
+                binary properties.
         """
         # remove nans from light curve
         mask = ~np.isnan(time) & ~np.isnan(flux_0)
@@ -1401,11 +1415,13 @@ class target:
     def plot_fits(self, time: np.ndarray,
                   flux_0: np.ndarray, flux_err_0: float,
                   save: bool = False, fname: str = None):
-        """
-        Plots light curve for best fit instance of each scenario.
+        """Visualize best-fit for each scenarios.
+
+        Plots light curve for best-fit instance of each scenario.
+
         Args:
             time (numpy array): Time of each data point
-                                [days from transit midpoint].
+                [days from transit midpoint].
             flux_0 (numpy array): Normalized flux of each data point.
             flux_err_0 (float): Uncertainty of flux.
             save (bool): Whether or not to save plot as pdf.

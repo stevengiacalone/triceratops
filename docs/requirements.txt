@@ -1,2 +1,4 @@
+sphinx
 nbsphinx
 sphinx_book_theme
+triceratops

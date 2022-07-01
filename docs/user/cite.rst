@@ -3,7 +3,7 @@
 Citing TRICERATOPS
 ==================
 
-If you use ``triceratops``, please cite both the paper and the code.
+If you use TRICERATOPS, please cite both the paper and the code.
 
 Paper citation::
 
