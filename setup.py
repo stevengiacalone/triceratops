@@ -24,6 +24,7 @@ setup(name = "triceratops",
       install_requires=['numpy>=1.18.1','pandas>=0.23.4', 'scipy>=1.1.0', 'matplotlib>=3.5.1',
                         'astropy>=4.0', 'astroquery>=0.4.6', 'pytransit>=2.2',
                         'mechanicalsoup>=0.12.0', 'emcee>=3.0.2', 'seaborn>=0.11.1',
-                        'numba>=0.52.0', 'pyrr>=0.10.3', 'celerite>=0.4.0', 'lightkurve>=2.0.0'],
+                        'numba>=0.52.0', 'pyrr>=0.10.3', 'celerite>=0.4.0', 'lightkurve>=2.0.0',
+                        'arviz>=0.12.1', 'corner>=2.2.1'],
       zip_safe=False
 )
