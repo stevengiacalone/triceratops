@@ -1,4 +1,6 @@
 sphinx
 nbsphinx
 sphinx_book_theme
+arviz
+corner
 triceratops
