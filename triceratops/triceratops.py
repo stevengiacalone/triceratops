@@ -199,12 +199,8 @@ class target:
 
             pix_coord = np.zeros([len(ra), 2])
             for i in range(len(ra)):
-                RApix = np.asscalar(
-                    wcs.all_world2pix(ra[i], dec[i], 0)[0]
-                    )
-                Decpix = np.asscalar(
-                    wcs.all_world2pix(ra[i], dec[i], 0)[1]
-                    )
+                RApix = wcs.all_world2pix(ra[i], dec[i], 0)[0].item()
+                Decpix = wcs.all_world2pix(ra[i], dec[i], 0)[1].item()
                 pix_coord[i, 0] = col0+RApix + n_cols_before
                 pix_coord[i, 1] = row0+Decpix + n_rows_before
             pix_coords.append(pix_coord)

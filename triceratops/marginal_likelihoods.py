@@ -143,7 +143,7 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             if (incs[i] >= inc_min) & (coll[i] == False):
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
                     time, flux, sigma, rps[i],
-                    P_orb[i], incs[i], a, R_s, u1, u2,
+                    P_orb[i], incs[i], a[i], R_s, u1, u2,
                     eccs[i], argps[i],
                     exptime=exptime, nsamples=nsamples
                     )
@@ -564,7 +564,7 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
                 & (qs_comp[i] != 0.0)):
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
                     time, flux, sigma, rps[i],
-                    P_orb[i], incs[i], a, R_s, u1, u2,
+                    P_orb[i], incs[i], a[i], R_s, u1, u2,
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[i],
                     companion_is_host=False,
@@ -1576,7 +1576,7 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             if (incs[i] >= inc_min) & (coll[i] == False):
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
                     time, flux, sigma, rps[i],
-                    P_orb[i], incs[i], a, R_s, u1, u2,
+                    P_orb[i], incs[i], a[i], R_s, u1, u2,
                     eccs[i], argps[i],
                     companion_fluxratio=fluxratios_comp[idxs[i]],
                     companion_is_host=False,
@@ -3015,7 +3015,7 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
             if (incs[i] >= inc_min) & (coll[i] == False):
                 lnL[i] = -0.5*ln2pi - lnsigma - lnL_TP(
                     time, flux, sigma, rps[i],
-                    P_orb[i], incs[i], a, R_s, u1, u2,
+                    P_orb[i], incs[i], a[i], R_s, u1, u2,
                     eccs[i], argps[i],
                     exptime=exptime, nsamples=nsamples
                     )
