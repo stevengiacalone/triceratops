@@ -46,7 +46,7 @@ class target:
         Args:
             ID (int): TIC ID of the target.
             sectors (numpy array): Sectors in which the target
-                has been observed. If Kepler or K2 selected, sectors 
+                has been observed. If Kepler or K2 selected, sectors
                 corresponds to quarter or campaign, respectively.
             search_radius (int): Number of pixels from the target
                 star to search.
@@ -310,7 +310,7 @@ class target:
                    fname: str = None):
         """For visualizing the field of stars.
 
-        Plots the field of stars and pixels around the target to 
+        Plots the field of stars and pixels around the target to
         show their positions relative to the TESS pixels.
 
         Args:
@@ -507,7 +507,7 @@ class target:
         return
 
     def calc_depths(self, tdepth: float, all_ap_pixels = None):
-        """Calculates required transit depth of each star. 
+        """Calculates required transit depth of each star.
 
         Calculates the transit depth each source near the target would
         have if it were the source of the transit.
@@ -628,7 +628,7 @@ class target:
                    exptime: float = 0.00139, nsamples: int = 20,
                    molusc_file: str = None):
         """Run to calculate FPP and NFPP.
-        
+
         Calculates the relative probability of each scenario.
 
         Args:
@@ -640,7 +640,7 @@ class target:
                 min and max periods to consider (i.e., [P_min, P_max]).
             contrast_curve_file (str): Path to contrast curve text file.
                 File should contain column with separations (in arcsec)
-                followed by column with Delta_mags.   
+                followed by column with Delta_mags.
             filt (str): Photometric filter of contrast curve. Options are
                 TESS, Vis, J, H, and K.
             N (int): Number of draws for MC.
@@ -651,7 +651,7 @@ class target:
             verbose (int): 1 to print progress, 0 to print nothing.
             exptime (float): Exposure time of observations [days].
             nsamples (int): Sampling rate for supersampling.
-            molusc_file (str): Path to MOLUSC output with stellar 
+            molusc_file (str): Path to MOLUSC output with stellar
                 binary properties.
         """
         # remove nans from light curve
@@ -701,9 +701,14 @@ class target:
             dec = filtered_stars["dec"].values[i]
 
             # get url to TRILEGAL results and save
-            if self.trilegal_fname is None: 
+            if self.trilegal_fname is None:
                 output_url = self.trilegal_url
                 trilegal_fname = save_trilegal(output_url, self.ID)
+                # save the downloaded filename for future calc_probs() calls to avoid:
+                # 1. repeated download, and
+                # 2. HTTP 400 error, if the users use the target instance for a long time
+                #   such that TRILEGAL deletes the result.
+                self.trilegal_fname = trilegal_fname
             else:
                 trilegal_fname = self.trilegal_fname
 
