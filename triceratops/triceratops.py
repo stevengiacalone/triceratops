@@ -273,7 +273,7 @@ class target:
                 self.pix_coords[i],
                 self.pix_coords[i][0]
                 ).reshape(
-                self.pix_coords[i]+1, 2
+                len(self.pix_coords[i])+1, 2
                 )
         return
 
