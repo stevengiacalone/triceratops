@@ -8,6 +8,7 @@ import astropy.units as u
 import numpy as np
 from astroquery.vizier import Vizier
 from scipy.integrate import dblquad
+import pandas as pd
 from pandas import DataFrame, read_csv
 from math import floor, ceil
 import matplotlib.pyplot as plt
@@ -264,7 +265,12 @@ class target:
             new_star = DataFrame(
                 [[str(ID), Tmag]], columns=["ID", "Tmag"]
                 )
-        self.stars = self.stars.append(new_star)
+        # MUST reset_index of the concatenated data frame
+        # to ensure the indices of each row is unique.
+        # Otherwise update_star() might produce incorrect result
+        # (updating multiple rows with the same index)
+        self.stars = pd.concat([self.stars, new_star]).reset_index(drop=True)
+
         # for each set of pixel coordinates (corresponding to
         # each sector), append a row for the new star with the same
         # coordinates as the target star
@@ -273,7 +279,7 @@ class target:
                 self.pix_coords[i],
                 self.pix_coords[i][0]
                 ).reshape(
-                self.pix_coords[i]+1, 2
+                len(self.pix_coords[i])+1, 2
                 )
         return
 
