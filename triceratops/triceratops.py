@@ -74,28 +74,29 @@ class target:
             pixel_size = 4*u.arcsec
         if mission == 'TESS':
             ticid = ID
-        elif ra is None or dec is None:
-            if mission == "Kepler":
-                columns = ["_RA", "_DE"]
-                result = (
-                    Vizier(columns=columns)
-                        .query_constraints(
-                            KIC=str(ID),
-                            catalog="J/ApJS/229/30/catalog"
-                            )[0].as_array()
-                )
-                ra = result[0]["_RA"]
-                dec = result[0]["_DE"]
-            elif mission == "K2":
-                result = (
-                    Vizier(columns=["RAJ2000", "DEJ2000"])
-                        .query_constraints(
-                            ID=str(ID),
-                            catalog="IV/34/epic"
-                            )[0].as_array()
-                )
-                ra = result[0]["RAJ2000"]
-                dec = result[0]["DEJ2000"]
+        else:
+            if ra is None or dec is None:
+                if mission == "Kepler":
+                    columns = ["_RA", "_DE"]
+                    result = (
+                        Vizier(columns=columns)
+                            .query_constraints(
+                                KIC=str(ID),
+                                catalog="J/ApJS/229/30/catalog"
+                                )[0].as_array()
+                    )
+                    ra = result[0]["_RA"]
+                    dec = result[0]["_DE"]
+                elif mission == "K2":
+                    result = (
+                        Vizier(columns=["RAJ2000", "DEJ2000"])
+                            .query_constraints(
+                                ID=str(ID),
+                                catalog="IV/34/epic"
+                                )[0].as_array()
+                    )
+                    ra = result[0]["RAJ2000"]
+                    dec = result[0]["DEJ2000"]
             ticid = Catalogs.query_region(
                 SkyCoord(ra, dec, unit="deg"),
                 radius=search_radius * pixel_size,
