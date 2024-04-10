@@ -38,7 +38,8 @@ ln2pi = np.log(2*pi)
 class target:
     def __init__(self, ID: int, sectors: np.ndarray,
                  search_radius: int = 10, mission: str = "TESS",
-                 lightkurve_cache_dir = None, trilegal_fname = None):
+                 lightkurve_cache_dir = None, trilegal_fname = None,
+                 ra: float=None, dec: float=None):
         """Initializes TRICERATOPS.
 
         Queries TIC for sources near the target and obtains a cutout
@@ -55,6 +56,8 @@ class target:
             lightkurve_cache_dir (str): Path to lightkurve cache
                 directory.
             trilegal_fname (str): Path to trilegal table.
+            ra (float): right ascension of target.
+            dec (float): declination of target.
         """
         self.ID = ID
         self.mission = mission
@@ -69,31 +72,31 @@ class target:
             pixel_size = 20.25*u.arcsec
         else:
             pixel_size = 4*u.arcsec
-        ra = None
-        dec = None
-        if mission == "Kepler":
-            columns = ["_RA", "_DE"]
-            result = (
-                Vizier(columns=columns)
-                    .query_constraints(
-                        KIC=str(ID),
-                        catalog="J/ApJS/229/30/catalog"
-                        )[0].as_array()
-            )
-            ra = result[0]["_RA"]
-            dec = result[0]["_DE"]
-        elif mission == "K2":
-            result = (
-                Vizier(columns=["RAJ2000", "DEJ2000"])
-                    .query_constraints(
-                        ID=str(ID),
-                        catalog="IV/34/epic"
-                        )[0].as_array()
-            )
-            ra = result[0]["RAJ2000"]
-            dec = result[0]["DEJ2000"]
-        ticid = ID
-        if ra is not None and dec is not None:
+        if mission == 'TESS':
+            ticid = ID
+        else:
+            if ra is None or dec is None:
+                if mission == "Kepler":
+                    columns = ["_RA", "_DE"]
+                    result = (
+                        Vizier(columns=columns)
+                            .query_constraints(
+                                KIC=str(ID),
+                                catalog="J/ApJS/229/30/catalog"
+                                )[0].as_array()
+                    )
+                    ra = result[0]["_RA"]
+                    dec = result[0]["_DE"]
+                elif mission == "K2":
+                    result = (
+                        Vizier(columns=["RAJ2000", "DEJ2000"])
+                            .query_constraints(
+                                ID=str(ID),
+                                catalog="IV/34/epic"
+                                )[0].as_array()
+                    )
+                    ra = result[0]["RAJ2000"]
+                    dec = result[0]["DEJ2000"]
             ticid = Catalogs.query_region(
                 SkyCoord(ra, dec, unit="deg"),
                 radius=search_radius * pixel_size,
