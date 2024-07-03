@@ -1,4 +1,5 @@
 import lightkurve
+import traceback
 from astroquery.mast import Catalogs, Tesscut
 from astropy.coordinates import SkyCoord
 from astropy import constants
@@ -129,75 +130,81 @@ class target:
         TESS_images = []
         col0s, row0s = [], []
         pix_coords = []
+        Tmag = stars["Tmag"].values
+        ra = stars["ra"].values
+        dec = stars["dec"].values
+        cutout_coord = SkyCoord(ra[0], dec[0], unit="deg")
         # for each sector, get FFI cutout and transform RA/Dec into
         # TESS pixel coordinates
         for j, sector in enumerate(sectors):
-            Tmag = stars["Tmag"].values
-            ra = stars["ra"].values
-            dec = stars["dec"].values
-            cutout_coord = SkyCoord(ra[0], dec[0], unit="deg")
-            if mission == "TESS":
-                cutout_hdu = Tesscut.get_cutouts(
-                    coordinates=cutout_coord,
-                    size=self.N_pix,
-                    sector=sector
-                    )[0]
-                cutout_table = cutout_hdu[1].data
-                hdu = cutout_hdu[2].header
-                wcs = WCS(hdu)
-                n_cols_before = 0
-                n_rows_before = 0
-                TESS_images.append(np.nanmean(cutout_table["FLUX"], axis=0))
-                col0 = cutout_hdu[1].header["1CRV4P"]
-                row0 = cutout_hdu[1].header["2CRV4P"]
-            elif mission == "Kepler":
-                tpf = lightkurve.search_targetpixelfile(
-                    "KIC " + str(ID),
-                    mission="Kepler",
-                    quarter=sector
-                    ).download_all(download_dir=lightkurve_cache_dir)
-                cutout_table = tpf[0].hdu[1].data
-                hdu = tpf[0].hdu[2].header
-                wcs = WCS(hdu)
-                image = np.nanmean(cutout_table["FLUX"], axis=0)
-                n_rows_before = (self.N_pix - image.shape[0])//2
-                n_rows_after = ((self.N_pix - image.shape[0])
-                    - (self.N_pix - image.shape[0])//2)
-                n_cols_before = (self.N_pix - image.shape[1])//2
-                n_cols_after = ((self.N_pix - image.shape[1])
-                    - (self.N_pix - image.shape[1])//2)
-                npad = ((n_rows_before, n_rows_after),
-                        (n_cols_before, n_cols_after))
-                image = np.pad(
-                    image, npad, mode='constant', constant_values=(np.nan)
-                    )
-                TESS_images.append(image)
-                col0 = tpf[0].hdu[1].header["1CRV4P"] - n_cols_before
-                row0 = tpf[0].hdu[1].header["2CRV4P"] - n_rows_before
-            elif mission == "K2":
-                tpf = lightkurve.search_targetpixelfile(
-                    "EPIC " + str(ID),
-                    mission="K2",
-                    campaign=sector
-                    ).download_all(download_dir=lightkurve_cache_dir)
-                cutout_table = tpf[0].hdu[1].data
-                hdu = tpf[0].hdu[2].header
-                wcs = WCS(hdu)
-                image = np.nanmean(cutout_table["FLUX"], axis=0)
-                n_rows_before = (self.N_pix - image.shape[0])//2
-                n_rows_after = ((self.N_pix - image.shape[0])
-                    - (self.N_pix - image.shape[0])//2)
-                n_cols_before = (self.N_pix - image.shape[1])//2
-                n_cols_after = ((self.N_pix - image.shape[1])
-                    - (self.N_pix - image.shape[1])//2)
-                npad = ((n_rows_before, n_rows_after),
-                        (n_cols_before, n_cols_after))
-                image = np.pad(
-                    image, npad, mode='constant', constant_values=(np.nan)
-                    )
-                TESS_images.append(image)
-                col0 = tpf[0].hdu[1].header["1CRV4P"] - n_cols_before
-                row0 = tpf[0].hdu[1].header["2CRV4P"] - n_rows_before
+            try:
+                if mission == "TESS":
+                    print(f"Getting TessCut for sector {sector}")
+                    tess_cuts = lightkurve.search_tesscut(target=cutout_coord, sector=sector) \
+                        .download_all(cutout_size=(self.N_pix, self.N_pix))
+                    cutout_hdu = tess_cuts[0].hdu
+                    cutout_table = cutout_hdu[1].data
+                    hdu = cutout_hdu[2].header
+                    wcs = WCS(hdu)
+                    n_cols_before = 0
+                    n_rows_before = 0
+                    TESS_images.append(np.nanmean(cutout_table["FLUX"], axis=0))
+                    col0 = cutout_hdu[1].header["1CRV4P"]
+                    row0 = cutout_hdu[1].header["2CRV4P"]
+                elif mission == "Kepler":
+                    print(f"Getting TPF for sector {sector}")
+                    tpf = lightkurve.search_targetpixelfile(
+                        "KIC " + str(ID),
+                        mission="Kepler",
+                        quarter=sector
+                        ).download_all(download_dir=lightkurve_cache_dir)
+                    cutout_table = tpf[0].hdu[1].data
+                    hdu = tpf[0].hdu[2].header
+                    wcs = WCS(hdu)
+                    image = np.nanmean(cutout_table["FLUX"], axis=0)
+                    n_rows_before = (self.N_pix - image.shape[0])//2
+                    n_rows_after = ((self.N_pix - image.shape[0])
+                        - (self.N_pix - image.shape[0])//2)
+                    n_cols_before = (self.N_pix - image.shape[1])//2
+                    n_cols_after = ((self.N_pix - image.shape[1])
+                        - (self.N_pix - image.shape[1])//2)
+                    npad = ((n_rows_before, n_rows_after),
+                            (n_cols_before, n_cols_after))
+                    image = np.pad(
+                        image, npad, mode='constant', constant_values=(np.nan)
+                        )
+                    TESS_images.append(image)
+                    col0 = tpf[0].hdu[1].header["1CRV4P"] - n_cols_before
+                    row0 = tpf[0].hdu[1].header["2CRV4P"] - n_rows_before
+                elif mission == "K2":
+                    print(f"Getting TPF for sector {sector}")
+                    tpf = lightkurve.search_targetpixelfile(
+                        "EPIC " + str(ID),
+                        mission="K2",
+                        campaign=sector
+                        ).download_all(download_dir=lightkurve_cache_dir)
+                    cutout_table = tpf[0].hdu[1].data
+                    hdu = tpf[0].hdu[2].header
+                    wcs = WCS(hdu)
+                    image = np.nanmean(cutout_table["FLUX"], axis=0)
+                    n_rows_before = (self.N_pix - image.shape[0])//2
+                    n_rows_after = ((self.N_pix - image.shape[0])
+                        - (self.N_pix - image.shape[0])//2)
+                    n_cols_before = (self.N_pix - image.shape[1])//2
+                    n_cols_after = ((self.N_pix - image.shape[1])
+                        - (self.N_pix - image.shape[1])//2)
+                    npad = ((n_rows_before, n_rows_after),
+                            (n_cols_before, n_cols_after))
+                    image = np.pad(
+                        image, npad, mode='constant', constant_values=(np.nan)
+                        )
+                    TESS_images.append(image)
+                    col0 = tpf[0].hdu[1].header["1CRV4P"] - n_cols_before
+                    row0 = tpf[0].hdu[1].header["2CRV4P"] - n_rows_before
+            except Exception as e:
+                print(f"Sector {sector} raised exception. Ignoring for validation.")
+                print(traceback.format_exc())
+                continue
             col0s.append(col0)
             row0s.append(row0)
 
