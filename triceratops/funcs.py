@@ -3,7 +3,10 @@ from pandas import read_csv
 from astropy import constants
 from scipy.interpolate import InterpolatedUnivariateSpline
 from mechanicalsoup import StatefulBrowser
+from urllib.request import urlopen
+from bs4 import BeautifulSoup
 from time import sleep
+from astropy.io import fits
 
 Msun = constants.M_sun.cgs.value
 Rsun = constants.R_sun.cgs.value
@@ -383,3 +386,75 @@ def trilegal_results(trilegal_fname: str, Tmag: float):
         Hmags = Hmags[mask]
         Kmags = Kmags[mask]
     return Tmags, Masses, loggs, Teffs, Zs, Jmags, Hmags, Kmags
+
+def segment_ID(str_segment):
+    """
+    Returns TIC ID with appropriate number of leading zeros
+    for MAST querying.
+    """
+    if len(str_segment) == 0:
+        return "0000"
+    elif len(str_segment) == 1:
+        return "000"+str_segment
+    elif len(str_segment) == 2:
+        return "00"+str_segment
+    elif len(str_segment) == 3:
+        return "0"+str_segment
+    elif len(str_segment) == 4:
+        return str_segment
+
+        
+def find_url(ID: str, sector: int):
+    """
+    Returns url of FITS file for TESS SPOC lc.
+    Within this file is the aperture used in the sector.
+    Args:
+        ID (str): TIC ID of star.
+        sector (int): TESS sector.
+    Returns:
+        url (str): FITS file url.
+    """
+    url = "https://archive.stsci.edu/missions/tess/tid/"
+    
+    if len(str(sector)) == 1:
+        str1 = "s000"+str(sector)
+    elif len(str(sector)) == 2:
+        str1 = "s00"+str(sector)
+           
+    str2 = segment_ID(str(ID)[-16:-12])
+    str3 = segment_ID(str(ID)[-12:-8])
+    str4 = segment_ID(str(ID)[-8:-4])
+    str5 = segment_ID(str(ID)[-4:])
+        
+    url += str1+"/"+str2+"/"+str3+"/"+str4+"/"+str5+"/"
+    
+    urlpath = urlopen(url)
+    string = urlpath.read().decode('utf-8')
+    soup = BeautifulSoup(string, 'html.parser')
+    for link in soup.find_all('a'):
+        if (link.get('href')[-9:]) == "s_lc.fits":
+            url += link.get('href')
+
+    return url
+
+def get_aperture(ID, sector):
+    """
+    Returns aperture array that can be input into
+    calc_depths method for a given sector.
+    Args:
+        ID (str): TIC ID of star.
+        sector (int): TESS sector.
+    Returns:
+        ap_pixels (numpy array): Aperture pixels.
+    """
+    fits_file = find_url(ID, sector)
+
+    with fits.open(fits_file, mode="readonly") as hdulist:
+        aperture = hdulist[2].data
+        
+    ap_pixels = np.argwhere(aperture == np.max(aperture))
+    ap_pixels[:,0] += hdulist[2].header["CRVAL2P"]
+    ap_pixels[:,1] += hdulist[2].header["CRVAL1P"]
+    ap_pixels = np.flip(ap_pixels, axis=1)
+    
+    return ap_pixels

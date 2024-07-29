@@ -24,7 +24,8 @@ from .funcs import (Gauss2D,
                    save_trilegal,
                    query_TRILEGAL,
                    renorm_flux,
-                   stellar_relations)
+                   stellar_relations,
+                   get_aperture)
 from .marginal_likelihoods import *
 
 Msun = constants.M_sun.cgs.value
@@ -320,6 +321,27 @@ class target:
         idx = self.stars[self.stars.ID == str(ID)].index
         self.stars.loc[idx, [param]] = value
         return
+
+    def get_spoc_apertures(self):
+        """
+        Returns apertures used by the SPOC in the given
+        sectors, if available.
+        Args:
+            self
+        Returns:
+            aps (list): List of aperture pixels, in order of
+                        sectors as input.
+        """
+        aps = []
+        this_ID = self.ID
+        these_sectors = self.sectors
+        try:
+            for sector in these_sectors:
+                ap = get_aperture(this_ID, sector)
+                aps.append(ap)
+        except:
+            print("No SPOC apertures available.")
+        return aps
 
     def plot_field(self, sector: int = None, ap_pixels = None,
                    ap_color: str = "red", save: bool = False,
