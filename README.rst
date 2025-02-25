@@ -12,6 +12,8 @@ A tool for vetting and validating TESS Objects of Interest.
 
 See `Giacalone et al. (2021) <https://ui.adsabs.harvard.edu/abs/2021AJ....161...24G/abstract>`_ for more information about this tool.
 
+For a modified version of the code that can simultaneously analyze transits observed in different photometric passbands (i.e., both TESS data and ground-based data), see `this repo <https://github.com/JGB276/TRICERATOPS_v2>`_.
+
 Installation
 -------------
 
