@@ -304,6 +304,10 @@ class target:
             drop_stars (numpy array): Array of (int) TIC IDs
                 for stars to drop.
         """
+        # convert drop_stars to an array of str for actual matching
+        if np.isscalar(drop_stars):
+            drop_stars = [drop_stars]
+        drop_stars = [str(s) for s in drop_stars]
         self.stars = self.stars[~self.stars["ID"].isin(drop_stars)]
         return
 
