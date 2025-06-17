@@ -111,7 +111,10 @@ class target:
             )
         new_df = df[
             "ID", "Tmag", "Jmag", "Hmag", "Kmag",
-            "ra", "dec", "mass", "rad", "Teff", "plx"
+            "ra", "dec", "mass", "rad", "Teff", "plx",
+            # for spurious objects, etc.
+            # see https://arxiv.org/abs/2108.04778 Section 3.1 for details
+            "disposition", "duplicate_id"
             ]
         stars = new_df.to_pandas()
 
