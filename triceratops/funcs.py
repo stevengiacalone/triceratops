@@ -7,6 +7,7 @@ from urllib.request import urlopen
 from bs4 import BeautifulSoup
 from time import sleep
 from astropy.io import fits
+import ssl
 
 Msun = constants.M_sun.cgs.value
 Rsun = constants.R_sun.cgs.value
@@ -231,17 +232,22 @@ def separation_at_contrast(delta_mags: np.array,
     return sep
 
 
-def query_TRILEGAL(RA: float, Dec: float, verbose: int = 1):
+def query_TRILEGAL(RA: float, Dec: float, verbose: int = 1, verify_ssl: bool = True):
     """
     Begins TRILEGAL query.
     Args:
         RA, Dec: Coordinates of the target.
         verbose: 1 to print progress, 0 to print nothing.
+        verify_ssl: True to verify SSL certificates, False to ignore.
+                    ONLY SET TO FALSE IF ABSOLUTELY NECESSARY.
     Returns:
         output_url (str): URL of page with query results.
     """
     # fill out and submit online TRILEGAL form
     browser = StatefulBrowser()
+    if verify_ssl is False:
+        ssl._create_default_https_context = ssl._create_unverified_context
+        browser.session.verify = False
     browser.open("http://stev.oapd.inaf.it/cgi-bin/trilegal_1.6")
     browser.select_form(nr=0)
     browser["gal_coord"] = "2"
@@ -258,6 +264,9 @@ def query_TRILEGAL(RA: float, Dec: float, verbose: int = 1):
     sleep(5)
     if len(browser.get_current_page().select("a")) == 0:
         browser = StatefulBrowser()
+        if verify_ssl is False:
+            ssl._create_default_https_context = ssl._create_unverified_context
+            browser.session.verify = False
         browser.open("http://stev.oapd.inaf.it/cgi-bin/trilegal_1.5")
         browser.select_form(nr=0)
         browser["gal_coord"] = "2"

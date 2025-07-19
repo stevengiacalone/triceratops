@@ -41,7 +41,7 @@ class target:
     def __init__(self, ID: int, sectors: np.ndarray,
                  search_radius: int = 10, mission: str = "TESS",
                  lightkurve_cache_dir = None, trilegal_fname = None,
-                 ra: float=None, dec: float=None):
+                 ra: float=None, dec: float=None, verify_ssl: bool=True):
         """Initializes TRICERATOPS.
 
         Queries TIC for sources near the target and obtains a cutout
@@ -60,6 +60,9 @@ class target:
             trilegal_fname (str): Path to trilegal table.
             ra (float): right ascension of target.
             dec (float): declination of target.
+            verify_ssl (bool): True to verify SSL certificates,
+                False to ignore. ONLY SET TO FALSE IF ABSOLUTELY
+                NECESSARY.
         """
         self.ID = ID
         self.mission = mission
@@ -123,7 +126,8 @@ class target:
             output_url = query_TRILEGAL(
                 stars["ra"].values[0],
                 stars["dec"].values[0],
-                verbose=0
+                verbose=0,
+                verify_ssl=True
                 )
             self.trilegal_url = output_url
             self.trilegal_fname = None
