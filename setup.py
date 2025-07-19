@@ -5,7 +5,7 @@ def readme():
         return f.read()
 
 setup(name = "triceratops",
-      version = '1.0.19',
+      version = '1.0.20',
       description = "Statistical Validation of Transiting Planet Candidates",
       long_description = readme(),
       author = "Steven Giacalone",
@@ -22,7 +22,7 @@ setup(name = "triceratops",
         'Topic :: Scientific/Engineering :: Astronomy'
         ],
       install_requires=['numpy>=1.18.1','pandas>=0.23.4', 'scipy>=1.1.0', 'matplotlib>=3.5.1',
-                        'astropy>=4.0', 'astroquery>=0.4.6', 'pytransit>=2.2',
+                        'astropy>=4.0', 'astroquery>=0.4.6', 'pytransit==2.2',
                         'mechanicalsoup>=0.12.0', 'emcee>=3.0.2', 'seaborn>=0.11.1',
                         'numba>=0.52.0', 'pyrr>=0.10.3', 'celerite>=0.4.0', 'lightkurve>=2.0.0',
                         'arviz>=0.12.1', 'corner>=2.2.1', 'beautifulsoup4>=4.11.1'],
