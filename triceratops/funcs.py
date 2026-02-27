@@ -188,10 +188,16 @@ def Gauss2D(x, y, mu_x, mu_y, sigma, A):
         A (float): Area under Gaussian.
     Returns:
     """
+    # dblquad passes scalar x/y; np.meshgrid on scalars returns 0-d arrays
+    # on NumPy 2.x, which scipy cannot convert internally. Fast-path for
+    # the scalar case (the only case dblquad uses).
+    if np.ndim(x) == 0 and np.ndim(y) == 0:
+        x0, y0 = float(x), float(y)
+        exponent = ((x0 - mu_x)**2 + (y0 - mu_y)**2) / (2*sigma**2)
+        return float(A / (2*np.pi*sigma**2) * np.exp(-exponent))
     xgrid, ygrid = np.meshgrid(x, y)
     exponent = ((xgrid-mu_x)**2 + (ygrid-mu_y)**2)/(2*sigma**2)
-    GaussExp = np.exp(-exponent)
-    return A/(2*np.pi*sigma**2)*GaussExp
+    return A/(2*np.pi*sigma**2)*np.exp(-exponent)
 
 
 def file_to_contrast_curve(contrast_curve_file: str):
