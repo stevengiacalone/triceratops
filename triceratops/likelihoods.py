@@ -1,9 +1,14 @@
 import numpy as np
 from astropy import constants
 
-# NumPy 2.0 removed np.trapz (renamed to np.trapezoid). Inject the alias
-# before pytransit's module-level import runs so older pytransit releases
-# load cleanly. No-op on NumPy < 2.0.
+# Older pytransit releases use NumPy aliases removed in modern NumPy.
+# Inject shims before the pytransit import runs; both guards are no-ops
+# on NumPy versions where the names still exist.
+#
+# np.int (Python builtin alias): removed in NumPy 1.24.
+# np.trapz (renamed to np.trapezoid): removed in NumPy 2.0.
+if not hasattr(np, "int"):
+    np.int = int  # type: ignore[attr-defined]
 if not hasattr(np, "trapz"):
     np.trapz = np.trapezoid  # type: ignore[attr-defined]
 
