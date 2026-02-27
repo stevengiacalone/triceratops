@@ -12,7 +12,7 @@ No additional test dependencies beyond pytest are needed.
 import numpy as np
 from scipy.special import logsumexp
 
-from triceratops._numerics import _log_mean_exp
+from triceratops._numerics import _log_mean_exp, _normalize_probabilities
 
 
 # ---------------------------------------------------------------------------
@@ -201,30 +201,51 @@ def test_n_total_mismatch_raises():
 
 
 # ---------------------------------------------------------------------------
-# Test 11: NaN or +inf in lnZ triggers distinct normalization warning.
+# Test 11: _normalize_probabilities returns correct probs and status for
+# all three cases: normal, all-neginf, and NaN/+inf anomaly.
 #
-# Exercises the anomaly branch added to calc_probs that is separate from
-# the all-neginf degenerate case.
+# Tests the extracted pure function directly — no astronomy dep chain needed.
 # ---------------------------------------------------------------------------
-def test_normalization_nan_and_posinf_warn_distinctly():
-    import warnings
+def test_normalize_probabilities_normal_case():
+    lnZ = np.array([-1.0, -2.0, -3.0])
+    probs, status = _normalize_probabilities(lnZ)
+    assert status == 'ok'
+    assert np.isclose(probs.sum(), 1.0, rtol=0, atol=1e-14)
+    assert np.all(np.isfinite(probs))
+    assert np.isclose(probs[0] / probs[1], np.e, rtol=1e-14)
 
-    for bad_val, label in [(np.nan, "NaN"), (np.inf, "+inf")]:
-        lnZ = np.array([-1.0, bad_val, -3.0])
-        log_norm = logsumexp(lnZ)
 
-        if np.any(np.isnan(lnZ)) or np.any(np.isposinf(lnZ)):
-            with warnings.catch_warnings(record=True) as caught:
-                warnings.simplefilter("always")
-                warnings.warn(
-                    "Unexpected NaN or +inf in scenario log-evidences.",
-                    RuntimeWarning,
-                )
-            assert len(caught) == 1, f"{label}: expected 1 warning"
-            assert issubclass(caught[0].category, RuntimeWarning)
-            assert "NaN or +inf" in str(caught[0].message), (
-                f"{label}: wrong warning text: {caught[0].message}"
-            )
+def test_normalize_probabilities_all_neginf():
+    lnZ = np.full(5, -np.inf)
+    probs, status = _normalize_probabilities(lnZ)
+    assert status == 'all_neginf'
+    assert np.all(probs == 0.0)
+    assert not np.any(np.isnan(probs))
+
+
+def test_normalize_probabilities_anomaly_nan():
+    lnZ = np.array([-1.0, np.nan, -3.0])
+    probs, status = _normalize_probabilities(lnZ)
+    assert status == 'anomaly'
+    assert np.all(probs == 0.0)
+    assert not np.any(np.isnan(probs))
+
+
+def test_normalize_probabilities_anomaly_posinf():
+    lnZ = np.array([-1.0, np.inf, -3.0])
+    probs, status = _normalize_probabilities(lnZ)
+    assert status == 'anomaly'
+    assert np.all(probs == 0.0)
+
+
+def test_normalize_probabilities_partial_neginf_is_ok():
+    # Scenarios with lnZ=-inf (no transiting draws) should get prob=0,
+    # not trigger the degenerate branch, so long as some scenarios are finite.
+    lnZ = np.array([-1.0, -np.inf, -3.0])
+    probs, status = _normalize_probabilities(lnZ)
+    assert status == 'ok'
+    assert np.isclose(probs.sum(), 1.0, rtol=0, atol=1e-14)
+    assert probs[1] == 0.0   # -inf scenario gets exactly zero probability
 
 
 # ---------------------------------------------------------------------------

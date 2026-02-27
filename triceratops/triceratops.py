@@ -10,7 +10,6 @@ import astropy.units as u
 import numpy as np
 from astroquery.vizier import Vizier
 from scipy.integrate import dblquad
-from scipy.special import logsumexp as _logsumexp
 import pandas as pd
 from pandas import DataFrame, read_csv
 from math import floor, ceil
@@ -22,6 +21,7 @@ from mpl_toolkits.axes_grid1.anchored_artists import (
 
 from .likelihoods import (simulate_TP_transit,
                          simulate_EB_transit)
+from ._numerics import _normalize_probabilities
 from .funcs import (Gauss2D,
                    save_trilegal,
                    query_TRILEGAL,
@@ -1428,7 +1428,8 @@ class target:
                 lnZ[j] = res_twin["lnZ"]
 
         # calculate the relative probability of each scenario
-        if np.any(np.isnan(lnZ)) or np.any(np.isposinf(lnZ)):
+        relative_probs, _norm_status = _normalize_probabilities(lnZ)
+        if _norm_status == 'anomaly':
             warnings.warn(
                 "Unexpected NaN or +inf in scenario log-evidences. This "
                 "indicates a numerical anomaly unrelated to geometric "
@@ -1436,9 +1437,8 @@ class target:
                 RuntimeWarning,
                 stacklevel=2,
             )
-            relative_probs = np.zeros(N_scenarios)
             self.FPP_degenerate = True
-        elif np.all(np.isneginf(lnZ)):
+        elif _norm_status == 'all_neginf':
             warnings.warn(
                 "All scenario log-evidences are -inf: every MC draw was "
                 "geometrically invalid. FPP=1.0 reflects a failed "
@@ -1447,11 +1447,8 @@ class target:
                 RuntimeWarning,
                 stacklevel=2,
             )
-            relative_probs = np.zeros(N_scenarios)
             self.FPP_degenerate = True
         else:
-            _log_norm = _logsumexp(lnZ)
-            relative_probs = np.exp(lnZ - _log_norm)
             self.FPP_degenerate = False
 
         # now save all of the arrays as a dataframe

@@ -40,3 +40,28 @@ def _log_mean_exp(logw: np.ndarray, *, N_total: int) -> float:
     if not np.any(finite):
         return -np.inf
     return float(_logsumexp(logw[finite]) - np.log(N_total))
+
+
+def _normalize_probabilities(lnZ: np.ndarray):
+    """Normalize scenario log-evidences to a probability vector.
+
+    Separates the pure normalization math from the warning/attribute-setting
+    concerns in ``calc_probs``, making both independently testable.
+
+    Args:
+        lnZ: 1-D array of per-scenario log-evidences.
+
+    Returns:
+        (probs, status) where:
+            probs  — normalized probability vector (sums to 1 in the 'ok'
+                     case; all-zero for the degenerate cases).
+            status — one of:
+                'ok'         normal logsumexp normalization
+                'all_neginf' every draw was geometrically invalid
+                'anomaly'    NaN or +inf present; distinct failure mode
+    """
+    if np.any(np.isnan(lnZ)) or np.any(np.isposinf(lnZ)):
+        return np.zeros(len(lnZ)), 'anomaly'
+    if np.all(np.isneginf(lnZ)):
+        return np.zeros(len(lnZ)), 'all_neginf'
+    return np.exp(lnZ - _logsumexp(lnZ)), 'ok'
