@@ -249,6 +249,28 @@ def test_normalize_probabilities_partial_neginf_is_ok():
 
 
 # ---------------------------------------------------------------------------
+# Test 12: +inf entry in logw propagates as +inf, not silently dropped.
+#
+# np.isfinite(+inf) is False, so without an explicit guard the +inf draw
+# would be excluded from logsumexp and the result would be wrong.
+# Mathematically: log(mean(exp([0, +inf]))) = log((1 + inf)/2) = +inf.
+# ---------------------------------------------------------------------------
+def test_log_mean_exp_posinf_propagates():
+    logw = np.array([0.0, np.inf])
+    result = _log_mean_exp(logw, N_total=2)
+    assert np.isposinf(result), (
+        f"Expected +inf, got {result}. "
+        "+inf draws must dominate the mean, not be silently excluded."
+    )
+
+
+def test_log_mean_exp_all_posinf_propagates():
+    logw = np.full(5, np.inf)
+    result = _log_mean_exp(logw, N_total=5)
+    assert np.isposinf(result)
+
+
+# ---------------------------------------------------------------------------
 # Exact expected values for reference
 # ---------------------------------------------------------------------------
 # Test 1:  -2000.0                       log(exp(-2000)) = -2000

@@ -16,10 +16,16 @@ def _log_mean_exp(logw: np.ndarray, *, N_total: int) -> float:
     when lnL values are very negative (e.g. long light curves with many
     flux points).
 
-    Non-finite entries (``-inf`` for non-transiting draws, ``NaN`` for
-    PyTransit numerical failures) contribute zero weight to the sum but
-    still count in the denominator, preserving the same mean semantics as
+    ``-inf`` entries (non-transiting draws) contribute zero weight to the sum
+    but still count in the denominator, preserving the same mean semantics as
     ``np.mean(np.nan_to_num(np.exp(lnL + 600)))``.
+
+    ``NaN`` entries (PyTransit numerical failures) are treated identically to
+    ``-inf``: zero weight, counted in the denominator.
+
+    ``+inf`` entries propagate as ``+inf`` — a single infinite-weight draw
+    dominates the mean, and the returned ``+inf`` is detected as an anomaly
+    by ``_normalize_probabilities``.
 
     Args:
         logw: 1-D array of log-weight values (e.g. lnL or lnL + lnprior).
@@ -27,8 +33,9 @@ def _log_mean_exp(logw: np.ndarray, *, N_total: int) -> float:
                  Must equal len(logw). Exposed as a keyword argument to make
                  the intent explicit at every call site.
     Returns:
-        log(mean(exp(logw))) as a Python float, or -inf if all entries are
-        non-finite.
+        log(mean(exp(logw))) as a Python float. Returns ``-inf`` if all
+        entries are non-positive-infinite, or ``+inf`` if any entry is
+        ``+inf``.
     """
     if N_total != logw.size:
         raise ValueError(
@@ -36,6 +43,8 @@ def _log_mean_exp(logw: np.ndarray, *, N_total: int) -> float:
             "Passing len(lnL[finite]) instead of len(lnL) would silently "
             "overestimate evidence for scenarios with geometric exclusions."
         )
+    if np.any(np.isposinf(logw)):
+        return np.inf
     finite = np.isfinite(logw)
     if not np.any(finite):
         return -np.inf
