@@ -1,7 +1,7 @@
 import numpy as np
 from pandas import read_csv
 from astropy import constants
-from pkg_resources import resource_filename
+from pathlib import Path
 
 from .likelihoods import *
 from .priors import *
@@ -17,9 +17,10 @@ au = constants.au.cgs.value
 pi = np.pi
 ln2pi = np.log(2*pi)
 
+_DATA_DIR = Path(__file__).parent / "data"
+
 # load TESS limb darkening coefficients
-LDC_FILE = resource_filename('triceratops', 'data/ldc_tess.csv')
-ldc_T = read_csv(LDC_FILE)
+ldc_T = read_csv(_DATA_DIR / "ldc_tess.csv")
 ldc_T_Zs = np.array(ldc_T.Z, dtype=float)
 ldc_T_Teffs = np.array(ldc_T.Teff, dtype=int)
 ldc_T_loggs = np.array(ldc_T.logg, dtype=float)
@@ -27,8 +28,7 @@ ldc_T_u1s = np.array(ldc_T.aLSM, dtype=float)
 ldc_T_u2s = np.array(ldc_T.bLSM, dtype=float)
 
 # load Kepler limb darkening coefficients
-LDC_FILE = resource_filename('triceratops', 'data/ldc_kepler.csv')
-ldc_K = read_csv(LDC_FILE)
+ldc_K = read_csv(_DATA_DIR / "ldc_kepler.csv")
 ldc_K_Zs = np.array(ldc_K.Z, dtype=float)
 ldc_K_Teffs = np.array(ldc_K.Teff, dtype=int)
 ldc_K_loggs = np.array(ldc_K.logg, dtype=float)
@@ -94,7 +94,7 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         & (ldc_Teffs == this_Teff)
         & (ldc_loggs == this_logg)
         )
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
+    u1, u2 = ldc_u1s[mask].item(), ldc_u2s[mask].item()
 
     # sample from prior distributions
     rps = sample_rp(np.random.rand(N), np.full(N, M_s), flatpriors)
@@ -233,7 +233,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         & (ldc_Teffs == this_Teff)
         & (ldc_loggs == this_logg)
         )
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
+    u1, u2 = ldc_u1s[mask].item(), ldc_u2s[mask].item()
 
     # sample from prior distributions
     incs = sample_inc(np.random.rand(N))
@@ -457,7 +457,7 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         & (ldc_Teffs == this_Teff)
         & (ldc_loggs == this_logg)
         )
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
+    u1, u2 = ldc_u1s[mask].item(), ldc_u2s[mask].item()
 
     # sample from q prior distributions
     if molusc_file is None:
@@ -665,7 +665,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         & (ldc_Teffs == this_Teff)
         & (ldc_loggs == this_logg)
         )
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
+    u1, u2 = ldc_u1s[mask].item(), ldc_u2s[mask].item()
 
     # sample from prior distributions
     incs = sample_inc(np.random.rand(N))
@@ -1484,7 +1484,7 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         & (ldc_Teffs == this_Teff)
         & (ldc_loggs == this_logg)
         )
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
+    u1, u2 = ldc_u1s[mask].item(), ldc_u2s[mask].item()
 
     # determine background star population properties
     (Tmags_comp, masses_comp, loggs_comp, Teffs_comp, Zs_comp,
@@ -1681,7 +1681,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         & (ldc_Teffs == this_Teff)
         & (ldc_loggs == this_logg)
         )
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
+    u1, u2 = ldc_u1s[mask].item(), ldc_u2s[mask].item()
 
     # sample from inc and q prior distributions
     incs = sample_inc(np.random.rand(N))
@@ -2965,7 +2965,7 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
         & (ldc_Teffs == this_Teff)
         & (ldc_loggs == this_logg)
         )
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
+    u1, u2 = ldc_u1s[mask].item(), ldc_u2s[mask].item()
 
     # sample from inc and R_p prior distributions
     rps = sample_rp(np.random.rand(N), np.full(N, M_s), flatpriors)
@@ -3106,7 +3106,7 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
         & (ldc_Teffs == this_Teff)
         & (ldc_loggs == this_logg)
         )
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
+    u1, u2 = ldc_u1s[mask].item(), ldc_u2s[mask].item()
 
     # sample from inc and q prior distributions
     incs = sample_inc(np.random.rand(N))

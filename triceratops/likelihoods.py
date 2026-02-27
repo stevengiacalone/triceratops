@@ -1,5 +1,12 @@
 import numpy as np
 from astropy import constants
+
+# NumPy 2.0 removed np.trapz (renamed to np.trapezoid). Inject the alias
+# before pytransit's module-level import runs so older pytransit releases
+# load cleanly. No-op on NumPy < 2.0.
+if not hasattr(np, "trapz"):
+    np.trapz = np.trapezoid  # type: ignore[attr-defined]
+
 from pytransit import QuadraticModel
 
 Msun = constants.M_sun.cgs.value

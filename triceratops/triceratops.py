@@ -609,13 +609,13 @@ class target:
                 this_flux = 0
                 for j in range(len(all_ap_pixels[k])):
                     this_pixel = all_ap_pixels[k][j]
-                    this_flux += dblquad(
+                    this_flux += float(dblquad(
                         Gauss2D,
                         this_pixel[1]-0.5,
                         this_pixel[1]+0.5,
                         this_pixel[0]-0.5,
                         this_pixel[0]+0.5,
-                        args=(mu_x, mu_y, 0.75, A))[0]
+                        args=(mu_x, mu_y, 0.75, A))[0])
                 rel_flux_per_aperture[k, i] = this_flux
             # calculate flux ratios for this aperture
             flux_ratio_per_aperture[k, :] = (
