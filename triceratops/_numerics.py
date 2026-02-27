@@ -30,6 +30,12 @@ def _log_mean_exp(logw: np.ndarray, *, N_total: int) -> float:
         log(mean(exp(logw))) as a Python float, or -inf if all entries are
         non-finite.
     """
+    if N_total != logw.size:
+        raise ValueError(
+            f"N_total ({N_total}) must equal len(logw) ({logw.size}). "
+            "Passing len(lnL[finite]) instead of len(lnL) would silently "
+            "overestimate evidence for scenarios with geometric exclusions."
+        )
     finite = np.isfinite(logw)
     if not np.any(finite):
         return -np.inf

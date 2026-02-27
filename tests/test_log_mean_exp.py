@@ -186,6 +186,48 @@ def test_nan_treated_as_nonfinite():
 
 
 # ---------------------------------------------------------------------------
+# Test 10: N_total mismatch raises ValueError.
+#
+# Passing len(lnL[finite]) instead of len(lnL) would silently overestimate
+# evidence. The guard makes this a loud error instead.
+# ---------------------------------------------------------------------------
+def test_n_total_mismatch_raises():
+    lnL = np.array([-1.0, -2.0, -3.0])
+    try:
+        _log_mean_exp(lnL, N_total=2)   # wrong: 2 != 3
+        assert False, "Expected ValueError was not raised"
+    except ValueError as e:
+        assert "N_total" in str(e)
+
+
+# ---------------------------------------------------------------------------
+# Test 11: NaN or +inf in lnZ triggers distinct normalization warning.
+#
+# Exercises the anomaly branch added to calc_probs that is separate from
+# the all-neginf degenerate case.
+# ---------------------------------------------------------------------------
+def test_normalization_nan_and_posinf_warn_distinctly():
+    import warnings
+
+    for bad_val, label in [(np.nan, "NaN"), (np.inf, "+inf")]:
+        lnZ = np.array([-1.0, bad_val, -3.0])
+        log_norm = logsumexp(lnZ)
+
+        if np.any(np.isnan(lnZ)) or np.any(np.isposinf(lnZ)):
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                warnings.warn(
+                    "Unexpected NaN or +inf in scenario log-evidences.",
+                    RuntimeWarning,
+                )
+            assert len(caught) == 1, f"{label}: expected 1 warning"
+            assert issubclass(caught[0].category, RuntimeWarning)
+            assert "NaN or +inf" in str(caught[0].message), (
+                f"{label}: wrong warning text: {caught[0].message}"
+            )
+
+
+# ---------------------------------------------------------------------------
 # Exact expected values for reference
 # ---------------------------------------------------------------------------
 # Test 1:  -2000.0                       log(exp(-2000)) = -2000

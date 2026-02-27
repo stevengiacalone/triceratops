@@ -1,5 +1,6 @@
 import lightkurve
 import traceback
+import warnings
 from astroquery.mast import Catalogs, Tesscut
 from astropy.coordinates import SkyCoord
 from astropy import constants
@@ -1427,21 +1428,31 @@ class target:
                 lnZ[j] = res_twin["lnZ"]
 
         # calculate the relative probability of each scenario
-        _log_norm = _logsumexp(lnZ)
-        if np.isfinite(_log_norm):
-            relative_probs = np.exp(lnZ - _log_norm)
-        else:
-            import warnings
+        if np.any(np.isnan(lnZ)) or np.any(np.isposinf(lnZ)):
             warnings.warn(
-                "All scenario log-evidences are -inf: every MC draw was "
-                "geometrically invalid or underflowed. FPP=1.0 reflects a "
-                "failed computation, not a confident false positive. "
-                "Inspect result.lnZ for diagnostics.",
+                "Unexpected NaN or +inf in scenario log-evidences. This "
+                "indicates a numerical anomaly unrelated to geometric "
+                "exclusions. Inspect self.lnZ for diagnostics.",
                 RuntimeWarning,
                 stacklevel=2,
             )
             relative_probs = np.zeros(N_scenarios)
-        self.FPP_degenerate = not np.isfinite(_log_norm)
+            self.FPP_degenerate = True
+        elif np.all(np.isneginf(lnZ)):
+            warnings.warn(
+                "All scenario log-evidences are -inf: every MC draw was "
+                "geometrically invalid. FPP=1.0 reflects a failed "
+                "computation, not a confident false positive. "
+                "Inspect self.lnZ for diagnostics.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            relative_probs = np.zeros(N_scenarios)
+            self.FPP_degenerate = True
+        else:
+            _log_norm = _logsumexp(lnZ)
+            relative_probs = np.exp(lnZ - _log_norm)
+            self.FPP_degenerate = False
 
         # now save all of the arrays as a dataframe
         prob_df = DataFrame({
