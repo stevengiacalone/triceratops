@@ -9,6 +9,7 @@ import astropy.units as u
 import numpy as np
 from astroquery.vizier import Vizier
 from scipy.integrate import dblquad
+from scipy.special import logsumexp as _logsumexp
 import pandas as pd
 from pandas import DataFrame, read_csv
 from math import floor, ceil
@@ -1426,9 +1427,21 @@ class target:
                 lnZ[j] = res_twin["lnZ"]
 
         # calculate the relative probability of each scenario
-        relative_probs = np.zeros(N_scenarios)
-        for i in range(N_scenarios):
-            relative_probs[i] = (np.exp(lnZ[i])) / np.sum(np.exp(lnZ))
+        _log_norm = _logsumexp(lnZ)
+        if np.isfinite(_log_norm):
+            relative_probs = np.exp(lnZ - _log_norm)
+        else:
+            import warnings
+            warnings.warn(
+                "All scenario log-evidences are -inf: every MC draw was "
+                "geometrically invalid or underflowed. FPP=1.0 reflects a "
+                "failed computation, not a confident false positive. "
+                "Inspect result.lnZ for diagnostics.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            relative_probs = np.zeros(N_scenarios)
+        self.FPP_degenerate = not np.isfinite(_log_norm)
 
         # now save all of the arrays as a dataframe
         prob_df = DataFrame({
@@ -1447,6 +1460,7 @@ class target:
             "prob": relative_probs
             })
         self.probs = prob_df
+        self.lnZ = lnZ
         self.star_num = star_num
         self.u1 = best_u1
         self.u2 = best_u2
