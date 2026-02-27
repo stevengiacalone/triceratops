@@ -992,7 +992,7 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
             zip(rounded_Teffs_comp, rounded_loggs_comp)
             ):
         mask = (Teffs_at_Z == comp_Teff) & (loggs_at_Z == comp_logg)
-        u1s_comp[i], u2s_comp[i] = u1s_at_Z[mask], u2s_at_Z[mask]
+        u1s_comp[i], u2s_comp[i] = u1s_at_Z[mask].item(), u2s_at_Z[mask].item()
 
     # calculate priors for companions
     if molusc_file is None:
@@ -1212,7 +1212,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             zip(rounded_Teffs_comp, rounded_loggs_comp)
             ):
         mask = (Teffs_at_Z == comp_Teff) & (loggs_at_Z == comp_logg)
-        u1s_comp[i], u2s_comp[i] = u1s_at_Z[mask], u2s_at_Z[mask]
+        u1s_comp[i], u2s_comp[i] = u1s_at_Z[mask].item(), u2s_at_Z[mask].item()
 
     # calculate properties of the drawn EBs
     masses = qs*masses_comp
@@ -1974,7 +1974,7 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             & (ldc_Teffs == this_Teff)
             & (ldc_loggs == this_logg)
             )
-        u1s_comp[i], u2s_comp[i] = ldc_u1s[mask], ldc_u2s[mask]
+        u1s_comp[i], u2s_comp[i] = ldc_u1s[mask].item(), ldc_u2s[mask].item()
     # draw random sample of background stars
     idxs = np.random.randint(0, N_comp, N)
 
@@ -2192,7 +2192,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             & (ldc_Teffs == this_Teff)
             & (ldc_loggs == this_logg)
             )
-        u1s_comp[i], u2s_comp[i] = ldc_u1s[mask], ldc_u2s[mask]
+        u1s_comp[i], u2s_comp[i] = ldc_u1s[mask].item(), ldc_u2s[mask].item()
     # draw random sample of background stars
     idxs = np.random.randint(0, N_comp, N)
 
@@ -2511,7 +2511,7 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
             & (ldc_Teffs == this_Teff)
             & (ldc_loggs == this_logg)
             )
-        u1s_possible[i], u2s_possible[i] = ldc_u1s[mask], ldc_u2s[mask]
+        u1s_possible[i], u2s_possible[i] = ldc_u1s[mask].item(), ldc_u2s[mask].item()
     # draw random sample of background stars
     if N_possible > 0:
         idxs = np.random.randint(0, N_possible, N)
@@ -2710,7 +2710,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
             & (ldc_Teffs == this_Teff)
             & (ldc_loggs == this_logg)
             )
-        u1s_possible[i], u2s_possible[i] = ldc_u1s[mask], ldc_u2s[mask]
+        u1s_possible[i], u2s_possible[i] = ldc_u1s[mask].item(), ldc_u2s[mask].item()
     # draw random sample of background stars
     if N_possible > 0:
         idxs = np.random.randint(0, N_possible, N)
