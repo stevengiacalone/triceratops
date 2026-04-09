@@ -597,6 +597,8 @@ class target:
             len(self.stars)
             ])
         for k in range(len(all_ap_pixels)):
+            pixels = np.array(all_ap_pixels[k])
+            sigma = 0.75
             for i in range(len(self.stars)):
                 # location of star in pixel space for aperture k
                 mu_x = self.pix_coords[k][i, 0]
@@ -610,8 +612,6 @@ class target:
                 # closed-form solution for a 2D Gaussian over a pixel box.
                 # The integral is separable: Phi((x1-mu)/s) - Phi((x0-mu)/s)
                 # where Phi = ndtr (standard normal CDF), s = sigma.
-                pixels = np.array(all_ap_pixels[k])
-                sigma = 0.75
                 this_flux = A * np.sum(
                     (ndtr((pixels[:, 0] + 0.5 - mu_x) / sigma)
                      - ndtr((pixels[:, 0] - 0.5 - mu_x) / sigma))
