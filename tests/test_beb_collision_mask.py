@@ -1,11 +1,17 @@
-"""Tests for NC-04: BEB collision mask fix.
+"""Tests for NC-04: EB collision mask fixes.
 
-The parallel code path in lnZ_BEB() previously used coll_twin (twin-period
-collision mask) for the q < 0.95 branch instead of coll (standard-period
-collision mask). Since a_twin > a (Kepler's 3rd law), coll_twin is less
-restrictive, admitting physically impossible configurations.
+Bug 1 (lnZ_BEB): The parallel code path used coll_twin (twin-period collision
+mask) for the q < 0.95 branch instead of coll (standard-period collision mask).
+Since a_twin > a (Kepler's 3rd law), coll_twin is less restrictive, admitting
+physically impossible configurations.
 
-The serial code path was already correct. This fix aligns the parallel path.
+Bug 2 (lnZ_NEB_unknown): The parallel code path used coll (standard-period
+collision mask) for the q >= 0.95 twin branch instead of coll_twin. This is
+the inverse of Bug 1: there the standard branch used the twin mask; here the
+twin branch uses the standard mask.
+
+Both serial code paths were already correct. These fixes align the parallel
+paths with their serial counterparts.
 """
 
 import inspect
@@ -282,3 +288,167 @@ class TestSourceRegression:
                 "q >= 0.95 mask must use (coll_twin == False), "
                 f"got:\n{textwrap.indent(text, '  ')}"
             )
+
+
+# ---------------------------------------------------------------------------
+# NEB_unknown source-level regression test
+# ---------------------------------------------------------------------------
+
+class TestNEBUnknownCollisionMask:
+    """NC-04: lnZ_NEB_unknown twin branch must use coll_twin, not coll.
+
+    The q >= 0.95 parallel path in lnZ_NEB_unknown() used coll (standard-
+    period collision mask) instead of coll_twin (twin-period collision mask).
+    The serial code path at line 2849 already correctly used coll_twin[i].
+    This is the inverse of the lnZ_BEB fix: there the standard branch used
+    the twin mask; here the twin branch used the standard mask.
+    """
+
+    @staticmethod
+    def _read_lnZ_NEB_unknown_source():
+        """Return the full source of lnZ_NEB_unknown as a string."""
+        from triceratops.marginal_likelihoods import lnZ_NEB_unknown
+        return inspect.getsource(lnZ_NEB_unknown)
+
+    @staticmethod
+    def _extract_parallel_mask_blocks(source):
+        """Extract multi-line mask blocks from the parallel path."""
+        blocks = list(re.finditer(
+            r"mask\s*=\s*\(.*?\n\s*\)",
+            source,
+            re.DOTALL,
+        ))
+        return [b for b in blocks if "qs" in b.group()]
+
+    def test_parallel_q_ge_95_uses_coll_twin_not_coll(self):
+        """The parallel q >= 0.95 mask must use (coll_twin == False)."""
+        source = self._read_lnZ_NEB_unknown_source()
+        blocks = self._extract_parallel_mask_blocks(source)
+
+        q_ge_95_blocks = [b for b in blocks if "(qs >= 0.95)" in b.group()]
+        assert len(q_ge_95_blocks) >= 1, (
+            "Expected at least one parallel mask block with (qs >= 0.95)"
+        )
+
+        for block in q_ge_95_blocks:
+            text = block.group()
+            assert "(coll_twin == False)" in text, (
+                "NC-04 regression: lnZ_NEB_unknown q >= 0.95 mask must use "
+                f"(coll_twin == False), got:\n{textwrap.indent(text, '  ')}"
+            )
+            # Ensure it does NOT use plain (coll == False)
+            # We need to check for exactly "coll ==" not preceded by "coll_twin"
+            coll_refs = re.findall(r"coll(?:_twin)?\s*==\s*False", text)
+            for ref in coll_refs:
+                assert "coll_twin" in ref, (
+                    "NC-04 regression: lnZ_NEB_unknown q >= 0.95 mask must "
+                    "not use plain (coll == False), "
+                    f"got:\n{textwrap.indent(text, '  ')}"
+                )
+
+    def test_parallel_q_lt_95_still_uses_coll(self):
+        """The parallel q < 0.95 mask must still use (coll == False)."""
+        source = self._read_lnZ_NEB_unknown_source()
+        blocks = self._extract_parallel_mask_blocks(source)
+
+        q_lt_95_blocks = [b for b in blocks if "(qs < 0.95)" in b.group()]
+        assert len(q_lt_95_blocks) >= 1, (
+            "Expected at least one parallel mask block with (qs < 0.95)"
+        )
+
+        for block in q_lt_95_blocks:
+            text = block.group()
+            assert "(coll == False)" in text, (
+                "lnZ_NEB_unknown q < 0.95 mask must use (coll == False), "
+                f"got:\n{textwrap.indent(text, '  ')}"
+            )
+            assert "(coll_twin == False)" not in text, (
+                "lnZ_NEB_unknown q < 0.95 mask must NOT use "
+                f"(coll_twin == False), got:\n{textwrap.indent(text, '  ')}"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Comprehensive check across ALL EB functions
+# ---------------------------------------------------------------------------
+
+class TestAllEBTwinBranches:
+    """Verify every EB function's q >= 0.95 parallel mask uses coll_twin.
+
+    This catches copy-paste errors across all EB functions, not just lnZ_BEB
+    and lnZ_NEB_unknown. The pattern: every EB function has a parallel mask
+    block for the twin period (q >= 0.95) that must use coll_twin, and a
+    standard-period block (q < 0.95) that must use coll.
+    """
+
+    # All EB marginal likelihood functions that have twin branches
+    EB_FUNCTIONS = [
+        "lnZ_TEB",
+        "lnZ_PEB",
+        "lnZ_SEB",
+        "lnZ_DEB",
+        "lnZ_BEB",
+        "lnZ_NEB_unknown",
+        "lnZ_NEB_evolved",
+    ]
+
+    @staticmethod
+    def _get_function_source(func_name):
+        """Import and return the source of the named function."""
+        import triceratops.marginal_likelihoods as ml
+        func = getattr(ml, func_name)
+        return inspect.getsource(func)
+
+    @staticmethod
+    def _find_parallel_twin_mask_blocks(source):
+        """Find mask blocks in the parallel path that filter for q >= 0.95.
+
+        Handles both multi-line and single-line mask assignment patterns.
+        Returns list of (match_text, line_number) tuples.
+        """
+        results = []
+
+        # Multi-line pattern: mask = (\n ...\n  )
+        for m in re.finditer(
+            r"mask\s*=\s*\(.*?\n\s*\)", source, re.DOTALL
+        ):
+            if "(qs >= 0.95)" in m.group() or "qs >= 0.95" in m.group():
+                lineno = source[:m.start()].count("\n") + 1
+                results.append((m.group(), lineno))
+
+        # Single-line pattern: mask = (incs >= inc_min) & ... & (qs >= 0.95)
+        for m in re.finditer(
+            r"mask\s*=\s*\([^=\n]*qs\s*>=\s*0\.95[^)]*\)", source
+        ):
+            text = m.group()
+            if text not in [r[0] for r in results]:
+                lineno = source[:m.start()].count("\n") + 1
+                results.append((text, lineno))
+
+        return results
+
+    @pytest.mark.parametrize("func_name", EB_FUNCTIONS)
+    def test_twin_branch_uses_coll_twin(self, func_name):
+        """q >= 0.95 parallel mask in {func_name} must use coll_twin."""
+        source = self._get_function_source(func_name)
+        blocks = self._find_parallel_twin_mask_blocks(source)
+
+        assert len(blocks) >= 1, (
+            f"{func_name}: expected at least one parallel mask block with "
+            "q >= 0.95 (twin branch)"
+        )
+
+        for text, lineno in blocks:
+            # Must contain coll_twin
+            assert "coll_twin" in text, (
+                f"{func_name} (approx line {lineno}): q >= 0.95 parallel "
+                f"mask must reference coll_twin, got:\n{textwrap.indent(text, '  ')}"
+            )
+            # Every "coll ... == False" must be "coll_twin == False"
+            coll_refs = re.findall(r"\bcoll(?:_twin)?\s*==\s*False", text)
+            for ref in coll_refs:
+                assert "coll_twin" in ref, (
+                    f"{func_name} (approx line {lineno}): q >= 0.95 parallel "
+                    f"mask uses plain 'coll == False' instead of "
+                    f"'coll_twin == False', got:\n{textwrap.indent(text, '  ')}"
+                )
