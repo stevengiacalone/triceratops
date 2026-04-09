@@ -2297,7 +2297,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         # filter out systems that do not transit or have a collision
         mask = (
             (incs >= inc_min)
-            & (coll_twin == False)
+            & (coll == False)
             & (qs < 0.95)
             & (loggs_comp[idxs] >= 3.5)
             & (Teffs_comp[idxs] <= 10000)
