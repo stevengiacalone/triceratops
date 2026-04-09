@@ -273,7 +273,7 @@ class TestSourceRegression:
             )
 
     def test_parallel_q_ge_95_still_uses_coll_twin(self):
-        """The parallel q >= 0.95 mask must still use (coll_twin == False)."""
+        """The parallel q >= 0.95 mask must use (coll_twin == False) only."""
         source = self._read_lnZ_BEB_source()
         blocks = self._extract_parallel_mask_blocks(source)
 
@@ -288,6 +288,13 @@ class TestSourceRegression:
                 "q >= 0.95 mask must use (coll_twin == False), "
                 f"got:\n{textwrap.indent(text, '  ')}"
             )
+            # Every coll reference must be coll_twin, not plain coll
+            coll_refs = re.findall(r"\bcoll(?:_twin)?\s*==\s*False", text)
+            for ref in coll_refs:
+                assert "coll_twin" in ref, (
+                    "q >= 0.95 mask must NOT use plain (coll == False), "
+                    f"got:\n{textwrap.indent(text, '  ')}"
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -427,9 +434,31 @@ class TestAllEBTwinBranches:
 
         return results
 
+    @staticmethod
+    def _find_parallel_standard_mask_blocks(source):
+        """Find mask blocks in the parallel path that filter for q < 0.95."""
+        results = []
+
+        for m in re.finditer(
+            r"mask\s*=\s*\(.*?\n\s*\)", source, re.DOTALL
+        ):
+            if "(qs < 0.95)" in m.group() or "qs < 0.95" in m.group():
+                lineno = source[:m.start()].count("\n") + 1
+                results.append((m.group(), lineno))
+
+        for m in re.finditer(
+            r"mask\s*=\s*\([^=\n]*qs\s*<\s*0\.95[^)]*\)", source
+        ):
+            text = m.group()
+            if text not in [r[0] for r in results]:
+                lineno = source[:m.start()].count("\n") + 1
+                results.append((text, lineno))
+
+        return results
+
     @pytest.mark.parametrize("func_name", EB_FUNCTIONS)
     def test_twin_branch_uses_coll_twin(self, func_name):
-        """q >= 0.95 parallel mask in {func_name} must use coll_twin."""
+        """q >= 0.95 parallel mask in {func_name} must use coll_twin only."""
         source = self._get_function_source(func_name)
         blocks = self._find_parallel_twin_mask_blocks(source)
 
@@ -452,3 +481,27 @@ class TestAllEBTwinBranches:
                     f"mask uses plain 'coll == False' instead of "
                     f"'coll_twin == False', got:\n{textwrap.indent(text, '  ')}"
                 )
+
+    @pytest.mark.parametrize("func_name", EB_FUNCTIONS)
+    def test_standard_branch_uses_coll(self, func_name):
+        """q < 0.95 parallel mask in {func_name} must use coll only."""
+        source = self._get_function_source(func_name)
+        blocks = self._find_parallel_standard_mask_blocks(source)
+
+        assert len(blocks) >= 1, (
+            f"{func_name}: expected at least one parallel mask block with "
+            "q < 0.95 (standard branch)"
+        )
+
+        for text, lineno in blocks:
+            # Must contain coll == False
+            assert re.search(r"\bcoll\s*==\s*False", text), (
+                f"{func_name} (approx line {lineno}): q < 0.95 parallel "
+                f"mask must reference coll, got:\n{textwrap.indent(text, '  ')}"
+            )
+            # Must NOT contain coll_twin == False
+            assert "coll_twin" not in text, (
+                f"{func_name} (approx line {lineno}): q < 0.95 parallel "
+                f"mask must NOT use 'coll_twin == False', "
+                f"got:\n{textwrap.indent(text, '  ')}"
+            )
