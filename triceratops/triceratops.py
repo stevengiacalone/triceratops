@@ -1,5 +1,6 @@
 import lightkurve
 import traceback
+import warnings
 from astroquery.mast import Catalogs, Tesscut
 from astropy.coordinates import SkyCoord
 from astropy import constants
@@ -8,7 +9,7 @@ from astropy.wcs.utils import pixel_to_skycoord
 import astropy.units as u
 import numpy as np
 from astroquery.vizier import Vizier
-from scipy.integrate import dblquad
+from scipy.special import ndtr
 import pandas as pd
 from pandas import DataFrame, read_csv
 from math import floor, ceil
@@ -20,8 +21,8 @@ from mpl_toolkits.axes_grid1.anchored_artists import (
 
 from .likelihoods import (simulate_TP_transit,
                          simulate_EB_transit)
-from .funcs import (Gauss2D,
-                   save_trilegal,
+from ._numerics import _normalize_probabilities
+from .funcs import (save_trilegal,
                    query_TRILEGAL,
                    renorm_flux,
                    stellar_relations,
@@ -596,6 +597,8 @@ class target:
             len(self.stars)
             ])
         for k in range(len(all_ap_pixels)):
+            pixels = np.array(all_ap_pixels[k])
+            sigma = 0.75
             for i in range(len(self.stars)):
                 # location of star in pixel space for aperture k
                 mu_x = self.pix_coords[k][i, 0]
@@ -605,17 +608,16 @@ class target:
                     np.min(self.stars.Tmag.values)
                     - self.stars.Tmag.values[i]
                     )/2.5)
-                # integrate PSF in each pixel
-                this_flux = 0
-                for j in range(len(all_ap_pixels[k])):
-                    this_pixel = all_ap_pixels[k][j]
-                    this_flux += dblquad(
-                        Gauss2D,
-                        this_pixel[1]-0.5,
-                        this_pixel[1]+0.5,
-                        this_pixel[0]-0.5,
-                        this_pixel[0]+0.5,
-                        args=(mu_x, mu_y, 0.75, A))[0]
+                # analytic PSF integral over aperture pixels using the
+                # closed-form solution for a 2D Gaussian over a pixel box.
+                # The integral is separable: Phi((x1-mu)/s) - Phi((x0-mu)/s)
+                # where Phi = ndtr (standard normal CDF), s = sigma.
+                this_flux = A * np.sum(
+                    (ndtr((pixels[:, 0] + 0.5 - mu_x) / sigma)
+                     - ndtr((pixels[:, 0] - 0.5 - mu_x) / sigma))
+                    * (ndtr((pixels[:, 1] + 0.5 - mu_y) / sigma)
+                     - ndtr((pixels[:, 1] - 0.5 - mu_y) / sigma))
+                )
                 rel_flux_per_aperture[k, i] = this_flux
             # calculate flux ratios for this aperture
             flux_ratio_per_aperture[k, :] = (
@@ -1426,9 +1428,28 @@ class target:
                 lnZ[j] = res_twin["lnZ"]
 
         # calculate the relative probability of each scenario
-        relative_probs = np.zeros(N_scenarios)
-        for i in range(N_scenarios):
-            relative_probs[i] = (np.exp(lnZ[i])) / np.sum(np.exp(lnZ))
+        relative_probs, _norm_status = _normalize_probabilities(lnZ)
+        if _norm_status == 'anomaly':
+            warnings.warn(
+                "Unexpected NaN or +inf in scenario log-evidences. This "
+                "indicates a numerical anomaly unrelated to geometric "
+                "exclusions. Inspect self.lnZ for diagnostics.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            self.FPP_degenerate = True
+        elif _norm_status == 'all_neginf':
+            warnings.warn(
+                "All scenario log-evidences are -inf: every MC draw was "
+                "geometrically invalid. FPP=1.0 reflects a failed "
+                "computation, not a confident false positive. "
+                "Inspect self.lnZ for diagnostics.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            self.FPP_degenerate = True
+        else:
+            self.FPP_degenerate = False
 
         # now save all of the arrays as a dataframe
         prob_df = DataFrame({
@@ -1447,6 +1468,7 @@ class target:
             "prob": relative_probs
             })
         self.probs = prob_df
+        self.lnZ = lnZ
         self.star_num = star_num
         self.u1 = best_u1
         self.u2 = best_u2

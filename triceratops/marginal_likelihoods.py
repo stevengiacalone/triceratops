@@ -1,11 +1,12 @@
 import numpy as np
 from pandas import read_csv
 from astropy import constants
-from pkg_resources import resource_filename
+from pathlib import Path
 
 from .likelihoods import *
 from .priors import *
 from .funcs import stellar_relations, flux_relation
+from ._numerics import _log_mean_exp
 
 np.seterr(divide='ignore')
 
@@ -17,9 +18,10 @@ au = constants.au.cgs.value
 pi = np.pi
 ln2pi = np.log(2*pi)
 
+_DATA_DIR = Path(__file__).parent / "data"
+
 # load TESS limb darkening coefficients
-LDC_FILE = resource_filename('triceratops', 'data/ldc_tess.csv')
-ldc_T = read_csv(LDC_FILE)
+ldc_T = read_csv(_DATA_DIR / "ldc_tess.csv")
 ldc_T_Zs = np.array(ldc_T.Z, dtype=float)
 ldc_T_Teffs = np.array(ldc_T.Teff, dtype=int)
 ldc_T_loggs = np.array(ldc_T.logg, dtype=float)
@@ -27,8 +29,7 @@ ldc_T_u1s = np.array(ldc_T.aLSM, dtype=float)
 ldc_T_u2s = np.array(ldc_T.bLSM, dtype=float)
 
 # load Kepler limb darkening coefficients
-LDC_FILE = resource_filename('triceratops', 'data/ldc_kepler.csv')
-ldc_K = read_csv(LDC_FILE)
+ldc_K = read_csv(_DATA_DIR / "ldc_kepler.csv")
 ldc_K_Zs = np.array(ldc_K.Z, dtype=float)
 ldc_K_Teffs = np.array(ldc_K.Teff, dtype=int)
 ldc_K_loggs = np.array(ldc_K.logg, dtype=float)
@@ -94,7 +95,7 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         & (ldc_Teffs == this_Teff)
         & (ldc_loggs == this_logg)
         )
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
+    u1, u2 = ldc_u1s[mask].item(), ldc_u2s[mask].item()
 
     # sample from prior distributions
     rps = sample_rp(np.random.rand(N), np.full(N, M_s), flatpriors)
@@ -150,10 +151,7 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     N_samples = 100
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(np.nan_to_num(
-        np.exp(lnL + 600)
-        ))
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL, N_total=N)
     res = {
         'M_s': np.full(N_samples, M_s),
         'R_s': np.full(N_samples, R_s),
@@ -233,7 +231,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         & (ldc_Teffs == this_Teff)
         & (ldc_loggs == this_logg)
         )
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
+    u1, u2 = ldc_u1s[mask].item(), ldc_u2s[mask].item()
 
     # sample from prior distributions
     incs = sample_inc(np.random.rand(N))
@@ -343,10 +341,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q < 0.95
     N_samples = 100
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(np.nan_to_num(
-        np.exp(lnL + 600)
-        ))
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL, N_total=N)
     res = {
         'M_s': np.full(N_samples, M_s),
         'R_s': np.full(N_samples, R_s),
@@ -367,10 +362,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q >= 0.95 and 2xP_orb
     N_samples = 100
     idx = (-lnL_twin).argsort()[:N_samples]
-    Z = np.mean(np.nan_to_num(
-        np.exp(lnL_twin + 600)
-        ))
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL_twin, N_total=N)
     res_twin = {
         'M_s': np.full(N_samples, M_s),
         'R_s': np.full(N_samples, R_s),
@@ -457,7 +449,7 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         & (ldc_Teffs == this_Teff)
         & (ldc_loggs == this_logg)
         )
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
+    u1, u2 = ldc_u1s[mask].item(), ldc_u2s[mask].item()
 
     # sample from q prior distributions
     if molusc_file is None:
@@ -573,12 +565,7 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     N_samples = 100
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(
-        np.nan_to_num(
-            np.exp(lnL+lnprior_companion+600)
-            )
-        )
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL + lnprior_companion, N_total=N)
     res = {
         'M_s': np.full(N_samples, M_s),
         'R_s': np.full(N_samples, R_s),
@@ -665,7 +652,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         & (ldc_Teffs == this_Teff)
         & (ldc_loggs == this_logg)
         )
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
+    u1, u2 = ldc_u1s[mask].item(), ldc_u2s[mask].item()
 
     # sample from prior distributions
     incs = sample_inc(np.random.rand(N))
@@ -837,12 +824,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q < 0.95
     N_samples = 100
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(
-        np.nan_to_num(
-            np.exp(lnL+lnprior_companion+600)
-            )
-        )
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL + lnprior_companion, N_total=N)
     res = {
         'M_s': np.full(N_samples, M_s),
         'R_s': np.full(N_samples, R_s),
@@ -863,12 +845,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q >= 0.95 and 2xP_orb
     N_samples = 100
     idx = (-lnL_twin).argsort()[:N_samples]
-    Z = np.mean(
-        np.nan_to_num(
-            np.exp(lnL_twin+lnprior_companion+600)
-            )
-        )
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL_twin + lnprior_companion, N_total=N)
     res_twin = {
         'M_s': np.full(N_samples, M_s),
         'R_s': np.full(N_samples, R_s),
@@ -992,7 +969,7 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
             zip(rounded_Teffs_comp, rounded_loggs_comp)
             ):
         mask = (Teffs_at_Z == comp_Teff) & (loggs_at_Z == comp_logg)
-        u1s_comp[i], u2s_comp[i] = u1s_at_Z[mask], u2s_at_Z[mask]
+        u1s_comp[i], u2s_comp[i] = u1s_at_Z[mask].item(), u2s_at_Z[mask].item()
 
     # calculate priors for companions
     if molusc_file is None:
@@ -1079,12 +1056,7 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     N_samples = 100
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(
-        np.nan_to_num(
-            np.exp(lnL+lnprior_companion+600)
-            )
-        )
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL + lnprior_companion, N_total=N)
     res = {
      'M_s': masses_comp[idx],
      'R_s': radii_comp[idx],
@@ -1212,7 +1184,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             zip(rounded_Teffs_comp, rounded_loggs_comp)
             ):
         mask = (Teffs_at_Z == comp_Teff) & (loggs_at_Z == comp_logg)
-        u1s_comp[i], u2s_comp[i] = u1s_at_Z[mask], u2s_at_Z[mask]
+        u1s_comp[i], u2s_comp[i] = u1s_at_Z[mask].item(), u2s_at_Z[mask].item()
 
     # calculate properties of the drawn EBs
     masses = qs*masses_comp
@@ -1362,12 +1334,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q < 0.95
     N_samples = 100
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(
-        np.nan_to_num(
-            np.exp(lnL + lnprior_companion + 600)
-            )
-        )
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL + lnprior_companion, N_total=N)
     res = {
      'M_s': masses_comp[idx],
      'R_s': radii_comp[idx],
@@ -1388,12 +1355,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q >= 0.95 and 2xP_orb
     N_samples = 100
     idx = (-lnL_twin).argsort()[:N_samples]
-    Z = np.mean(
-        np.nan_to_num(
-            np.exp(lnL_twin+lnprior_companion+600)
-            )
-        )
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL_twin + lnprior_companion, N_total=N)
     res_twin = {
      'M_s': masses_comp[idx],
      'R_s': radii_comp[idx],
@@ -1484,7 +1446,7 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         & (ldc_Teffs == this_Teff)
         & (ldc_loggs == this_logg)
         )
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
+    u1, u2 = ldc_u1s[mask].item(), ldc_u2s[mask].item()
 
     # determine background star population properties
     (Tmags_comp, masses_comp, loggs_comp, Teffs_comp, Zs_comp,
@@ -1585,12 +1547,7 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     N_samples = 100
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(
-        np.nan_to_num(
-            np.exp(lnL+lnprior_companion+600)
-            )
-        )
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL + lnprior_companion, N_total=N)
     res = {
         'M_s': np.full(N_samples, M_s),
         'R_s': np.full(N_samples, R_s),
@@ -1681,7 +1638,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         & (ldc_Teffs == this_Teff)
         & (ldc_loggs == this_logg)
         )
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
+    u1, u2 = ldc_u1s[mask].item(), ldc_u2s[mask].item()
 
     # sample from inc and q prior distributions
     incs = sample_inc(np.random.rand(N))
@@ -1838,12 +1795,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q < 0.95
     N_samples = 100
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(
-        np.nan_to_num(
-            np.exp(lnL+lnprior_companion+600)
-            )
-        )
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL + lnprior_companion, N_total=N)
     res = {
         'M_s': np.full(N_samples, M_s),
         'R_s': np.full(N_samples, R_s),
@@ -1864,12 +1816,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q >= 0.95 and 2xP_orb
     N_samples = 100
     idx = (-lnL_twin).argsort()[:N_samples]
-    Z = np.mean(
-        np.nan_to_num(
-            np.exp(lnL_twin+lnprior_companion+600)
-            )
-        )
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL_twin + lnprior_companion, N_total=N)
     res_twin = {
         'M_s': np.full(N_samples, M_s),
         'R_s': np.full(N_samples, R_s),
@@ -1974,7 +1921,7 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             & (ldc_Teffs == this_Teff)
             & (ldc_loggs == this_logg)
             )
-        u1s_comp[i], u2s_comp[i] = ldc_u1s[mask], ldc_u2s[mask]
+        u1s_comp[i], u2s_comp[i] = ldc_u1s[mask].item(), ldc_u2s[mask].item()
     # draw random sample of background stars
     idxs = np.random.randint(0, N_comp, N)
 
@@ -2067,12 +2014,7 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     N_samples = 100
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(
-        np.nan_to_num(
-            np.exp(lnL+lnprior_companion+600)
-            )
-        )
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL + lnprior_companion, N_total=N)
     res = {
         'M_s': masses_comp[idxs[idx]],
         'R_s': radii_comp[idxs[idx]],
@@ -2192,7 +2134,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             & (ldc_Teffs == this_Teff)
             & (ldc_loggs == this_logg)
             )
-        u1s_comp[i], u2s_comp[i] = ldc_u1s[mask], ldc_u2s[mask]
+        u1s_comp[i], u2s_comp[i] = ldc_u1s[mask].item(), ldc_u2s[mask].item()
     # draw random sample of background stars
     idxs = np.random.randint(0, N_comp, N)
 
@@ -2378,12 +2320,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q < 0.95
     N_samples = 100
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(
-        np.nan_to_num(
-            np.exp(lnL+lnprior_companion+600)
-            )
-        )
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL + lnprior_companion, N_total=N)
     res = {
         'M_s': masses_comp[idxs[idx]],
         'R_s': radii_comp[idxs[idx]],
@@ -2404,12 +2341,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q >= 0.95 and 2xP_orb
     N_samples = 100
     idx = (-lnL_twin).argsort()[:N_samples]
-    Z = np.mean(
-        np.nan_to_num(
-            np.exp(lnL_twin+lnprior_companion+600)
-            )
-        )
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL_twin + lnprior_companion, N_total=N)
     res_twin = {
         'M_s': masses_comp[idxs[idx]],
         'R_s': radii_comp[idxs[idx]],
@@ -2511,7 +2443,7 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
             & (ldc_Teffs == this_Teff)
             & (ldc_loggs == this_logg)
             )
-        u1s_possible[i], u2s_possible[i] = ldc_u1s[mask], ldc_u2s[mask]
+        u1s_possible[i], u2s_possible[i] = ldc_u1s[mask].item(), ldc_u2s[mask].item()
     # draw random sample of background stars
     if N_possible > 0:
         idxs = np.random.randint(0, N_possible, N)
@@ -2598,10 +2530,7 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     N_samples = 100
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(np.nan_to_num(
-        np.exp(lnL+600)
-        ))
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL, N_total=N)
     res = {
         'M_s': masses_possible[idxs[idx]],
         'R_s': radii_possible[idxs[idx]],
@@ -2710,7 +2639,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
             & (ldc_Teffs == this_Teff)
             & (ldc_loggs == this_logg)
             )
-        u1s_possible[i], u2s_possible[i] = ldc_u1s[mask], ldc_u2s[mask]
+        u1s_possible[i], u2s_possible[i] = ldc_u1s[mask].item(), ldc_u2s[mask].item()
     # draw random sample of background stars
     if N_possible > 0:
         idxs = np.random.randint(0, N_possible, N)
@@ -2858,10 +2787,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q < 0.95
     N_samples = 100
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(np.nan_to_num(
-        np.exp(lnL+600)
-        ))
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL, N_total=N)
     res = {
         'M_s': masses_possible[idxs[idx]],
         'R_s': radii_possible[idxs[idx]],
@@ -2882,10 +2808,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q >= 0.95 and 2xP_orb
     N_samples = 100
     idx = (-lnL_twin).argsort()[:N_samples]
-    Z = np.mean(np.nan_to_num(
-        np.exp(lnL_twin+600)
-        ))
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL_twin, N_total=N)
     res_twin = {
         'M_s': masses_possible[idxs[idx]],
         'R_s': radii_possible[idxs[idx]],
@@ -2965,7 +2888,7 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
         & (ldc_Teffs == this_Teff)
         & (ldc_loggs == this_logg)
         )
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
+    u1, u2 = ldc_u1s[mask].item(), ldc_u2s[mask].item()
 
     # sample from inc and R_p prior distributions
     rps = sample_rp(np.random.rand(N), np.full(N, M_s), flatpriors)
@@ -3022,10 +2945,7 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     N_samples = 100
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(np.nan_to_num(
-        np.exp(lnL+600)
-        ))
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL, N_total=N)
     res = {
         'M_s': np.full(N_samples, M_s),
         'R_s': np.full(N_samples, R_s),
@@ -3106,7 +3026,7 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
         & (ldc_Teffs == this_Teff)
         & (ldc_loggs == this_logg)
         )
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
+    u1, u2 = ldc_u1s[mask].item(), ldc_u2s[mask].item()
 
     # sample from inc and q prior distributions
     incs = sample_inc(np.random.rand(N))
@@ -3216,10 +3136,7 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q < 0.95
     N_samples = 100
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(np.nan_to_num(
-        np.exp(lnL + 600)
-        ))
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL, N_total=N)
     res = {
         'M_s': np.full(N_samples, M_s),
         'R_s': np.full(N_samples, R_s),
@@ -3240,10 +3157,7 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q >= 0.95 and 2xP_orb
     N_samples = 100
     idx = (-lnL_twin).argsort()[:N_samples]
-    Z = np.mean(np.nan_to_num(
-        np.exp(lnL_twin+600)
-        ))
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL_twin, N_total=N)
     res_twin = {
         'M_s': np.full(N_samples, M_s),
         'R_s': np.full(N_samples, R_s),
