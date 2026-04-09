@@ -9,7 +9,7 @@ from astropy.wcs.utils import pixel_to_skycoord
 import astropy.units as u
 import numpy as np
 from astroquery.vizier import Vizier
-from scipy.integrate import dblquad
+from scipy.special import ndtr
 import pandas as pd
 from pandas import DataFrame, read_csv
 from math import floor, ceil
@@ -22,8 +22,7 @@ from mpl_toolkits.axes_grid1.anchored_artists import (
 from .likelihoods import (simulate_TP_transit,
                          simulate_EB_transit)
 from ._numerics import _normalize_probabilities
-from .funcs import (Gauss2D,
-                   save_trilegal,
+from .funcs import (save_trilegal,
                    query_TRILEGAL,
                    renorm_flux,
                    stellar_relations,
@@ -607,17 +606,18 @@ class target:
                     np.min(self.stars.Tmag.values)
                     - self.stars.Tmag.values[i]
                     )/2.5)
-                # integrate PSF in each pixel
-                this_flux = 0
-                for j in range(len(all_ap_pixels[k])):
-                    this_pixel = all_ap_pixels[k][j]
-                    this_flux += float(dblquad(
-                        Gauss2D,
-                        this_pixel[1]-0.5,
-                        this_pixel[1]+0.5,
-                        this_pixel[0]-0.5,
-                        this_pixel[0]+0.5,
-                        args=(mu_x, mu_y, 0.75, A))[0])
+                # analytic PSF integral over aperture pixels using the
+                # closed-form solution for a 2D Gaussian over a pixel box.
+                # The integral is separable: Phi((x1-mu)/s) - Phi((x0-mu)/s)
+                # where Phi = ndtr (standard normal CDF), s = sigma.
+                pixels = np.array(all_ap_pixels[k])
+                sigma = 0.75
+                this_flux = A * np.sum(
+                    (ndtr((pixels[:, 0] + 0.5 - mu_x) / sigma)
+                     - ndtr((pixels[:, 0] - 0.5 - mu_x) / sigma))
+                    * (ndtr((pixels[:, 1] + 0.5 - mu_y) / sigma)
+                     - ndtr((pixels[:, 1] - 0.5 - mu_y) / sigma))
+                )
                 rel_flux_per_aperture[k, i] = this_flux
             # calculate flux ratios for this aperture
             flux_ratio_per_aperture[k, :] = (
