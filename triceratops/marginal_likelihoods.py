@@ -1507,7 +1507,7 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             fluxratios_comp[idxs]/(1-fluxratios_comp[idxs])
             )
         lnprior_companion = np.full(
-            N, np.log10((N_comp/0.1) * (1/3600)**2 * 2.2**2)
+            N, np.log((N_comp/0.1) * (1/3600)**2 * 2.2**2)
             )
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
@@ -1721,7 +1721,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             fluxratios_comp[idxs]/(1-fluxratios_comp[idxs])
             )
         lnprior_companion = np.full(
-            N, np.log10((N_comp/0.1) * (1/3600)**2 * 2.2**2)
+            N, np.log((N_comp/0.1) * (1/3600)**2 * 2.2**2)
             )
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
@@ -1985,7 +1985,7 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             fluxratios_comp[idxs]/(1-fluxratios_comp[idxs])
             )
         lnprior_companion = np.full(
-            N, np.log10((N_comp/0.1) * (1/3600)**2 * 2.2**2)
+            N, np.log((N_comp/0.1) * (1/3600)**2 * 2.2**2)
             )
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
@@ -2247,7 +2247,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             + (fluxratios/(1-fluxratios))
             )
         lnprior_companion = np.full(
-            N, np.log10((N_comp/0.1) * (1/3600)**2 * 2.2**2)
+            N, np.log((N_comp/0.1) * (1/3600)**2 * 2.2**2)
             )
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf

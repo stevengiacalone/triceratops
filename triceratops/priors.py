@@ -1001,5 +1001,5 @@ def lnprior_background(N_comp: int, delta_mags: np.array,
                             a background star.
     """
     seps = separation_at_contrast(delta_mags, separations, contrasts)
-    lnprior_bg = np.log10((N_comp/0.1) * (1/3600)**2 * seps**2)
+    lnprior_bg = np.log((N_comp/0.1) * (1/3600)**2 * seps**2)
     return lnprior_bg
