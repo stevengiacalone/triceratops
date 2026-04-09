@@ -16,6 +16,10 @@ Run with:
     pytest tests/test_analytic_psf.py -v
 """
 
+import inspect
+import os
+import sys
+
 import numpy as np
 from scipy.integrate import dblquad
 from scipy.special import ndtr
@@ -234,3 +238,54 @@ def test_distant_star():
     # Star at (50, 50) -- very far away
     val = flux_ndtr(pixels, 50.0, 50.0, sigma, A)
     assert val < 1e-100, f"Expected negligible flux, got {val}"
+
+
+# ---- test 9: source-level regression -- calc_depths uses ndtr, not dblquad ----
+
+def test_calc_depths_uses_ndtr():
+    """Verify that target.calc_depths source uses ndtr, not dblquad.
+
+    This is a regression test: if someone reverts to the dblquad
+    implementation, this test will fail. Without this, the other tests
+    in this file (which exercise standalone helpers, not package code)
+    would pass on both the fixed and unfixed branches.
+    """
+    # Import from the repo, not from an installed package
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+    from triceratops.triceratops import target
+    source = inspect.getsource(target.calc_depths)
+
+    # Must use ndtr
+    assert "ndtr(" in source, (
+        "calc_depths must use ndtr() for the analytic PSF integral"
+    )
+    # Must NOT call dblquad
+    assert "dblquad(" not in source, (
+        "calc_depths must not call dblquad() -- "
+        "replaced by the analytic ndtr integral"
+    )
+    # Must NOT reference Gauss2D
+    assert "Gauss2D" not in source, (
+        "calc_depths must not reference Gauss2D -- "
+        "no longer needed with the analytic integral"
+    )
+
+
+def test_triceratops_module_imports_ndtr_not_dblquad():
+    """Verify the module-level imports use ndtr, not dblquad."""
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+    import triceratops.triceratops as tr_mod
+    source = inspect.getsource(tr_mod)
+
+    # Module should import ndtr
+    assert "from scipy.special import ndtr" in source, (
+        "triceratops.py must import ndtr from scipy.special"
+    )
+    # Module should NOT import dblquad
+    assert "from scipy.integrate import dblquad" not in source, (
+        "triceratops.py must not import dblquad (no longer used)"
+    )
