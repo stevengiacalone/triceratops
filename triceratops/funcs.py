@@ -1,5 +1,6 @@
 import numpy as np
 from pandas import read_csv
+from pandas.errors import EmptyDataError
 from astropy import constants
 from scipy.interpolate import InterpolatedUnivariateSpline
 from mechanicalsoup import StatefulBrowser
@@ -249,59 +250,49 @@ def query_TRILEGAL(RA: float, Dec: float, verbose: int = 1, verify_ssl: bool = T
     Returns:
         output_url (str): URL of page with query results.
     """
-    # fill out and submit online TRILEGAL form
-    browser = StatefulBrowser()
-    if verify_ssl is False:
-        ssl._create_default_https_context = ssl._create_unverified_context
-        browser.session.verify = False
-    browser.open("http://stev.oapd.inaf.it/cgi-bin/trilegal_1.6")
-    browser.select_form(nr=0)
-    browser["gal_coord"] = "2"
-    browser["eq_alpha"] = str(RA)
-    browser["eq_delta"] = str(Dec)
-    browser["field"] = "0.1"
-    browser["photsys_file"] = "tab_mag_odfnew/tab_mag_TESS_2mass.dat"
-    browser["icm_lim"] = "1"
-    browser["mag_lim"] = "21"
-    browser["binary_kind"] = "0"
-    browser.submit_selected()
-    if verbose == 1:
-        print("TRILEGAL form submitted.")
-    sleep(5)
-    if len(browser.get_current_page().select("a")) == 0:
-        browser = StatefulBrowser()
-        if verify_ssl is False:
-            ssl._create_default_https_context = ssl._create_unverified_context
-            browser.session.verify = False
-        browser.open("http://stev.oapd.inaf.it/cgi-bin/trilegal_1.5")
-        browser.select_form(nr=0)
-        browser["gal_coord"] = "2"
-        browser["eq_alpha"] = str(RA)
-        browser["eq_delta"] = str(Dec)
-        browser["field"] = "0.1"
-        browser["photsys_file"] = "tab_mag_odfnew/tab_mag_2mass.dat"
-        browser["icm_lim"] = "1"
-        browser["mag_lim"] = "21"
-        browser["binary_kind"] = "0"
-        browser.submit_selected()
-        # print("TRILEGAL form submitted.")
-        sleep(5)
-        if len(browser.get_current_page().select("a")) == 0:
-            print(
-                "TRILEGAL too busy, \
-                using saved stellar populations instead."
-                )
-            return None
-        else:
-            this_page = browser.get_current_page()
-            data_link = this_page.select("a")[0].get("href")
-            output_url = "http://stev.oapd.inaf.it/"+data_link[3:]
-            return output_url
-    else:
-        this_page = browser.get_current_page()
-        data_link = this_page.select("a")[0].get("href")
-        output_url = "http://stev.oapd.inaf.it/"+data_link[3:]
-        return output_url
+    for version in ("1.6", "1.5"):
+        url = f"https://stev.oapd.inaf.it/cgi-bin/trilegal_{version}"
+        try:
+            # TRILEGAL's legacy HTML is malformed enough that MechanicalSoup's
+            # default lxml parser can fail to see its form at all.  Use the
+            # stdlib parser, which is more tolerant of that response.
+            browser = StatefulBrowser(soup_config={"features": "html.parser"})
+            browser.session.verify = verify_ssl
+            browser.set_user_agent(
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
+            )
+            browser.open(url, timeout=60)
+            browser.select_form(nr=0)
+            browser["gal_coord"] = "2"
+            browser["eq_alpha"] = str(RA)
+            browser["eq_delta"] = str(Dec)
+            browser["field"] = "0.1"
+            if version == "1.6":
+                browser["photsys_file"] = "tab_mag_odfnew/tab_mag_TESS_2mass.dat"
+            else:
+                browser["photsys_file"] = "tab_mag_odfnew/tab_mag_2mass.dat"
+            browser["icm_lim"] = "1"
+            browser["mag_lim"] = "21"
+            browser["binary_kind"] = "0"
+            browser.submit_selected()
+            if verbose:
+                print(f"TRILEGAL v{version} form submitted.")
+            sleep(5)
+            links = browser.get_current_page().select("a")
+            if len(links) > 0:
+                data_link = links[0].get("href")
+                return f"https://stev.oapd.inaf.it/{data_link[3:]}"
+            if verbose:
+                print(f"TRILEGAL v{version}: no result links, trying next...")
+        except Exception as exc:
+            if verbose:
+                print(f"TRILEGAL v{version} failed: {exc}")
+            continue
+    print(
+        "TRILEGAL unavailable after trying versions 1.6 and 1.5; "
+        "using saved stellar populations instead."
+    )
+    return None
 
 
 def save_trilegal(output_url, ID: int):
@@ -320,8 +311,15 @@ def save_trilegal(output_url, ID: int):
             )
         return 0.0
     else:
-        for i in range(1000):
-            last = read_csv(output_url, header=None)[-1:]
+        for i in range(5):
+            try:
+                last = read_csv(output_url, header=None)[-1:]
+            except EmptyDataError:
+                if i < 4:
+                    print("...")
+                    sleep(10)
+                    continue
+                raise
             if last.values[0, 0] != "#TRILEGAL normally terminated":
                 print("...")
                 sleep(10)
@@ -401,7 +399,6 @@ def trilegal_results(trilegal_fname: str, Tmag: float):
         Hmags = Hmags[mask]
         Kmags = Kmags[mask]
     return Tmags, Masses, loggs, Teffs, Zs, Jmags, Hmags, Kmags
-
 def segment_ID(str_segment):
     """
     Returns TIC ID with appropriate number of leading zeros
@@ -435,6 +432,10 @@ def find_url(ID: str, sector: int):
         str1 = "s000"+str(sector)
     elif len(str(sector)) == 2:
         str1 = "s00"+str(sector)
+    elif len(str(sector)) == 3:
+        str1 = "s0"+str(sector)
+    else:
+        raise ValueError("TESS sector must be a positive integer with at most three digits")
            
     str2 = segment_ID(str(ID)[-16:-12])
     str3 = segment_ID(str(ID)[-12:-8])
