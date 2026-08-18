@@ -399,8 +399,6 @@ def trilegal_results(trilegal_fname: str, Tmag: float):
         Hmags = Hmags[mask]
         Kmags = Kmags[mask]
     return Tmags, Masses, loggs, Teffs, Zs, Jmags, Hmags, Kmags
-<<<<<<< HEAD
-
 def segment_ID(str_segment):
     """
     Returns TIC ID with appropriate number of leading zeros
@@ -472,5 +470,3 @@ def get_aperture(ID, sector):
     ap_pixels = np.flip(ap_pixels, axis=1)
     
     return ap_pixels
-=======
->>>>>>> f7323b4 (fix trilegal broken form extraction)
