@@ -432,6 +432,10 @@ def find_url(ID: str, sector: int):
         str1 = "s000"+str(sector)
     elif len(str(sector)) == 2:
         str1 = "s00"+str(sector)
+    elif len(str(sector)) == 3:
+        str1 = "s0"+str(sector)
+    else:
+        raise ValueError("TESS sector must be a positive integer with at most three digits")
            
     str2 = segment_ID(str(ID)[-16:-12])
     str3 = segment_ID(str(ID)[-12:-8])
