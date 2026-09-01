@@ -577,8 +577,7 @@ def lnprior_Porb_binary(P_orb: float):
     return lnprior_Porb
 
 
-def lnprior_bound_TP(M_s: float, plx: float, delta_mags: np.array,
-                     separations: np.array, contrasts: np.array):
+def lnprior_bound_TP(M_s: float, plx: float, seps: np.array):
     """
     Calculates the bound companion rate of the target star,
     assuming the orbital period of the companion is > 2500 days.
@@ -588,10 +587,10 @@ def lnprior_bound_TP(M_s: float, plx: float, delta_mags: np.array,
     Args:
         M_s (float): Target star mass [solar masses].
         plx (float): Parallax of the target star [mas].
-        delta_mags (numpy array): Contrasts of simulated
-                                  companions (delta_mag).
-        separations (numpy array): Separation at contrast (arcsec).
-        contrasts (numpy array): Contrast at separation (delta_mag).
+        seps (numpy array): Limiting angular separation beyond which each
+                            simulated companion can be ruled out (arcsec).
+                            When more than one contrast curve is supplied,
+                            this is the tightest constraint across curves.
     Returns:
         lnprior_bound (float): The log probability of there being
                                a bound companion.
@@ -601,7 +600,7 @@ def lnprior_bound_TP(M_s: float, plx: float, delta_mags: np.array,
     if np.isnan(plx):
         plx = 0.1
     d = 1000/plx
-    seps = d*separation_at_contrast(delta_mags, separations, contrasts)
+    seps = d*seps
 
     # calculate prior probability for M_s >= 1.0 solar masses
     if M_s >= 1.0:
@@ -781,8 +780,7 @@ def lnprior_bound_TP(M_s: float, plx: float, delta_mags: np.array,
 
     return lnprior_bound
 
-def lnprior_bound_EB(M_s: float, plx: float, delta_mags: np.array,
-                     separations: np.array, contrasts: np.array):
+def lnprior_bound_EB(M_s: float, plx: float, seps: np.array):
     """
     Calculates the bound companion rate of the target star for EB
     scenarios. Assumes the period of the tertiary is > 10 days.
@@ -790,10 +788,10 @@ def lnprior_bound_EB(M_s: float, plx: float, delta_mags: np.array,
     Args:
         M_s (float): Target star mass [solar masses].
         plx (float): Parallax of the target star [mas].
-        delta_mags (numpy array): Contrasts of simulated
-                                  companions (delta_mag).
-        separations (numpy array): Separation at contrast (arcsec).
-        contrasts (numpy array): Contrast at separation (delta_mag).
+        seps (numpy array): Limiting angular separation beyond which each
+                            simulated companion can be ruled out (arcsec).
+                            When more than one contrast curve is supplied,
+                            this is the tightest constraint across curves.
     Returns:
         lnprior_bound (float): The log probability of there being
                                a bound companion.
@@ -803,7 +801,7 @@ def lnprior_bound_EB(M_s: float, plx: float, delta_mags: np.array,
     if np.isnan(plx):
         plx = 0.1
     d = 1000/plx
-    seps = d*separation_at_contrast(delta_mags, separations, contrasts)
+    seps = d*seps
 
     # calculate prior probability for M_s >= 1.0 solar masses
     if M_s >= 1.0:
@@ -983,23 +981,22 @@ def lnprior_bound_EB(M_s: float, plx: float, delta_mags: np.array,
 
     return lnprior_bound
 
-def lnprior_background(N_comp: int, delta_mags: np.array,
-                       separations: np.array,
-                       contrasts: np.array):
+def lnprior_background(N_comp: int, seps: np.array):
     """
-    Calculates the limiting separation (in arcsecs)
-    at a given delta_mag.
+    Calculates the probability of there being an unresolved background
+    star, given the limiting angular separation at which each simulated
+    background star can be ruled out.
     Args:
         N_comp (int): Number of stars obtained from
                       trilegal simulation.
-        delta_mags (numpy array): Contrasts of simulated
-                                  companions (delta_mag).
-        separations (numpy array): Separation at contrast (arcsec).
-        contrasts (numpy array): Contrast at separation (delta_mag).
+        seps (numpy array): Limiting angular separation beyond which each
+                            simulated background star can be ruled out
+                            (arcsec). When more than one contrast curve is
+                            supplied, this is the tightest constraint
+                            across curves.
     Returns:
         lnprior_bg (float): The log probability of there being
                             a background star.
     """
-    seps = separation_at_contrast(delta_mags, separations, contrasts)
     lnprior_bg = np.log((N_comp/0.1) * (1/3600)**2 * seps**2)
     return lnprior_bg

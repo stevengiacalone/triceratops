@@ -672,7 +672,7 @@ class target:
 
     def calc_probs(self, time: np.ndarray, flux_0: np.ndarray,
                    flux_err_0: float, P_orb,
-                   contrast_curve_file: str = None, filt: str = "TESS",
+                   contrast_curve_file=None, filt="TESS",
                    N: int = 1000000, parallel: bool = False,
                    drop_scenario: list = [],
                    verbose: int = 1, flatpriors: bool = False,
@@ -689,11 +689,18 @@ class target:
             flux_err_0 (float): Uncertainty of flux.
             P_orb (float or numpy array): Orbital period [days] OR
                 min and max periods to consider (i.e., [P_min, P_max]).
-            contrast_curve_file (str): Path to contrast curve text file.
-                File should contain column with separations (in arcsec)
-                followed by column with Delta_mags.
-            filt (str): Photometric filter of contrast curve. Options are
-                TESS, Vis, J, H, and K.
+            contrast_curve_file (str or list of str): Path to contrast
+                curve text file, or a list of paths to use more than one
+                contrast curve in the analysis. Each file should contain
+                a column with separations (in arcsec) followed by a
+                column with Delta_mags. When multiple curves are given, a
+                simulated companion is ruled out if any single curve
+                rules it out (the tightest constraint is adopted).
+            filt (str or list of str): Photometric filter of the contrast
+                curve(s). Options are TESS, Vis, J, H, and K. If a list of
+                contrast curves is given, this may be a single filter
+                (applied to all curves) or a list of filters matching
+                contrast_curve_file.
             N (int): Number of draws for MC.
             parallel (bool): Whether or not to simulate light curves
                 in parallel.

@@ -239,6 +239,76 @@ def separation_at_contrast(delta_mags: np.array,
     return sep
 
 
+def parse_contrast_curves(contrast_curve_file, filt="TESS"):
+    """
+    Normalizes contrast curve inputs so that one or more contrast curves
+    can be supplied to the analysis.
+    Args:
+        contrast_curve_file (str or list of str): Path(s) to contrast
+            curve text file(s), or None.
+        filt (str or list of str): Photometric filter(s) of the contrast
+            curve(s). A single filter is broadcast to all files. Options
+            are TESS, Vis, J, H, and K.
+    Returns:
+        files (list of str or None): List of contrast curve paths, or
+            None if no contrast curve was provided.
+        filts (list of str or None): Matching list of filters, or None.
+    """
+    if contrast_curve_file is None:
+        return None, None
+    if (isinstance(contrast_curve_file, (str, bytes))
+            or not hasattr(contrast_curve_file, "__iter__")):
+        files = [contrast_curve_file]
+    else:
+        files = list(contrast_curve_file)
+    if len(files) == 0:
+        return None, None
+    if isinstance(filt, (str, bytes)) or not hasattr(filt, "__iter__"):
+        filts = [filt]
+    else:
+        filts = list(filt)
+    if len(filts) == 1:
+        filts = filts*len(files)
+    if len(filts) != len(files):
+        raise ValueError(
+            "Number of contrast curve filters ({0}) does not match the "
+            "number of contrast curve files ({1}).".format(
+                len(filts), len(files)
+                )
+            )
+    return files, filts
+
+
+def limiting_separation(delta_mags_list: list, contrast_curve_files: list):
+    """
+    Determines the limiting angular separation (in arcsec) beyond which
+    each simulated companion can be ruled out, combining the constraints
+    from one or more contrast curves. A companion is considered ruled out
+    if any single contrast curve rules it out, so the tightest (smallest)
+    limiting separation across all curves is adopted.
+    Args:
+        delta_mags_list (list of numpy arrays): Contrasts of the simulated
+            companions (delta_mag), one array per contrast curve, each
+            evaluated in that curve's photometric filter.
+        contrast_curve_files (list of str): Paths to the contrast curve
+            text files, in the same order as delta_mags_list.
+    Returns:
+        seps (numpy array): Separation beyond which each simulated
+            companion can be ruled out (arcsec).
+    """
+    seps = None
+    for delta_mags, cc_file in zip(delta_mags_list, contrast_curve_files):
+        separations, contrasts = file_to_contrast_curve(cc_file)
+        this_seps = separation_at_contrast(
+            delta_mags, separations, contrasts
+            )
+        if seps is None:
+            seps = this_seps
+        else:
+            seps = np.minimum(seps, this_seps)
+    return seps
+
+
 def query_TRILEGAL(RA: float, Dec: float, verbose: int = 1, verify_ssl: bool = True):
     """
     Begins TRILEGAL query.

@@ -5,7 +5,8 @@ from pathlib import Path
 
 from .likelihoods import *
 from .priors import *
-from .funcs import stellar_relations, flux_relation
+from .funcs import (stellar_relations, flux_relation,
+                    parse_contrast_curves, limiting_separation)
 from ._numerics import _log_mean_exp
 
 np.seterr(divide='ignore')
@@ -385,8 +386,8 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 
 def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
-            Z: float, plx: float, contrast_curve_file: str = None,
-            filt: str = "TESS",
+            Z: float, plx: float, contrast_curve_file=None,
+            filt="TESS",
             N: int = 1000000, parallel: bool = False,
             mission: str = "TESS", flatpriors: bool = False,
             exptime: float = 0.00139, nsamples: int = 20,
@@ -404,9 +405,13 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         Teff (float): Target star effective temperature [K].
         Z (float): Target star metallicity [dex].
         plx (float): Target star parallax [mas].
-        contrast_curve_file (string): Path to contrast curve file.
-        filt (string): Photometric filter of contrast curve. Options
-                         are TESS, Vis, J, H, and K.
+        contrast_curve_file (str or list of str): Path to contrast curve
+                         file, or a list of paths to combine more than
+                         one contrast curve. A companion is ruled out if
+                         any single curve rules it out.
+        filt (str or list of str): Photometric filter(s) of the contrast
+                         curve(s). Options are TESS, Vis, J, H, and K. A
+                         single filter is applied to all curves.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
@@ -482,29 +487,36 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
                 fluxratios_comp/(1-fluxratios_comp)
                 )
             lnprior_companion = lnprior_bound_TP(
-                M_s, plx, np.abs(delta_mags),
-                np.array([2.2]), np.array([1.0])
+                M_s, plx, np.full(delta_mags.shape, 2.2)
                 )
             lnprior_companion[lnprior_companion > 0.0] = 0.0
             lnprior_companion[delta_mags > 0.0] = -np.inf
         else:
-            # use flux ratio of contrast curve filter
-            fluxratios_comp_cc = (
-                flux_relation(masses_comp, filt)
-                / (flux_relation(masses_comp, filt)
-                    + flux_relation(np.array([M_s]), filt))
+            # evaluate each contrast curve in its own filter and adopt
+            # the tightest constraint across all supplied curves
+            cc_files, cc_filts = parse_contrast_curves(
+                contrast_curve_file, filt
                 )
-            delta_mags = 2.5*np.log10(
-                fluxratios_comp_cc/(1-fluxratios_comp_cc)
+            delta_mags_list = []
+            for cc_filt in cc_filts:
+                fluxratios_comp_cc = (
+                    flux_relation(masses_comp, cc_filt)
+                    / (flux_relation(masses_comp, cc_filt)
+                        + flux_relation(np.array([M_s]), cc_filt))
+                    )
+                delta_mags_list.append(
+                    2.5*np.log10(
+                        fluxratios_comp_cc/(1-fluxratios_comp_cc)
+                        )
+                    )
+            seps = limiting_separation(
+                [np.abs(dm) for dm in delta_mags_list], cc_files
                 )
-            separations, contrasts = file_to_contrast_curve(
-                contrast_curve_file
-                )
-            lnprior_companion = lnprior_bound_TP(
-                M_s, plx, np.abs(delta_mags), separations, contrasts
-                )
+            lnprior_companion = lnprior_bound_TP(M_s, plx, seps)
             lnprior_companion[lnprior_companion > 0.0] = 0.0
-            lnprior_companion[delta_mags > 0.0] = -np.inf
+            lnprior_companion[
+                np.any(np.array(delta_mags_list) > 0.0, axis=0)
+                ] = -np.inf
     else:
         lnprior_companion = np.zeros(N)
 
@@ -588,8 +600,8 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
 def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
-            Z: float, plx: float, contrast_curve_file: str = None,
-            filt: str = "TESS",
+            Z: float, plx: float, contrast_curve_file=None,
+            filt="TESS",
             N: int = 1000000, parallel: bool = False,
             mission: str = "TESS", flatpriors: bool = False,
             exptime: float = 0.00139, nsamples: int = 20,
@@ -607,9 +619,13 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         Teff (float): Target star effective temperature [K].
         Z (float): Target star metallicity [dex].
         plx (float): Target star parallax [mas].
-        contrast_curve_file (string): Path to contrast curve file.
-        filt (string): Photometric filter of contrast curve. Options
-                         are TESS, Vis, J, H, and K.
+        contrast_curve_file (str or list of str): Path to contrast curve
+                         file, or a list of paths to combine more than
+                         one contrast curve. A companion is ruled out if
+                         any single curve rules it out.
+        filt (str or list of str): Photometric filter(s) of the contrast
+                         curve(s). Options are TESS, Vis, J, H, and K. A
+                         single filter is applied to all curves.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
@@ -700,29 +716,36 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                 fluxratios_comp/(1-fluxratios_comp)
                 )
             lnprior_companion = lnprior_bound_EB(
-                M_s, plx, np.abs(delta_mags),
-                np.array([2.2]), np.array([1.0])
+                M_s, plx, np.full(delta_mags.shape, 2.2)
                 )
             lnprior_companion[lnprior_companion > 0.0] = 0.0
             lnprior_companion[delta_mags > 0.0] = -np.inf
         else:
-            # use flux ratio of contrast curve filter
-            fluxratios_comp_cc = (
-                flux_relation(masses_comp, filt)
-                / (flux_relation(masses_comp, filt)
-                    + flux_relation(np.array([M_s]), filt))
+            # evaluate each contrast curve in its own filter and adopt
+            # the tightest constraint across all supplied curves
+            cc_files, cc_filts = parse_contrast_curves(
+                contrast_curve_file, filt
                 )
-            delta_mags = 2.5*np.log10(
-                fluxratios_comp_cc/(1-fluxratios_comp_cc)
+            delta_mags_list = []
+            for cc_filt in cc_filts:
+                fluxratios_comp_cc = (
+                    flux_relation(masses_comp, cc_filt)
+                    / (flux_relation(masses_comp, cc_filt)
+                        + flux_relation(np.array([M_s]), cc_filt))
+                    )
+                delta_mags_list.append(
+                    2.5*np.log10(
+                        fluxratios_comp_cc/(1-fluxratios_comp_cc)
+                        )
+                    )
+            seps = limiting_separation(
+                [np.abs(dm) for dm in delta_mags_list], cc_files
                 )
-            separations, contrasts = file_to_contrast_curve(
-                contrast_curve_file
-                )
-            lnprior_companion = lnprior_bound_EB(
-                M_s, plx, np.abs(delta_mags), separations, contrasts
-                )
+            lnprior_companion = lnprior_bound_EB(M_s, plx, seps)
             lnprior_companion[lnprior_companion > 0.0] = 0.0
-            lnprior_companion[delta_mags > 0.0] = -np.inf
+            lnprior_companion[
+                np.any(np.array(delta_mags_list) > 0.0, axis=0)
+                ] = -np.inf
     else:
         lnprior_companion = np.zeros(N)
 
@@ -868,8 +891,8 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
 
 def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float, Z: float,
-            plx: float, contrast_curve_file: str = None,
-            filt: str = "TESS",
+            plx: float, contrast_curve_file=None,
+            filt="TESS",
             N: int = 1000000, parallel: bool = False,
             mission: str = "TESS", flatpriors: bool = False,
             exptime: float = 0.00139, nsamples: int = 20,
@@ -887,9 +910,13 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
         Teff (float): Target star effective temperature [K].
         Z (float): Target star metallicity [dex].
         plx (float): Target star parallax [mas].
-        contrast_curve_file (string): contrast curve file.
-        filt (string): Photometric filter of contrast curve. Options
-                         are TESS, Vis, J, H, and K.
+        contrast_curve_file (str or list of str): Path to contrast curve
+                         file, or a list of paths to combine more than
+                         one contrast curve. A companion is ruled out if
+                         any single curve rules it out.
+        filt (str or list of str): Photometric filter(s) of the contrast
+                         curve(s). Options are TESS, Vis, J, H, and K. A
+                         single filter is applied to all curves.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
@@ -977,27 +1004,36 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
             # use TESS/Vis band flux ratios
             delta_mags = 2.5*np.log10(fluxratios_comp/(1-fluxratios_comp))
             lnprior_companion = lnprior_bound_TP(
-                M_s, plx, np.abs(delta_mags),
-                np.array([2.2]), np.array([1.0])
+                M_s, plx, np.full(delta_mags.shape, 2.2)
                 )
             lnprior_companion[lnprior_companion > 0.0] = 0.0
             lnprior_companion[delta_mags > 0.0] = -np.inf
         else:
-            # use flux ratio of contrast curve filter
-            fluxratios_comp_cc = (
-                flux_relation(masses_comp, filt)
-                / (flux_relation(masses_comp, filt)
-                    + flux_relation(np.array([M_s]), filt))
+            # evaluate each contrast curve in its own filter and adopt
+            # the tightest constraint across all supplied curves
+            cc_files, cc_filts = parse_contrast_curves(
+                contrast_curve_file, filt
                 )
-            delta_mags = 2.5*np.log10(fluxratios_comp_cc/(1-fluxratios_comp_cc))
-            separations, contrasts = file_to_contrast_curve(
-                contrast_curve_file
+            delta_mags_list = []
+            for cc_filt in cc_filts:
+                fluxratios_comp_cc = (
+                    flux_relation(masses_comp, cc_filt)
+                    / (flux_relation(masses_comp, cc_filt)
+                        + flux_relation(np.array([M_s]), cc_filt))
+                    )
+                delta_mags_list.append(
+                    2.5*np.log10(
+                        fluxratios_comp_cc/(1-fluxratios_comp_cc)
+                        )
+                    )
+            seps = limiting_separation(
+                [np.abs(dm) for dm in delta_mags_list], cc_files
                 )
-            lnprior_companion = lnprior_bound_TP(
-                M_s, plx, np.abs(delta_mags), separations, contrasts
-                )
+            lnprior_companion = lnprior_bound_TP(M_s, plx, seps)
             lnprior_companion[lnprior_companion > 0.0] = 0.0
-            lnprior_companion[delta_mags > 0.0] = -np.inf
+            lnprior_companion[
+                np.any(np.array(delta_mags_list) > 0.0, axis=0)
+                ] = -np.inf
     else:
         lnprior_companion = np.zeros(N)
 
@@ -1079,8 +1115,8 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
 def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
-            Z: float, plx: float, contrast_curve_file: str = None,
-            filt: str = "TESS",
+            Z: float, plx: float, contrast_curve_file=None,
+            filt="TESS",
             N: int = 1000000, parallel: bool = False,
             mission: str = "TESS", flatpriors: bool = False,
             exptime: float = 0.00139, nsamples: int = 20,
@@ -1098,9 +1134,13 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         Teff (float): Target star effective temperature [K].
         Z (float): Target star metallicity [dex].
         plx (float): Target star parallax [mas].
-        contrast_curve_file (string): Path to contrast curve file.
-        filt (string): Photometric filter of contrast curve. Options
-                         are TESS, Vis, J, H, and K.
+        contrast_curve_file (str or list of str): Path to contrast curve
+                         file, or a list of paths to combine more than
+                         one contrast curve. A companion is ruled out if
+                         any single curve rules it out.
+        filt (str or list of str): Photometric filter(s) of the contrast
+                         curve(s). Options are TESS, Vis, J, H, and K. A
+                         single filter is applied to all curves.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
@@ -1204,35 +1244,42 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                 + (fluxratios/(1-fluxratios))
                 )
             lnprior_companion = lnprior_bound_EB(
-                M_s, plx, np.abs(delta_mags),
-                np.array([2.2]), np.array([1.0])
+                M_s, plx, np.full(delta_mags.shape, 2.2)
                 )
             lnprior_companion[lnprior_companion > 0.0] = 0.0
             lnprior_companion[delta_mags > 0.0] = -np.inf
         else:
-            # use flux ratio of contrast curve filter
-            fluxratios_cc = (
-                flux_relation(masses, filt)
-                / (flux_relation(masses, filt)
-                    + flux_relation(np.array([M_s]), filt))
+            # evaluate each contrast curve in its own filter and adopt
+            # the tightest constraint across all supplied curves
+            cc_files, cc_filts = parse_contrast_curves(
+                contrast_curve_file, filt
                 )
-            fluxratios_comp_cc = (
-                flux_relation(masses_comp, filt)
-                / (flux_relation(masses_comp, filt)
-                    + flux_relation(np.array([M_s]), filt))
+            delta_mags_list = []
+            for cc_filt in cc_filts:
+                fluxratios_cc = (
+                    flux_relation(masses, cc_filt)
+                    / (flux_relation(masses, cc_filt)
+                        + flux_relation(np.array([M_s]), cc_filt))
+                    )
+                fluxratios_comp_cc = (
+                    flux_relation(masses_comp, cc_filt)
+                    / (flux_relation(masses_comp, cc_filt)
+                        + flux_relation(np.array([M_s]), cc_filt))
+                    )
+                delta_mags_list.append(
+                    2.5*np.log10(
+                        (fluxratios_comp_cc/(1-fluxratios_comp_cc))
+                        + (fluxratios_cc/(1-fluxratios_cc))
+                        )
+                    )
+            seps = limiting_separation(
+                [np.abs(dm) for dm in delta_mags_list], cc_files
                 )
-            delta_mags = 2.5*np.log10(
-                (fluxratios_comp_cc/(1-fluxratios_comp_cc))
-                + (fluxratios_cc/(1-fluxratios_cc))
-                )
-            separations, contrasts = file_to_contrast_curve(
-                contrast_curve_file
-                )
-            lnprior_companion = lnprior_bound_EB(
-                M_s, plx, np.abs(delta_mags), separations, contrasts
-                )
+            lnprior_companion = lnprior_bound_EB(M_s, plx, seps)
             lnprior_companion[lnprior_companion > 0.0] = 0.0
-            lnprior_companion[delta_mags > 0.0] = -np.inf
+            lnprior_companion[
+                np.any(np.array(delta_mags_list) > 0.0, axis=0)
+                ] = -np.inf
     else:
         lnprior_companion = np.zeros(N)
 
@@ -1380,7 +1427,7 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Z: float, Tmag: float, Jmag: float, Hmag: float,
             Kmag: float, trilegal_fname: str,
-            contrast_curve_file: str = None, filt: str = "TESS",
+            contrast_curve_file=None, filt="TESS",
             N: int = 1000000, parallel: bool = False,
             mission: str = "TESS", flatpriors: bool = False,
             exptime: float = 0.00139, nsamples: int = 20):
@@ -1401,9 +1448,13 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         Hmag (float): Target star H magnitude.
         Kmag (float): Target star K magnitude.
         trilegal_fname (string): File containing trilegal query results.
-        contrast_curve_file (string): Contrast curve file.
-        filt (string): Photometric filter of contrast curve. Options
-                         are TESS, Vis, J, H, and K.
+        contrast_curve_file (str or list of str): Path to contrast curve
+                         file, or a list of paths to combine more than
+                         one contrast curve. A companion is ruled out if
+                         any single curve rules it out.
+        filt (str or list of str): Photometric filter(s) of the contrast
+                         curve(s). Options are TESS, Vis, J, H, and K. A
+                         single filter is applied to all curves.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
@@ -1474,22 +1525,26 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
-        if filt == "J":
-            delta_mags = delta_Jmags[idxs]
-        elif filt == "H":
-            delta_mags = delta_Hmags[idxs]
-        elif filt == "K":
-            delta_mags = delta_Kmags[idxs]
-        else:
-            delta_mags = delta_mags[idxs]
-        separations, contrasts = file_to_contrast_curve(
-            contrast_curve_file
+        # evaluate each contrast curve in its own filter and adopt the
+        # tightest constraint across all supplied curves
+        cc_files, cc_filts = parse_contrast_curves(
+            contrast_curve_file, filt
             )
-        lnprior_companion = lnprior_background(
-            N_comp, np.abs(delta_mags), separations, contrasts
+        delta_mags_by_filt = {
+            "J": delta_Jmags, "H": delta_Hmags, "K": delta_Kmags
+            }
+        delta_mags_list = [
+            delta_mags_by_filt.get(cc_filt, delta_mags)[idxs]
+            for cc_filt in cc_filts
+            ]
+        seps = limiting_separation(
+            [np.abs(dm) for dm in delta_mags_list], cc_files
             )
+        lnprior_companion = lnprior_background(N_comp, seps)
         lnprior_companion[lnprior_companion > 0.0] = 0.0
-        lnprior_companion[delta_mags > 0.0] = -np.inf
+        lnprior_companion[
+            np.any(np.array(delta_mags_list) > 0.0, axis=0)
+            ] = -np.inf
 
     # sample from R_p and inc prior distributions
     rps = sample_rp(np.random.rand(N), np.full(N, M_s), flatpriors)
@@ -1572,7 +1627,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Z: float, Tmag: float, Jmag: float, Hmag: float,
             Kmag: float, trilegal_fname: str,
-            contrast_curve_file: str = None, filt: str = "TESS",
+            contrast_curve_file=None, filt="TESS",
             N: int = 1000000, parallel: bool = False,
             mission: str = "TESS", flatpriors: bool = False,
             exptime: float = 0.00139, nsamples: int = 20):
@@ -1593,9 +1648,13 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         Hmag (float): Target star H magnitude.
         Kmag (float): Target star K magnitude.
         trilegal_fname (string): File containing trilegal query results.
-        contrast_curve_file (string): Path to contrast curve file.
-        filt (string): Photometric filter of contrast curve. Options
-                         are TESS, Vis, J, H, and K.
+        contrast_curve_file (str or list of str): Path to contrast curve
+                         file, or a list of paths to combine more than
+                         one contrast curve. A companion is ruled out if
+                         any single curve rules it out.
+        filt (str or list of str): Photometric filter(s) of the contrast
+                         curve(s). Options are TESS, Vis, J, H, and K. A
+                         single filter is applied to all curves.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
@@ -1683,22 +1742,26 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
-        if filt == "J":
-            delta_mags = delta_Jmags[idxs]
-        elif filt == "H":
-            delta_mags = delta_Hmags[idxs]
-        elif filt == "K":
-            delta_mags = delta_Kmags[idxs]
-        else:
-            delta_mags = delta_mags[idxs]
-        separations, contrasts = file_to_contrast_curve(
-            contrast_curve_file
+        # evaluate each contrast curve in its own filter and adopt the
+        # tightest constraint across all supplied curves
+        cc_files, cc_filts = parse_contrast_curves(
+            contrast_curve_file, filt
             )
-        lnprior_companion = lnprior_background(
-            N_comp, np.abs(delta_mags), separations, contrasts
+        delta_mags_by_filt = {
+            "J": delta_Jmags, "H": delta_Hmags, "K": delta_Kmags
+            }
+        delta_mags_list = [
+            delta_mags_by_filt.get(cc_filt, delta_mags)[idxs]
+            for cc_filt in cc_filts
+            ]
+        seps = limiting_separation(
+            [np.abs(dm) for dm in delta_mags_list], cc_files
             )
+        lnprior_companion = lnprior_background(N_comp, seps)
         lnprior_companion[lnprior_companion > 0.0] = 0.0
-        lnprior_companion[delta_mags > 0.0] = -np.inf
+        lnprior_companion[
+            np.any(np.array(delta_mags_list) > 0.0, axis=0)
+            ] = -np.inf
 
     # calculate transit probability for each instance
     e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
@@ -1841,7 +1904,7 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Tmag: float, Jmag: float, Hmag: float, Kmag: float,
             trilegal_fname: str,
-            contrast_curve_file: str = None, filt: str = "TESS",
+            contrast_curve_file=None, filt="TESS",
             N: int = 1000000, parallel: bool = False,
             mission: str = "TESS", flatpriors: bool = False,
             exptime: float = 0.00139, nsamples: int = 20):
@@ -1861,9 +1924,13 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         Hmag (float): Target star H magnitude.
         Kmag (float): Target star K magnitude.
         trilegal_fname (string): File containing trilegal query results.
-        contrast_curve_file (string): Path to contrast curve file.
-        filt (string): Photometric filter of contrast curve. Options
-                         are TESS, Vis, J, H, and K.
+        contrast_curve_file (str or list of str): Path to contrast curve
+                         file, or a list of paths to combine more than
+                         one contrast curve. A companion is ruled out if
+                         any single curve rules it out.
+        filt (str or list of str): Photometric filter(s) of the contrast
+                         curve(s). Options are TESS, Vis, J, H, and K. A
+                         single filter is applied to all curves.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
@@ -1937,22 +2004,26 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
-        if filt == "J":
-            delta_mags = delta_Jmags[idxs]
-        elif filt == "H":
-            delta_mags = delta_Hmags[idxs]
-        elif filt == "K":
-            delta_mags = delta_Kmags[idxs]
-        else:
-            delta_mags = delta_mags[idxs]
-        separations, contrasts = file_to_contrast_curve(
-            contrast_curve_file
+        # evaluate each contrast curve in its own filter and adopt the
+        # tightest constraint across all supplied curves
+        cc_files, cc_filts = parse_contrast_curves(
+            contrast_curve_file, filt
             )
-        lnprior_companion = lnprior_background(
-            N_comp, np.abs(delta_mags), separations, contrasts
+        delta_mags_by_filt = {
+            "J": delta_Jmags, "H": delta_Hmags, "K": delta_Kmags
+            }
+        delta_mags_list = [
+            delta_mags_by_filt.get(cc_filt, delta_mags)[idxs]
+            for cc_filt in cc_filts
+            ]
+        seps = limiting_separation(
+            [np.abs(dm) for dm in delta_mags_list], cc_files
             )
+        lnprior_companion = lnprior_background(N_comp, seps)
         lnprior_companion[lnprior_companion > 0.0] = 0.0
-        lnprior_companion[delta_mags > 0.0] = -np.inf
+        lnprior_companion[
+            np.any(np.array(delta_mags_list) > 0.0, axis=0)
+            ] = -np.inf
 
     # sample from inc and R_p prior distributions
     rps = sample_rp(np.random.rand(N), masses_comp[idxs], flatpriors)
@@ -2039,7 +2110,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             P_orb: float, M_s: float, R_s: float, Teff: float,
             Tmag: float, Jmag:float, Hmag: float, Kmag: float,
             trilegal_fname: str,
-            contrast_curve_file: str = None, filt: str = "TESS",
+            contrast_curve_file=None, filt="TESS",
             N: int = 1000000, parallel: bool = False,
             mission: str = "TESS", flatpriors: bool = False,
             exptime: float = 0.00139, nsamples: int = 20):
@@ -2059,9 +2130,13 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         Hmag (float): Target star H magnitude.
         Kmag (float): Target star K magnitude.
         trilegal_fname (string): File containing trilegal query results.
-        contrast_curve_file (string): Path to contrast curve file.
-        filt (string): Photometric filter of contrast curve. Options
-                         are TESS, Vis, J, H, and K.
+        contrast_curve_file (str or list of str): Path to contrast curve
+                         file, or a list of paths to combine more than
+                         one contrast curve. A companion is ruled out if
+                         any single curve rules it out.
+        filt (str or list of str): Photometric filter(s) of the contrast
+                         curve(s). Options are TESS, Vis, J, H, and K. A
+                         single filter is applied to all curves.
         N (int): Number of draws for MC.
         parallel (bool): Whether or not to simulate light curves
                          in parallel.
@@ -2157,30 +2232,6 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         / (flux_relation(masses) + flux_relation(np.array([M_s])))
         * distance_correction
         )
-    # calculate EB flux ratios in the contrast curve filter
-    if filt == "J":
-        fluxratios_comp_cc = fluxratios_comp_J[idxs]
-    elif filt == "H":
-        fluxratios_comp_cc = fluxratios_comp_H[idxs]
-    elif filt == "K":
-        fluxratios_comp_cc = fluxratios_comp_K[idxs]
-    else:
-        fluxratios_comp_cc = fluxratios_comp[idxs]
-    fluxratios_comp_bound_cc = (
-        flux_relation(masses_comp[idxs], filt)
-        / (
-            flux_relation(masses_comp[idxs], filt)
-            + flux_relation(np.array([M_s]), filt)
-            )
-        )
-    distance_correction_cc = fluxratios_comp_cc/fluxratios_comp_bound_cc
-    fluxratios_cc = (
-        flux_relation(masses, filt)
-        / (flux_relation(masses, filt)
-            + flux_relation(np.array([M_s]), filt))
-        * distance_correction_cc
-        )
-
     # calculate priors for companions
     if contrast_curve_file is None:
         # use TESS/Vis band flux ratios
@@ -2194,19 +2245,51 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         lnprior_companion[lnprior_companion > 0.0] = 0.0
         lnprior_companion[delta_mags > 0.0] = -np.inf
     else:
-        # use contrast curve filter flux ratios
-        delta_mags = 2.5*np.log10(
-            (fluxratios_comp_cc/(1-fluxratios_comp_cc))
-            + (fluxratios_cc/(1-fluxratios_cc))
+        # evaluate each contrast curve in its own filter and adopt the
+        # tightest constraint across all supplied curves
+        cc_files, cc_filts = parse_contrast_curves(
+            contrast_curve_file, filt
             )
-        separations, contrasts = file_to_contrast_curve(
-            contrast_curve_file
+        fluxratios_comp_by_filt = {
+            "J": fluxratios_comp_J, "H": fluxratios_comp_H,
+            "K": fluxratios_comp_K
+            }
+        delta_mags_list = []
+        for cc_filt in cc_filts:
+            # EB flux ratios in this contrast curve's filter
+            fluxratios_comp_cc = fluxratios_comp_by_filt.get(
+                cc_filt, fluxratios_comp
+                )[idxs]
+            fluxratios_comp_bound_cc = (
+                flux_relation(masses_comp[idxs], cc_filt)
+                / (
+                    flux_relation(masses_comp[idxs], cc_filt)
+                    + flux_relation(np.array([M_s]), cc_filt)
+                    )
+                )
+            distance_correction_cc = (
+                fluxratios_comp_cc/fluxratios_comp_bound_cc
+                )
+            fluxratios_cc = (
+                flux_relation(masses, cc_filt)
+                / (flux_relation(masses, cc_filt)
+                    + flux_relation(np.array([M_s]), cc_filt))
+                * distance_correction_cc
+                )
+            delta_mags_list.append(
+                2.5*np.log10(
+                    (fluxratios_comp_cc/(1-fluxratios_comp_cc))
+                    + (fluxratios_cc/(1-fluxratios_cc))
+                    )
+                )
+        seps = limiting_separation(
+            [np.abs(dm) for dm in delta_mags_list], cc_files
             )
-        lnprior_companion = lnprior_background(
-            N_comp, np.abs(delta_mags), separations, contrasts
-            )
+        lnprior_companion = lnprior_background(N_comp, seps)
         lnprior_companion[lnprior_companion > 0.0] = 0.0
-        lnprior_companion[delta_mags > 0.0] = -np.inf
+        lnprior_companion[
+            np.any(np.array(delta_mags_list) > 0.0, axis=0)
+            ] = -np.inf
 
     # calculate transit probability for each instance
     e_corr = (1+eccs*np.sin(argps*pi/180))/(1-eccs**2)
