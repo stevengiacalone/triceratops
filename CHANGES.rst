@@ -45,3 +45,6 @@ Other additions on this release:
   ``pyproject.toml`` with pytest configuration, and unit tests for the
   pure helper functions and prior samplers. Tests that need the full
   install are marked ``heavy``.
+- Capped ``numpy < 2`` and ``scipy < 1.14``: the pinned ``pytransit``
+  2.2 imports ``numpy.NaN`` and ``scipy.integrate.trapz``, both of
+  which have since been removed.

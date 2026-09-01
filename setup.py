@@ -21,7 +21,11 @@ setup(name = "triceratops",
    	'License :: OSI Approved :: MIT License',
         'Topic :: Scientific/Engineering :: Astronomy'
         ],
-      install_requires=['numpy>=1.18.1','pandas>=0.23.4', 'scipy>=1.1.0', 'matplotlib>=3.5.1',
+      install_requires=[# numpy < 2 and scipy < 1.14 are required by the
+                        # pinned pytransit 2.2 (it uses numpy.NaN and
+                        # scipy.integrate.trapz, both since removed)
+                        'numpy>=1.18.1,<2', 'scipy>=1.1.0,<1.14',
+                        'pandas>=0.23.4', 'matplotlib>=3.5.1',
                         'astropy>=4.0', 'astroquery>=0.4.6', 'pytransit==2.2',
                         'mechanicalsoup>=0.12.0', 'emcee>=3.0.2', 'seaborn>=0.11.1',
                         'numba>=0.52.0', 'pyrr>=0.10.3', 'celerite>=0.4.0', 'lightkurve>=2.0.0',
