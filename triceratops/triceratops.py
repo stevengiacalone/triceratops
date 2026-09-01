@@ -406,10 +406,10 @@ class target:
         photometry) have shown that the transit occurs on-target, ruling
         out nearby stars as the source of the signal.
 
-        Run this after calc_depths() so that the dilution of the target
-        light curve by nearby stars is still accounted for. If run before
-        calc_depths(), the target flux ratio will be treated as 1 (i.e.,
-        no dilution).
+        Run this after calc_depths(). calc_probs() still needs the
+        'fluxratio' and 'tdepth' columns it produces, and if you pass
+        dilution_corrected=False the target flux ratio must be known to
+        correct the light curve.
         """
         if "tdepth" not in self.stars.columns:
             print(
@@ -669,7 +669,8 @@ class target:
             plt.savefig(fname+".pdf")
         return
 
-    def calc_depths(self, tdepth: float, all_ap_pixels = None):
+    def calc_depths(self, tdepth: float, all_ap_pixels = None,
+                    dilution_corrected: bool = True):
         """Calculates required transit depth of each star.
 
         Calculates the transit depth each source near the target would
@@ -678,9 +679,16 @@ class target:
         Gaussian with a standard deviation of 0.75 pixels.
 
         Args:
-            tdepth (float): Reported transit depth [ppm].
+            tdepth (float): Transit depth as it appears in the light
+                curve (fractional, not ppm).
             all_ap_pixels (list of numpy arrays): Apertures used to
                 extract light curve.
+            dilution_corrected (bool): Whether the light curve the depth
+                was measured from has already been corrected for dilution
+                by nearby stars (e.g. SPOC PDCSAP flux). If True
+                (default), tdepth is the on-target depth. If False, it is
+                the depth in the raw aperture (SAP) light curve. Use the
+                same value here as in calc_probs().
         """
         if all_ap_pixels is None:
             print("No apertures provided, assuming 5x5 centered on target.")
@@ -742,11 +750,18 @@ class target:
         # to stars dataframe
         flux_ratios = np.mean(flux_ratio_per_aperture, axis=0)
         self.stars["fluxratio"] = flux_ratios
-        # calculate transit depth of each star given input transit depth
+        # depth of the dip in the raw aperture light curve. If tdepth is
+        # already dilution-corrected it is the on-target depth, so the
+        # aperture dip is smaller by the target flux ratio.
+        if dilution_corrected:
+            aperture_depth = tdepth * flux_ratios[0]
+        else:
+            aperture_depth = tdepth
+        # transit depth each star would need to host to produce that dip
         tdepths = np.zeros(len(self.stars))
         for i in range(len(flux_ratios)):
             if flux_ratios[i] != 0:
-                tdepths[i] = 1-(flux_ratios[i]-tdepth)/flux_ratios[i]
+                tdepths[i] = aperture_depth / flux_ratios[i]
         tdepths[tdepths > 1] = 0
         self.stars["tdepth"] = tdepths
 
@@ -790,7 +805,8 @@ class target:
                    drop_scenario: list = [],
                    verbose: int = 1, flatpriors: bool = False,
                    exptime: float = 0.00139, nsamples: int = 20,
-                   molusc_file: str = None):
+                   molusc_file: str = None,
+                   dilution_corrected: bool = True):
         """Run to calculate FPP and NFPP.
 
         Calculates the relative probability of each scenario.
@@ -799,6 +815,10 @@ class target:
             time (numpy array): Time of each data point
                 [days from transit midpoint].
             flux_0 (numpy array): Normalized flux of each data point.
+                By default this is assumed to already be corrected for
+                dilution by nearby stars, i.e. normalized so the
+                out-of-transit target flux is 1 (e.g. SPOC PDCSAP flux).
+                See dilution_corrected.
             flux_err_0 (float): Uncertainty of flux.
             P_orb (float or numpy array): Orbital period [days] OR
                 min and max periods to consider (i.e., [P_min, P_max]).
@@ -824,11 +844,28 @@ class target:
             nsamples (int): Sampling rate for supersampling.
             molusc_file (str): Path to MOLUSC output with stellar
                 binary properties.
+            dilution_corrected (bool): Whether flux_0 has already been
+                corrected for dilution by nearby stars (e.g. SPOC PDCSAP
+                flux). If True (default), the target light curve is used
+                as-is and each nearby star's light curve is derived from
+                it. If False, flux_0 is treated as the raw aperture (SAP)
+                light curve and is dilution-corrected internally. Use the
+                same value here as in calc_depths().
         """
         # remove nans from light curve
         mask = ~np.isnan(time) & ~np.isnan(flux_0)
         time = time[mask]
         flux_0 = flux_0[mask]
+        self.dilution_corrected = dilution_corrected
+        # target flux ratio, used to relate the target and nearby-star
+        # light curves (always the first row of .stars)
+        fluxratio_target = self.stars["fluxratio"].values[0]
+        if not dilution_corrected:
+            # convert the raw aperture light curve to the on-target
+            # (dilution-corrected) convention used below
+            flux_0, flux_err_0 = renorm_flux(
+                flux_0, flux_err_0, fluxratio_target
+                )
         # construct a new dataframe that gives the values of lnL, best
         # fit parameters, lnprior, and relative probability of
         # each scenario considered
@@ -854,10 +891,13 @@ class target:
         lnZ = np.zeros(N_scenarios)
 
         for i, ID in enumerate(filtered_stars["ID"].values):
-            # subtract flux from other stars in the aperture
-            flux, flux_err = renorm_flux(
-                flux_0, flux_err_0, filtered_stars["fluxratio"].values[i]
-                )
+            # derive this star's light curve from the on-target light
+            # curve: re-dilute by the target flux ratio, then undilute by
+            # this star's. For the target (fluxratio == fluxratio_target)
+            # this leaves flux_0 unchanged.
+            fluxratio_i = filtered_stars["fluxratio"].values[i]
+            flux = 1.0 + (fluxratio_target/fluxratio_i)*(flux_0 - 1.0)
+            flux_err = flux_err_0 * fluxratio_target/fluxratio_i
 
             M_s = filtered_stars["mass"].values[i]
             R_s = filtered_stars["rad"].values[i]
@@ -1614,7 +1654,9 @@ class target:
         Args:
             time (numpy array): Time of each data point
                 [days from transit midpoint].
-            flux_0 (numpy array): Normalized flux of each data point.
+            flux_0 (numpy array): Normalized flux of each data point,
+                using the same convention as calc_probs() (see its
+                dilution_corrected argument).
             flux_err_0 (float): Uncertainty of flux.
             save (bool): Whether or not to save plot as pdf.
             fname (str): File name of pdf.
@@ -1627,6 +1669,13 @@ class target:
         fluxratios_EB = self.fluxratio_EB[self.probs["ID"] != 0]
         fluxratios_comp = self.fluxratio_comp[self.probs["ID"] != 0]
 
+        # match the light-curve handling used in calc_probs()
+        fluxratio_target = self.stars["fluxratio"].values[0]
+        if not getattr(self, "dilution_corrected", True):
+            flux_0, flux_err_0 = renorm_flux(
+                flux_0, flux_err_0, fluxratio_target
+                )
+
         model_time = np.linspace(min(time), max(time), 100)
 
         f, ax = plt.subplots(
@@ -1638,13 +1687,13 @@ class target:
                     k = j
                 else:
                     k = 3*i+j
-                # subtract flux from other stars in the aperture
+                # derive this star's light curve from the on-target one
                 idx = np.argwhere(
                     self.stars["ID"].values == str(df["ID"].values[k])
                     )[0, 0]
-                flux, flux_err = renorm_flux(
-                    flux_0, flux_err_0, self.stars["fluxratio"].values[idx]
-                    )
+                fluxratio_i = self.stars["fluxratio"].values[idx]
+                flux = 1.0 + (fluxratio_target/fluxratio_i)*(flux_0 - 1.0)
+                flux_err = flux_err_0 * fluxratio_target/fluxratio_i
                 # all TPs
                 if j == 0:
                     if star_num[k] == 1:
