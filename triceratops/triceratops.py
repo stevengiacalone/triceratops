@@ -397,6 +397,41 @@ class target:
         self.stars = self.stars[~self.stars["ID"].isin(drop_stars)]
         return
 
+    def remove_nearby_stars(self):
+        """For excluding all nearby stars from the analysis.
+
+        Drops every star except the target from the .stars dataframe, so
+        that no NEB or NTP scenarios are considered by calc_probs(). Use
+        this when follow-up observations (e.g. seeing-limited ground-based
+        photometry) have shown that the transit occurs on-target, ruling
+        out nearby stars as the source of the signal.
+
+        Run this after calc_depths() so that the dilution of the target
+        light curve by nearby stars is still accounted for. If run before
+        calc_depths(), the target flux ratio will be treated as 1 (i.e.,
+        no dilution).
+        """
+        if "tdepth" not in self.stars.columns:
+            print(
+                "WARNING: remove_nearby_stars() is being run before "
+                + "calc_depths(). The target light curve will not be "
+                + "corrected for dilution by nearby stars. Run "
+                + "calc_depths() first to account for this."
+                )
+        n_removed = len(self.stars) - 1
+        self.stars = self.stars.iloc[:1].reset_index(drop=True)
+        self.pix_coords = [
+            pix_coord[:1] for pix_coord in self.pix_coords
+            ]
+        if n_removed > 0:
+            print(
+                "Removed " + str(n_removed) + " nearby star(s). Only the "
+                + "target will be considered by calc_probs() (NFPP = 0)."
+                )
+        else:
+            print("No nearby stars to remove.")
+        return
+
     def update_star(self, ID: int, param: str, value: float):
         """For updating the properties of a star.
 
