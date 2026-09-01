@@ -5,20 +5,14 @@ As of 1.1.0 the input light curve is assumed to be dilution-corrected
 dilution_corrected flag, and each nearby star's light curve is derived
 from the target's rather than by correcting the input per star.
 
-The heavy triceratops.triceratops import is done inside the tests.
+Tests that construct a ``target`` are marked ``heavy``; the flux-transform
+arithmetic tests only need ``renorm_flux``.
 """
 from __future__ import annotations
-
-import os
-import sys
 
 import numpy as np
 import pandas as pd
 import pytest
-
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _REPO_ROOT not in sys.path:
-    sys.path.insert(0, _REPO_ROOT)
 
 # target flux ratio 0.8, one neighbor at 0.2 (target 4x brighter)
 _DMAG = 2.5 * np.log10(4.0)
@@ -47,6 +41,7 @@ def _target_two_stars():
     return tgt, aperture
 
 
+@pytest.mark.heavy
 class TestCalcDepths:
     def test_fluxratios(self):
         tgt, ap = _target_two_stars()

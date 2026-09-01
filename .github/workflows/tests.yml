@@ -1,0 +1,51 @@
+name: tests
+
+on:
+  push:
+    branches: [master, development]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  core:
+    # Fast tests that only need the light dependency set (numpy/scipy/
+    # astropy/pandas/...). Skips anything marked "heavy".
+    name: core (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install core dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install "pytest>=7" numpy scipy astropy pandas mechanicalsoup beautifulsoup4
+      - name: Run fast tests
+        run: pytest -m "not heavy" -v
+
+  full:
+    # Full install and the complete suite, including tests that import
+    # marginal_likelihoods / triceratops (pytransit, celerite, lightkurve).
+    name: full (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install triceratops
+        run: |
+          python -m pip install --upgrade pip
+          pip install "pytest>=7"
+          pip install .
+      - name: Run full test suite
+        run: pytest -v

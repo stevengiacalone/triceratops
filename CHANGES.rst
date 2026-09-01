@@ -40,3 +40,8 @@ Other additions on this release:
   (``None`` where an aperture could not be retrieved) instead of
   silently returning a shorter list, and ``get_aperture`` reads the
   SPOC optimal-aperture bitmask bit rather than the maximum mask value.
+- Added a GitHub Actions test workflow (a fast "core" job on the light
+  dependency set and a "full" job with the complete install), a
+  ``pyproject.toml`` with pytest configuration, and unit tests for the
+  pure helper functions and prior samplers. Tests that need the full
+  install are marked ``heavy``.

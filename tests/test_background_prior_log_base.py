@@ -4,26 +4,16 @@ Verifies that background star priors use natural logarithm (np.log) rather
 than base-10 logarithm (np.log10). The prior is added to natural-log
 likelihoods in Bayesian evidence integrals, so it must be a natural log.
 
-These tests are designed to run without installing the full triceratops
-package -- they add the source directory to sys.path and import directly.
+The repo root is put on sys.path by the pytest configuration in
+pyproject.toml, so triceratops imports resolve to the source tree.
 """
 from __future__ import annotations
-
-import os
-import sys
 
 import numpy as np
 import pytest
 
-# ---------------------------------------------------------------------------
-# Make triceratops importable without pip install
-# ---------------------------------------------------------------------------
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _REPO_ROOT not in sys.path:
-    sys.path.insert(0, _REPO_ROOT)
-
-from triceratops.funcs import separation_at_contrast  # noqa: E402
-from triceratops.priors import lnprior_background  # noqa: E402
+from triceratops.funcs import separation_at_contrast
+from triceratops.priors import lnprior_background
 
 
 # ---------------------------------------------------------------------------

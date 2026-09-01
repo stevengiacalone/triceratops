@@ -9,17 +9,11 @@ Network access is mocked, so these run offline.
 """
 from __future__ import annotations
 
-import os
-import sys
 from unittest import mock
 
 import numpy as np
 import pandas as pd
 import pytest
-
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _REPO_ROOT not in sys.path:
-    sys.path.insert(0, _REPO_ROOT)
 
 
 class _FakeHDU:
@@ -96,6 +90,7 @@ class TestFindUrlErrors:
                 funcs.find_url("270380593", 4)
 
 
+@pytest.mark.heavy
 class TestGetSpocApertures:
     @staticmethod
     def _target(mission="TESS", sectors=(4, 5)):
@@ -139,6 +134,7 @@ class TestGetSpocApertures:
         assert len(aps) == 1 and aps[0] is not None
 
 
+@pytest.mark.heavy
 class TestCalcDepthsRejectsNone:
     def test_none_in_apertures_raises(self):
         from triceratops.triceratops import target

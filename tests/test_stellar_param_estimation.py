@@ -11,17 +11,10 @@ stars.
 """
 from __future__ import annotations
 
-import os
-import sys
-
 import numpy as np
 import pytest
 
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _REPO_ROOT not in sys.path:
-    sys.path.insert(0, _REPO_ROOT)
-
-from triceratops.funcs import estimate_stellar_parameters  # noqa: E402
+from triceratops.funcs import estimate_stellar_parameters
 
 
 # TIC 307210830 -- a nearby mid-M dwarf.

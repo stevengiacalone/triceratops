@@ -8,28 +8,20 @@ across all curves.
 
 These tests exercise the pieces that combine the curves
 (``triceratops.funcs``) plus the refactored priors
-(``triceratops.priors``). They import the source directly so they run
-without a full package install.
+(``triceratops.priors``), neither of which needs the full package.
 """
 from __future__ import annotations
-
-import os
-import sys
 
 import numpy as np
 import pytest
 
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _REPO_ROOT not in sys.path:
-    sys.path.insert(0, _REPO_ROOT)
-
-from triceratops.funcs import (  # noqa: E402
+from triceratops.funcs import (
     file_to_contrast_curve,
     limiting_separation,
     parse_contrast_curves,
     separation_at_contrast,
 )
-from triceratops.priors import lnprior_background  # noqa: E402
+from triceratops.priors import lnprior_background
 
 
 @pytest.fixture()

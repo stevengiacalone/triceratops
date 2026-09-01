@@ -6,21 +6,15 @@ transit to be on-target. It should keep the target's (diluted) flux
 ratio and keep the per-sector pixel-coordinate arrays consistent.
 
 The full triceratops.triceratops import is heavy (lightkurve, astroquery,
-pytransit); like the other integration-style tests it is done inside the
-test body.
+pytransit), so this module is marked ``heavy``.
 """
 from __future__ import annotations
-
-import os
-import sys
 
 import numpy as np
 import pandas as pd
 import pytest
 
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _REPO_ROOT not in sys.path:
-    sys.path.insert(0, _REPO_ROOT)
+pytestmark = pytest.mark.heavy
 
 
 def _fake_target(with_depths: bool):
