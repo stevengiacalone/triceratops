@@ -177,35 +177,58 @@ mamajek_sequence = read_csv(
 # 2MASS values from Indebetouw et al. (2005), Gaia from Casagrande &
 # VandenBerg (2018). Only used to deredden colors, so approximate values
 # are sufficient at the low reddening typical of TESS targets.
-_A_EBV = {
+A_EBV = {
     "V": 3.10, "G": 2.80, "BP": 3.37, "RP": 2.14,
     "J": 0.72, "H": 0.46, "K": 0.31,
     }
 
-_MBOL_SUN = 4.74
-_TEFF_SUN = 5772.0
-
-# thresholds for flagging a star as evolved (off the main sequence)
-_EVOLVED_LOGG = 3.5           # surface gravity below this => evolved
-_EVOLVED_RADIUS_FACTOR = 1.7  # radius / dwarf-sequence radius above this
-_EVOLVED_MKS_MARGIN = 1.0     # mags brighter in M_Ks than the dwarf value
-_EVOLVED_MASS = 1.0           # M_sun assigned to an evolved star with no mass
+Mbol_sun = 4.74
+Teff_sun = 5772.0
 
 
-def _mamajek_column(col):
-    """Returns the Mamajek sequence column ``col`` as a float array,
-    building the synthetic ``G-Ks`` / ``V-Ks`` colors from absolute
-    magnitudes where needed."""
+def float_or_nan(x):
+    """
+    Converts x to a float, returning NaN if it is not a finite number.
+    Args:
+        x: Value to convert.
+    Returns:
+        value (float): float(x), or NaN.
+    """
+    try:
+        x = float(x)
+    except (TypeError, ValueError):
+        return np.nan
+    return x if np.isfinite(x) else np.nan
+
+
+def mamajek_column(col: str):
+    """
+    Returns a column of the Mamajek dwarf sequence as a float array.
+    Args:
+        col (str): Column name. The synthetic color "GKs" is built from
+                   the absolute magnitudes M_G and M_Ks.
+    Returns:
+        values (numpy array): The requested column.
+    """
     if col == "GKs":
         return (mamajek_sequence["M_G"] - mamajek_sequence["M_Ks"]).values
     return mamajek_sequence[col].values.astype(float)
 
 
-def _monotonic_interp(x, xvals, yvals, tol=0.0):
-    """1D interpolation of ``yvals`` vs ``xvals`` after sorting and
-    dropping non-increasing points. Returns NaN if ``x`` falls outside
-    the tabulated range by more than ``tol``, or if fewer than two
-    usable points remain."""
+def monotonic_interp(x: float, xvals: np.array, yvals: np.array,
+                     tol: float = 0.0):
+    """
+    Interpolates yvals vs xvals after sorting and dropping non-increasing
+    points, so that np.interp is well defined.
+    Args:
+        x (float): Location to interpolate at.
+        xvals, yvals (numpy arrays): Points to interpolate between.
+        tol (float): Allowed distance of x beyond the tabulated range of
+                     xvals before NaN is returned instead.
+    Returns:
+        value (float): Interpolated value, or NaN if x is out of range
+                       or fewer than two usable points remain.
+    """
     mask = np.isfinite(xvals) & np.isfinite(yvals)
     xvals, yvals = xvals[mask], yvals[mask]
     if len(xvals) < 2:
@@ -219,24 +242,37 @@ def _monotonic_interp(x, xvals, yvals, tol=0.0):
     return float(np.interp(x, xvals, yvals))
 
 
-def _color_to_teff(color_value, col):
-    """Estimates Teff from a dereddened color using the Mamajek dwarf
+def color_to_teff(color_value: float, col: str):
+    """
+    Estimates Teff from a dereddened color using the Mamajek dwarf
     sequence. The near-infrared colors J-H and H-Ks are only used for
-    cool stars, where they are single-valued."""
-    teffs = _mamajek_column("Teff")
-    colors = _mamajek_column(col)
+    cool stars, where they are single-valued.
+    Args:
+        color_value (float): Dereddened color.
+        col (str): Mamajek sequence column for that color.
+    Returns:
+        Teff (float): Effective temperature [K], or NaN.
+    """
+    teffs = mamajek_column("Teff")
+    colors = mamajek_column(col)
     if col in ("JH", "HKs"):
         cool = teffs < 5500
         teffs, colors = teffs[cool], colors[cool]
-    return _monotonic_interp(color_value, colors, teffs, tol=0.15)
+    return monotonic_interp(color_value, colors, teffs, tol=0.15)
 
 
-def _bc_Ks(teff):
-    """Bolometric correction in the 2MASS Ks band, BC_Ks = (V-Ks) + BC_V,
-    interpolated over the Mamajek dwarf sequence."""
-    return _monotonic_interp(
-        teff, _mamajek_column("Teff"),
-        _mamajek_column("VKs") + _mamajek_column("BCv"),
+def bc_Ks(teff: float):
+    """
+    Bolometric correction in the 2MASS Ks band, BC_Ks = (V-Ks) + BC_V,
+    interpolated over the Mamajek dwarf sequence.
+    Args:
+        teff (float): Effective temperature [K].
+    Returns:
+        BC_Ks (float): Bolometric correction [mag], or NaN.
+    """
+    return monotonic_interp(
+        teff, mamajek_column("Teff"),
+        mamajek_column("VKs") + mamajek_column("BCv"),
         tol=200.0
         )
 
@@ -288,17 +324,12 @@ def estimate_stellar_parameters(Vmag: float = np.nan, Gmag: float = np.nan,
             treated as evolved), and "method" (how Teff and the radius
             were determined).
     """
-    def _f(x):
-        try:
-            x = float(x)
-        except (TypeError, ValueError):
-            return np.nan
-        return x if np.isfinite(x) else np.nan
-
-    Vmag, Gmag, BPmag, RPmag = _f(Vmag), _f(Gmag), _f(BPmag), _f(RPmag)
-    Jmag, Hmag, Kmag, plx = _f(Jmag), _f(Hmag), _f(Kmag), _f(plx)
-    mass, rad, Teff, logg = _f(mass), _f(rad), _f(Teff), _f(logg)
-    ebv = _f(ebv)
+    Vmag, Gmag = float_or_nan(Vmag), float_or_nan(Gmag)
+    BPmag, RPmag = float_or_nan(BPmag), float_or_nan(RPmag)
+    Jmag, Hmag, Kmag = float_or_nan(Jmag), float_or_nan(Hmag), float_or_nan(Kmag)
+    plx, logg = float_or_nan(plx), float_or_nan(logg)
+    mass, rad, Teff = float_or_nan(mass), float_or_nan(rad), float_or_nan(Teff)
+    ebv = float_or_nan(ebv)
     if not np.isfinite(ebv) or ebv < 0:
         ebv = 0.0
 
@@ -310,36 +341,36 @@ def estimate_stellar_parameters(Vmag: float = np.nan, Gmag: float = np.nan,
         candidates = []
         if np.isfinite(BPmag) and np.isfinite(RPmag):
             candidates.append((
-                (BPmag - RPmag) - (_A_EBV["BP"] - _A_EBV["RP"])*ebv,
+                (BPmag - RPmag) - (A_EBV["BP"] - A_EBV["RP"])*ebv,
                 "BpRp", "BP-RP color"
                 ))
         if np.isfinite(Vmag) and np.isfinite(Kmag):
             candidates.append((
-                (Vmag - Kmag) - (_A_EBV["V"] - _A_EBV["K"])*ebv,
+                (Vmag - Kmag) - (A_EBV["V"] - A_EBV["K"])*ebv,
                 "VKs", "V-Ks color"
                 ))
         if np.isfinite(Gmag) and np.isfinite(Kmag):
             candidates.append((
-                (Gmag - Kmag) - (_A_EBV["G"] - _A_EBV["K"])*ebv,
+                (Gmag - Kmag) - (A_EBV["G"] - A_EBV["K"])*ebv,
                 "GKs", "G-Ks color"
                 ))
         if np.isfinite(Gmag) and np.isfinite(RPmag):
             candidates.append((
-                (Gmag - RPmag) - (_A_EBV["G"] - _A_EBV["RP"])*ebv,
+                (Gmag - RPmag) - (A_EBV["G"] - A_EBV["RP"])*ebv,
                 "GRp", "G-RP color"
                 ))
         if np.isfinite(Jmag) and np.isfinite(Hmag):
             candidates.append((
-                (Jmag - Hmag) - (_A_EBV["J"] - _A_EBV["H"])*ebv,
+                (Jmag - Hmag) - (A_EBV["J"] - A_EBV["H"])*ebv,
                 "JH", "J-H color"
                 ))
         if np.isfinite(Hmag) and np.isfinite(Kmag):
             candidates.append((
-                (Hmag - Kmag) - (_A_EBV["H"] - _A_EBV["K"])*ebv,
+                (Hmag - Kmag) - (A_EBV["H"] - A_EBV["K"])*ebv,
                 "HKs", "H-Ks color"
                 ))
         for color_value, col, label in candidates:
-            teff_try = _color_to_teff(color_value, col)
+            teff_try = color_to_teff(color_value, col)
             if np.isfinite(teff_try):
                 Teff = float(np.clip(teff_try, 2300.0, 50000.0))
                 method["Teff"] = label
@@ -349,43 +380,45 @@ def estimate_stellar_parameters(Vmag: float = np.nan, Gmag: float = np.nan,
     # M_Ks (absolute Ks magnitude), used for the evolved-star test, the
     # Stefan-Boltzmann radius, and the cool-star mass relation
     if np.isfinite(plx) and plx > 0 and np.isfinite(Kmag):
-        M_Ks = Kmag - _A_EBV["K"]*ebv - 10.0 + 5.0*np.log10(plx)
+        M_Ks = Kmag - A_EBV["K"]*ebv - 10.0 + 5.0*np.log10(plx)
     else:
         M_Ks = np.nan
 
     # --- is the star evolved (off the main sequence)? ---
+    # flagged by a low surface gravity, a radius well above the
+    # dwarf-sequence value at its Teff, or an over-luminous M_Ks
     evolved = False
-    if np.isfinite(logg) and logg < _EVOLVED_LOGG:
+    if np.isfinite(logg) and logg < 3.5:
         evolved = True
     elif np.isfinite(rad) and np.isfinite(Teff):
-        rad_ms = _monotonic_interp(
-            Teff, _mamajek_column("Teff"),
-            _mamajek_column("R_Rsun"), tol=200.0
+        rad_ms = monotonic_interp(
+            Teff, mamajek_column("Teff"),
+            mamajek_column("R_Rsun"), tol=200.0
             )
-        if np.isfinite(rad_ms) and rad > _EVOLVED_RADIUS_FACTOR*rad_ms:
+        if np.isfinite(rad_ms) and rad > 1.7*rad_ms:
             evolved = True
     elif np.isfinite(M_Ks) and np.isfinite(Teff):
-        mks_ms = _monotonic_interp(
-            Teff, _mamajek_column("Teff"),
-            _mamajek_column("M_Ks"), tol=200.0
+        mks_ms = monotonic_interp(
+            Teff, mamajek_column("Teff"),
+            mamajek_column("M_Ks"), tol=200.0
             )
-        if np.isfinite(mks_ms) and M_Ks < mks_ms - _EVOLVED_MKS_MARGIN:
+        if np.isfinite(mks_ms) and M_Ks < mks_ms - 1.0:
             evolved = True
 
     # --- radius ---
     if not np.isfinite(rad) and np.isfinite(Teff):
         if np.isfinite(M_Ks):
-            bc = _bc_Ks(Teff)
+            bc = bc_Ks(Teff)
             if np.isfinite(bc):
                 M_bol = M_Ks + bc
-                lum = 10.0**(-0.4*(M_bol - _MBOL_SUN))
-                rad = np.sqrt(lum) / (Teff/_TEFF_SUN)**2
+                lum = 10.0**(-0.4*(M_bol - Mbol_sun))
+                rad = np.sqrt(lum) / (Teff/Teff_sun)**2
                 method["rad"] = "Stefan-Boltzmann (parallax + Ks)"
         if not np.isfinite(rad) and not evolved:
             # the dwarf-sequence radius is only valid on the main sequence
-            rad = _monotonic_interp(
-                Teff, _mamajek_column("Teff"),
-                _mamajek_column("R_Rsun"), tol=200.0
+            rad = monotonic_interp(
+                Teff, mamajek_column("Teff"),
+                mamajek_column("R_Rsun"), tol=200.0
                 )
             method["rad"] = "dwarf sequence (Teff)"
         if np.isfinite(rad):
@@ -396,21 +429,21 @@ def estimate_stellar_parameters(Vmag: float = np.nan, Gmag: float = np.nan,
     if not np.isfinite(mass):
         if evolved:
             # photometry does not constrain an evolved star's mass;
-            # adopt a nominal value (cf. the field red-giant mass
-            # distribution, which peaks near 1 M_sun)
-            mass = _EVOLVED_MASS
+            # adopt 1 M_sun (near the peak of the field red-giant mass
+            # distribution)
+            mass = 1.0
             method["mass"] = "assumed (evolved star)"
             estimated.append("mass")
         elif np.isfinite(Teff):
             if (np.isfinite(M_Ks) and Teff < 4200.0):
-                mass = _monotonic_interp(
-                    M_Ks, _mamajek_column("M_Ks"),
-                    _mamajek_column("Msun"), tol=0.3
+                mass = monotonic_interp(
+                    M_Ks, mamajek_column("M_Ks"),
+                    mamajek_column("Msun"), tol=0.3
                     )
             if not np.isfinite(mass):
-                mass = _monotonic_interp(
-                    Teff, _mamajek_column("Teff"),
-                    _mamajek_column("Msun"), tol=200.0
+                mass = monotonic_interp(
+                    Teff, mamajek_column("Teff"),
+                    mamajek_column("Msun"), tol=200.0
                     )
             if np.isfinite(mass):
                 mass = float(np.clip(mass, 0.07, 100.0))
