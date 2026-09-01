@@ -449,23 +449,45 @@ class target:
 
     def get_spoc_apertures(self):
         """
-        Returns apertures used by the SPOC in the given
-        sectors, if available.
-        Args:
-            self
+        Returns the SPOC optimal photometric aperture for each of the
+        target's sectors, ready to pass to calc_depths(all_ap_pixels=).
+
+        The returned list always has one entry per sector, in the same
+        order as self.sectors. Sectors for which no SPOC aperture could
+        be retrieved (e.g. FFI-only sectors, or a failed archive query)
+        get a None entry and are reported; supply an aperture for those
+        sectors yourself, or drop them, before calling calc_depths().
+
         Returns:
-            aps (list): List of aperture pixels, in order of
-                        sectors as input.
+            aps (list): List of aperture-pixel arrays (or None), one per
+                        sector.
         """
+        if self.mission != "TESS":
+            print("SPOC apertures are only available for TESS targets.")
+            return [None for _ in self.sectors]
+
         aps = []
-        this_ID = self.ID
-        these_sectors = self.sectors
-        try:
-            for sector in these_sectors:
-                ap = get_aperture(this_ID, sector)
-                aps.append(ap)
-        except:
-            print("No SPOC apertures available.")
+        failed = []
+        for sector in self.sectors:
+            try:
+                aps.append(get_aperture(self.ID, sector))
+            except Exception as e:
+                aps.append(None)
+                failed.append(sector)
+                print(
+                    "Could not get SPOC aperture for sector "
+                    + str(sector) + ": " + str(e)
+                    )
+        if failed:
+            warnings.warn(
+                "No SPOC aperture for sector(s) "
+                + ", ".join(str(s) for s in failed)
+                + ". The returned list has None for these; provide an "
+                + "aperture for them or drop those sectors before "
+                + "calling calc_depths().",
+                RuntimeWarning,
+                stacklevel=2,
+                )
         return aps
 
     def plot_field(self, sector: int = None, ap_pixels = None,
@@ -690,6 +712,15 @@ class target:
                 the depth in the raw aperture (SAP) light curve. Use the
                 same value here as in calc_probs().
         """
+        if all_ap_pixels is not None and any(
+                ap is None for ap in all_ap_pixels
+                ):
+            raise ValueError(
+                "all_ap_pixels contains None for one or more sectors "
+                "(e.g. from get_spoc_apertures() when an aperture could "
+                "not be retrieved). Provide an aperture for every sector, "
+                "or restrict the target to the sectors that have one."
+                )
         if all_ap_pixels is None:
             print("No apertures provided, assuming 5x5 centered on target.")
             all_ap_pixels = []

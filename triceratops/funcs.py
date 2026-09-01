@@ -6,6 +6,7 @@ from astropy import constants
 from scipy.interpolate import InterpolatedUnivariateSpline
 from mechanicalsoup import StatefulBrowser
 from urllib.request import urlopen
+from urllib.error import HTTPError, URLError
 from bs4 import BeautifulSoup
 from time import sleep
 from astropy.io import fits
@@ -807,34 +808,61 @@ def find_url(ID: str, sector: int):
     str5 = segment_ID(str(ID)[-4:])
         
     url += str1+"/"+str2+"/"+str3+"/"+str4+"/"+str5+"/"
-    
-    urlpath = urlopen(url)
-    string = urlpath.read().decode('utf-8')
+
+    no_data_msg = (
+        "No SPOC light curve found for TIC " + str(ID) + " in sector "
+        + str(sector) + ", so no aperture is available. This target may "
+        + "not have 2-minute cadence data in that sector."
+        )
+    try:
+        urlpath = urlopen(url)
+        string = urlpath.read().decode('utf-8')
+    except HTTPError as e:
+        if e.code == 404:
+            raise FileNotFoundError(no_data_msg) from e
+        raise RuntimeError(
+            "MAST archive returned an error for TIC " + str(ID)
+            + " sector " + str(sector) + " (" + url + ")."
+            ) from e
+    except URLError as e:
+        raise RuntimeError(
+            "Could not reach the MAST archive for TIC " + str(ID)
+            + " sector " + str(sector) + " (" + url + ")."
+            ) from e
     soup = BeautifulSoup(string, 'html.parser')
     for link in soup.find_all('a'):
-        if (link.get('href')[-9:]) == "s_lc.fits":
-            url += link.get('href')
+        href = link.get('href') or ""
+        if href[-9:] == "s_lc.fits":
+            return url + href
 
-    return url
+    raise FileNotFoundError(no_data_msg)
+
 
 def get_aperture(ID, sector):
     """
-    Returns aperture array that can be input into
-    calc_depths method for a given sector.
+    Returns the SPOC optimal photometric aperture for a given sector, in
+    the [[col, row], ...] format expected by target.calc_depths().
     Args:
         ID (str): TIC ID of star.
         sector (int): TESS sector.
     Returns:
-        ap_pixels (numpy array): Aperture pixels.
+        ap_pixels (numpy array): Aperture pixels, one [col, row] per row.
     """
     fits_file = find_url(ID, sector)
 
     with fits.open(fits_file, mode="readonly") as hdulist:
-        aperture = hdulist[2].data
-        
-    ap_pixels = np.argwhere(aperture == np.max(aperture))
-    ap_pixels[:,0] += hdulist[2].header["CRVAL2P"]
-    ap_pixels[:,1] += hdulist[2].header["CRVAL1P"]
-    ap_pixels = np.flip(ap_pixels, axis=1)
-    
+        aperture = hdulist["APERTURE"].data.astype(int)
+        col_ref = hdulist["APERTURE"].header["CRVAL1P"]
+        row_ref = hdulist["APERTURE"].header["CRVAL2P"]
+
+    # bit 2 of the SPOC aperture bitmask flags pixels used in the
+    # optimal photometric aperture
+    rows, cols = np.nonzero(np.bitwise_and(aperture, 2))
+    if len(rows) == 0:
+        raise ValueError(
+            "The SPOC aperture mask for TIC " + str(ID) + " sector "
+            + str(sector) + " contains no optimal-aperture pixels."
+            )
+    ap_pixels = np.column_stack([cols + col_ref, rows + row_ref])
+
     return ap_pixels

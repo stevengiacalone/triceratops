@@ -36,3 +36,7 @@ Other additions on this release:
   assigned a nominal 1 M_Sun.
 - ``target.remove_nearby_stars()`` drops all stars except the target,
   for use when follow-up has shown the transit to be on-target.
+- ``target.get_spoc_apertures()`` now returns one entry per sector
+  (``None`` where an aperture could not be retrieved) instead of
+  silently returning a shorter list, and ``get_aperture`` reads the
+  SPOC optimal-aperture bitmask bit rather than the maximum mask value.
