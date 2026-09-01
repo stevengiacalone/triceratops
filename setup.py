@@ -37,6 +37,10 @@ setup(name = "triceratops",
                         'numpy>=2.1; python_version >= "3.13"',
                         'scipy>=1.1.0,<1.14; python_version < "3.13"',
                         'scipy>=1.14; python_version >= "3.13"',
+                        # pytransit 2.2 imports pkg_resources, which is no
+                        # longer bundled with Python >= 3.12 and was
+                        # dropped from setuptools 81
+                        'setuptools<81; python_version >= "3.12"',
                         'pandas>=0.23.4', 'matplotlib>=3.5.1',
                         'astropy>=4.0', 'astroquery>=0.4.6', 'pytransit==2.2',
                         'mechanicalsoup>=0.12.0', 'emcee>=3.0.2', 'seaborn>=0.11.1',

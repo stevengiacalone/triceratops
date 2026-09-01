@@ -954,6 +954,11 @@ class target:
             else:
                 trilegal_fname = self.trilegal_fname
 
+            # if the TRILEGAL query failed there is no simulated
+            # background population, so the scenarios that need one are
+            # skipped (handled like drop_scenario below)
+            trilegal_missing = not isinstance(trilegal_fname, str)
+
             # target star
             if i == 0:
 
@@ -1305,7 +1310,7 @@ class target:
                         best_fluxratio_comp[j] = res_twin["fluxratio_comp"][0]
                         lnZ[j] = res_twin["lnZ"]
 
-                    if "DTP" in drop_scenario:
+                    if "DTP" in drop_scenario or trilegal_missing:
                         j = 9
                         targets[j] = ID
                         star_num[j] = 1
@@ -1349,7 +1354,7 @@ class target:
                         best_fluxratio_comp[j] = res["fluxratio_comp"][0]
                         lnZ[j] = res["lnZ"]
 
-                    if "DEB" in drop_scenario:
+                    if "DEB" in drop_scenario or trilegal_missing:
                         j = 10
                         targets[j] = ID
                         star_num[j] = 1
@@ -1417,7 +1422,7 @@ class target:
                         best_fluxratio_comp[j] = res_twin["fluxratio_comp"][0]
                         lnZ[j] = res_twin["lnZ"]
 
-                    if "BTP" in drop_scenario:
+                    if "BTP" in drop_scenario or trilegal_missing:
                         j = 12
                         targets[j] = ID
                         star_num[j] = 2
@@ -1461,7 +1466,7 @@ class target:
                         best_fluxratio_comp[j] = res["fluxratio_comp"][0]
                         lnZ[j] = res["lnZ"]
 
-                    if "BEB" in drop_scenario:
+                    if "BEB" in drop_scenario or trilegal_missing:
                         j = 13
                         targets[j] = ID
                         star_num[j] = 2

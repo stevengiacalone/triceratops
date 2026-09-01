@@ -16,6 +16,7 @@ from triceratops.funcs import (
     color_Teff_relations,
     flux_relation,
     renorm_flux,
+    save_trilegal,
     stellar_relations,
 )
 from triceratops.priors import (
@@ -213,3 +214,12 @@ class TestLogPriors:
     def test_lnprior_bound_handles_nan_parallax(self):
         out = lnprior_bound_TP(1.0, np.nan, np.full(2, 1.0))
         assert np.all(np.isfinite(out) | (out == -np.inf))
+
+
+class TestTrilegalUnavailable:
+    def test_save_trilegal_returns_non_str_when_url_is_none(self, capsys):
+        # calc_probs relies on `not isinstance(trilegal_fname, str)` to
+        # detect a failed TRILEGAL query and skip the D/B scenarios
+        result = save_trilegal(None, 12345)
+        assert not isinstance(result, str)
+        assert "TRILEGAL" in capsys.readouterr().out

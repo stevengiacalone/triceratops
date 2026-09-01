@@ -654,8 +654,9 @@ def query_TRILEGAL(RA: float, Dec: float, verbose: int = 1, verify_ssl: bool = T
                 print(f"TRILEGAL v{version} failed: {exc}")
             continue
     print(
-        "TRILEGAL unavailable after trying versions 1.6 and 1.5; "
-        "using saved stellar populations instead."
+        "TRILEGAL unavailable after trying versions 1.6 and 1.5. "
+        "The scenarios that need a simulated background population "
+        "(DTP, DEB, DEBx2P, BTP, BEB, BEBx2P) will be skipped."
     )
     return None
 

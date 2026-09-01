@@ -45,6 +45,13 @@ Other additions on this release:
   ``pyproject.toml`` with pytest configuration, and unit tests for the
   pure helper functions and prior samplers. Tests that need the full
   install are marked ``heavy``.
-- Capped ``numpy < 2`` and ``scipy < 1.14``: the pinned ``pytransit``
-  2.2 imports ``numpy.NaN`` and ``scipy.integrate.trapz``, both of
-  which have since been removed.
+- Python 3.8-3.13 support: ``python_requires='>=3.8'``, version
+  classifiers, and dependency pins that adapt to the interpreter. The
+  pinned ``pytransit`` 2.2 predates NumPy 2 / SciPy 1.14 and needs
+  ``pkg_resources``; ``triceratops.likelihoods`` shims the removed
+  NumPy/SciPy names, ``setup.py`` holds NumPy/SciPy back where wheels
+  exist and requires ``setuptools<81`` on 3.12+.
+- ``calc_probs`` no longer crashes when the TRILEGAL query fails: the
+  scenarios that need a simulated background population (DTP, DEB,
+  DEBx2P, BTP, BEB, BEBx2P) are skipped, and FPP/NFPP are returned
+  without them.
