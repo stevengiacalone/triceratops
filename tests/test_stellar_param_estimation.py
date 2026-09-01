@@ -1,0 +1,109 @@
+"""Tests for estimating missing stellar parameters from photometry.
+
+triceratops.funcs.estimate_stellar_parameters() fills in a star's mass,
+radius, and/or Teff from broadband photometry (Gaia, 2MASS, Johnson V)
+using the main-sequence (dwarf) sequence of Pecaut & Mamajek (2013),
+with a Stefan-Boltzmann radius when a parallax is available.
+
+These tests use fixed photometry (no network) so they run offline. The
+reference values are the TIC v8.2 parameters for the corresponding
+stars.
+"""
+from __future__ import annotations
+
+import os
+import sys
+
+import numpy as np
+import pytest
+
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from triceratops.funcs import estimate_stellar_parameters  # noqa: E402
+
+
+# TIC 307210830 -- a nearby mid-M dwarf.
+# TIC values: mass 0.293 Msun, rad 0.314 Rsun, Teff 3429 K.
+M_DWARF = dict(
+    Vmag=11.685, Gmag=10.5976, BPmag=11.9775, RPmag=9.47197,
+    Jmag=7.933, Hmag=7.359, Kmag=7.101, plx=94.1385, ebv=0.0,
+)
+M_DWARF_TRUTH = dict(mass=0.293, rad=0.314, Teff=3429.0)
+
+
+class TestFullPhotometry:
+    def test_recovers_m_dwarf_parameters(self):
+        res = estimate_stellar_parameters(**M_DWARF)
+        assert set(res["estimated"]) == {"mass", "rad", "Teff"}
+        assert res["Teff"] == pytest.approx(M_DWARF_TRUTH["Teff"], abs=200)
+        assert res["mass"] == pytest.approx(M_DWARF_TRUTH["mass"], rel=0.15)
+        assert res["rad"] == pytest.approx(M_DWARF_TRUTH["rad"], rel=0.15)
+
+    def test_uses_parallax_for_radius(self):
+        res = estimate_stellar_parameters(**M_DWARF)
+        assert "Stefan-Boltzmann" in res["method"]["rad"]
+
+    def test_prefers_gaia_color_for_teff(self):
+        res = estimate_stellar_parameters(**M_DWARF)
+        assert res["method"]["Teff"] == "BP-RP color"
+
+
+class TestPartialInputs:
+    def test_known_values_are_preserved(self):
+        res = estimate_stellar_parameters(
+            mass=0.5, rad=0.5, Teff=3800.0, **M_DWARF
+        )
+        assert res["estimated"] == []
+        assert (res["mass"], res["rad"], res["Teff"]) == (0.5, 0.5, 3800.0)
+
+    def test_known_teff_used_as_anchor(self):
+        # only Teff known, no photometry at all -> mass & rad from the
+        # dwarf sequence at that Teff
+        res = estimate_stellar_parameters(Teff=5772.0)
+        assert set(res["estimated"]) == {"mass", "rad"}
+        assert res["mass"] == pytest.approx(1.0, rel=0.1)
+        assert res["rad"] == pytest.approx(1.0, rel=0.1)
+
+    def test_only_missing_params_are_filled(self):
+        res = estimate_stellar_parameters(rad=0.9, **M_DWARF)
+        assert "rad" not in res["estimated"]
+        assert res["rad"] == 0.9
+        assert set(res["estimated"]) == {"mass", "Teff"}
+
+    def test_radius_falls_back_to_sequence_without_parallax(self):
+        phot = {k: v for k, v in M_DWARF.items() if k != "plx"}
+        res = estimate_stellar_parameters(**phot)
+        assert res["method"]["rad"] == "dwarf sequence (Teff)"
+        assert np.isfinite(res["rad"])
+
+
+class TestInsufficientData:
+    def test_no_usable_photometry_returns_nan(self):
+        res = estimate_stellar_parameters(Kmag=10.0)
+        assert res["estimated"] == []
+        assert np.isnan(res["mass"])
+        assert np.isnan(res["rad"])
+        assert np.isnan(res["Teff"])
+
+    def test_handles_none_and_strings_gracefully(self):
+        res = estimate_stellar_parameters(
+            BPmag=None, RPmag="", Jmag=7.933, Hmag=7.359, Kmag=7.101,
+            plx=94.1385,
+        )
+        assert np.isfinite(res["Teff"])
+        assert np.isfinite(res["mass"])
+
+
+class TestSunLikeStar:
+    def test_solar_analog(self):
+        # Sun at 10 pc: V ~ 4.83 + 5 = ... use apparent mags consistent
+        # with M_V(G2V)=4.80, M_Ks=3.236 and a 10 mas parallax (100 pc,
+        # distance modulus 5.0)
+        res = estimate_stellar_parameters(
+            Vmag=4.80 + 5.0, Kmag=3.236 + 5.0, plx=10.0, ebv=0.0
+        )
+        assert res["Teff"] == pytest.approx(5770, abs=250)
+        assert res["mass"] == pytest.approx(1.0, rel=0.1)
+        assert res["rad"] == pytest.approx(1.0, rel=0.12)

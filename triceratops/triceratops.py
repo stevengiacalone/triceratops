@@ -26,6 +26,7 @@ from .funcs import (save_trilegal,
                    query_TRILEGAL,
                    renorm_flux,
                    stellar_relations,
+                   estimate_stellar_parameters,
                    get_aperture)
 from .marginal_likelihoods import *
 
@@ -42,7 +43,8 @@ class target:
     def __init__(self, ID: int, sectors: np.ndarray,
                  search_radius: int = 10, mission: str = "TESS",
                  lightkurve_cache_dir = None, trilegal_fname = None,
-                 ra: float=None, dec: float=None, verify_ssl: bool=True):
+                 ra: float=None, dec: float=None, verify_ssl: bool=True,
+                 estimate_missing_params: bool=True):
         """Initializes TRICERATOPS.
 
         Queries TIC for sources near the target and obtains a cutout
@@ -64,6 +66,10 @@ class target:
             verify_ssl (bool): True to verify SSL certificates,
                 False to ignore. ONLY SET TO FALSE IF ABSOLUTELY
                 NECESSARY.
+            estimate_missing_params (bool): If True (default), estimate
+                any missing stellar mass, radius, and/or Teff in the
+                .stars dataframe from the available photometry using
+                main-sequence relations (see estimate_stellar_params).
         """
         self.ID = ID
         self.mission = mission
@@ -114,7 +120,8 @@ class target:
             catalog="TIC"
             )
         new_df = df[
-            "ID", "Tmag", "Jmag", "Hmag", "Kmag",
+            "ID", "Tmag", "Vmag", "GAIAmag", "gaiabp", "gaiarp",
+            "Jmag", "Hmag", "Kmag", "ebv",
             "ra", "dec", "mass", "rad", "Teff", "plx",
             # for spurious objects, etc.
             # see https://arxiv.org/abs/2108.04778 Section 3.1 for details
@@ -256,10 +263,65 @@ class target:
         stars["PA (E of N)"] = pa
 
         self.stars = stars
+        if estimate_missing_params:
+            self.estimate_stellar_params()
         self.TESS_images = TESS_images
         self.col0s = col0s
         self.row0s = row0s
         self.pix_coords = pix_coords
+        return
+
+    def estimate_stellar_params(self, overwrite: bool = False,
+                                verbose: int = 1):
+        """Estimates missing stellar parameters from photometry.
+
+        Fills in any missing mass, radius, and/or Teff for stars in the
+        .stars dataframe using the star's broadband photometry (Gaia,
+        2MASS, Johnson V) and main-sequence relations, via
+        triceratops.funcs.estimate_stellar_parameters. Adds a
+        "params_estimated" column listing which parameters were
+        estimated for each star ("" if none).
+
+        Args:
+            overwrite (bool): If True, re-estimate mass/rad/Teff for
+                every star, ignoring any values already present. If
+                False (default), only fill in missing values.
+            verbose (int): 1 to print a summary, 0 to print nothing.
+        """
+        phot_cols = {
+            "Vmag": "Vmag", "Gmag": "GAIAmag", "BPmag": "gaiabp",
+            "RPmag": "gaiarp", "Jmag": "Jmag", "Hmag": "Hmag",
+            "Kmag": "Kmag", "plx": "plx", "ebv": "ebv",
+            }
+        flags = []
+        for idx in self.stars.index:
+            row = self.stars.loc[idx]
+            known = {
+                "mass": np.nan if overwrite else row.get("mass", np.nan),
+                "rad": np.nan if overwrite else row.get("rad", np.nan),
+                "Teff": np.nan if overwrite else row.get("Teff", np.nan),
+                }
+            if all(np.isfinite(pd.to_numeric(v, errors="coerce"))
+                   for v in known.values()):
+                flags.append("")
+                continue
+            phot = {
+                key: pd.to_numeric(row.get(col, np.nan), errors="coerce")
+                for key, col in phot_cols.items()
+                }
+            phot["ebv"] = phot["ebv"] if np.isfinite(phot["ebv"]) else 0.0
+            res = estimate_stellar_parameters(**phot, **known)
+            for param in res["estimated"]:
+                self.stars.loc[idx, param] = res[param]
+            flags.append(",".join(res["estimated"]))
+        self.stars["params_estimated"] = flags
+        n_est = int(np.sum([f != "" for f in flags]))
+        if verbose and n_est > 0:
+            print(
+                f"Estimated missing stellar parameters for {n_est} of "
+                f"{len(self.stars)} stars from photometry. See the "
+                f"'params_estimated' column of the .stars dataframe."
+                )
         return
 
     def add_star(self, ID: int, Tmag: float, bound: bool):
