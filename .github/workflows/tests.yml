@@ -31,10 +31,8 @@ jobs:
   full:
     # Full install and the complete suite, including tests that import
     # marginal_likelihoods / triceratops (pytransit, celerite, lightkurve).
-    # 3.12 and 3.13 currently fail (see KNOWN_ISSUES.rst) and do not gate.
     name: full (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    continue-on-error: ${{ contains(fromJSON('["3.12", "3.13"]'), matrix.python-version) }}
     strategy:
       fail-fast: false
       matrix:
