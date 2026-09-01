@@ -13,18 +13,30 @@ setup(name = "triceratops",
       url = "https://github.com/stevengiacalone/triceratops",
       packages = find_packages(),
       package_data = {'triceratops': ['data/*']},
+      python_requires='>=3.8',
       classifiers=[
         'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Science/Research',
         'Operating System :: OS Independent',
         'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
+        'Programming Language :: Python :: 3.13',
    	'License :: OSI Approved :: MIT License',
         'Topic :: Scientific/Engineering :: Astronomy'
         ],
-      install_requires=[# numpy < 2 and scipy < 1.14 are required by the
-                        # pinned pytransit 2.2 (it uses numpy.NaN and
-                        # scipy.integrate.trapz, both since removed)
-                        'numpy>=1.18.1,<2', 'scipy>=1.1.0,<1.14',
+      install_requires=[# pytransit 2.2 predates NumPy 2 / SciPy 1.14 and
+                        # uses names removed there. On Pythons where a
+                        # <2 NumPy is still available we hold it back; on
+                        # 3.13+ (NumPy 2 only) triceratops.likelihoods
+                        # shims the removed names instead.
+                        'numpy>=1.18.1,<2; python_version < "3.13"',
+                        'numpy>=2.1; python_version >= "3.13"',
+                        'scipy>=1.1.0,<1.14; python_version < "3.13"',
+                        'scipy>=1.14; python_version >= "3.13"',
                         'pandas>=0.23.4', 'matplotlib>=3.5.1',
                         'astropy>=4.0', 'astroquery>=0.4.6', 'pytransit==2.2',
                         'mechanicalsoup>=0.12.0', 'emcee>=3.0.2', 'seaborn>=0.11.1',
