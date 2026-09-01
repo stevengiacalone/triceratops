@@ -185,6 +185,12 @@ _A_EBV = {
 _MBOL_SUN = 4.74
 _TEFF_SUN = 5772.0
 
+# thresholds for flagging a star as evolved (off the main sequence)
+_EVOLVED_LOGG = 3.5           # surface gravity below this => evolved
+_EVOLVED_RADIUS_FACTOR = 1.7  # radius / dwarf-sequence radius above this
+_EVOLVED_MKS_MARGIN = 1.0     # mags brighter in M_Ks than the dwarf value
+_EVOLVED_MASS = 1.0           # M_sun assigned to an evolved star with no mass
+
 
 def _mamajek_column(col):
     """Returns the Mamajek sequence column ``col`` as a float array,
@@ -239,8 +245,9 @@ def estimate_stellar_parameters(Vmag: float = np.nan, Gmag: float = np.nan,
                                 BPmag: float = np.nan, RPmag: float = np.nan,
                                 Jmag: float = np.nan, Hmag: float = np.nan,
                                 Kmag: float = np.nan, plx: float = np.nan,
-                                ebv: float = 0.0, mass: float = np.nan,
-                                rad: float = np.nan, Teff: float = np.nan):
+                                ebv: float = 0.0, logg: float = np.nan,
+                                mass: float = np.nan, rad: float = np.nan,
+                                Teff: float = np.nan):
     """
     Estimates a star's mass, radius, and/or effective temperature from
     broadband photometry, assuming it lies on the main sequence.
@@ -252,6 +259,12 @@ def estimate_stellar_parameters(Vmag: float = np.nan, Gmag: float = np.nan,
     otherwise. The mass is read from the dwarf sequence (as a function
     of M_Ks for cool stars with a parallax, else as a function of Teff).
 
+    Stars found to be evolved (a low surface gravity, or a radius /
+    luminosity well above the main sequence at their Teff) are handled
+    separately: the radius is only estimated when it can come from a
+    parallax, and the mass is set to a nominal 1 M_sun, since photometry
+    alone does not constrain an evolved star's mass.
+
     Only the parameters passed as NaN are estimated. A parameter passed
     with a finite value is returned unchanged and used as a constraint
     (e.g. a known Teff is used as the anchor instead of a color).
@@ -262,6 +275,8 @@ def estimate_stellar_parameters(Vmag: float = np.nan, Gmag: float = np.nan,
             for those that are unavailable.
         plx (float): Parallax [mas].
         ebv (float): Reddening E(B-V) [mag].
+        logg (float): Surface gravity [dex]. Used only to identify
+            evolved stars; NaN if unknown.
         mass (float): Known mass [M_sun], or NaN to estimate.
         rad (float): Known radius [R_sun], or NaN to estimate.
         Teff (float): Known effective temperature [K], or NaN to estimate.
@@ -269,7 +284,8 @@ def estimate_stellar_parameters(Vmag: float = np.nan, Gmag: float = np.nan,
     Returns:
         result (dict): Keys "mass", "rad", "Teff" (estimates filled in
             where possible), "estimated" (list of the parameters that
-            were newly estimated), and "method" (how Teff and the radius
+            were newly estimated), "evolved" (bool; whether the star was
+            treated as evolved), and "method" (how Teff and the radius
             were determined).
     """
     def _f(x):
@@ -281,13 +297,13 @@ def estimate_stellar_parameters(Vmag: float = np.nan, Gmag: float = np.nan,
 
     Vmag, Gmag, BPmag, RPmag = _f(Vmag), _f(Gmag), _f(BPmag), _f(RPmag)
     Jmag, Hmag, Kmag, plx = _f(Jmag), _f(Hmag), _f(Kmag), _f(plx)
-    mass, rad, Teff = _f(mass), _f(rad), _f(Teff)
+    mass, rad, Teff, logg = _f(mass), _f(rad), _f(Teff), _f(logg)
     ebv = _f(ebv)
     if not np.isfinite(ebv) or ebv < 0:
         ebv = 0.0
 
     estimated = []
-    method = {"Teff": "input", "rad": "input"}
+    method = {"Teff": "input", "rad": "input", "mass": "input"}
 
     # --- effective temperature, from the best available color ---
     if not np.isfinite(Teff):
@@ -330,17 +346,43 @@ def estimate_stellar_parameters(Vmag: float = np.nan, Gmag: float = np.nan,
                 estimated.append("Teff")
                 break
 
+    # M_Ks (absolute Ks magnitude), used for the evolved-star test, the
+    # Stefan-Boltzmann radius, and the cool-star mass relation
+    if np.isfinite(plx) and plx > 0 and np.isfinite(Kmag):
+        M_Ks = Kmag - _A_EBV["K"]*ebv - 10.0 + 5.0*np.log10(plx)
+    else:
+        M_Ks = np.nan
+
+    # --- is the star evolved (off the main sequence)? ---
+    evolved = False
+    if np.isfinite(logg) and logg < _EVOLVED_LOGG:
+        evolved = True
+    elif np.isfinite(rad) and np.isfinite(Teff):
+        rad_ms = _monotonic_interp(
+            Teff, _mamajek_column("Teff"),
+            _mamajek_column("R_Rsun"), tol=200.0
+            )
+        if np.isfinite(rad_ms) and rad > _EVOLVED_RADIUS_FACTOR*rad_ms:
+            evolved = True
+    elif np.isfinite(M_Ks) and np.isfinite(Teff):
+        mks_ms = _monotonic_interp(
+            Teff, _mamajek_column("Teff"),
+            _mamajek_column("M_Ks"), tol=200.0
+            )
+        if np.isfinite(mks_ms) and M_Ks < mks_ms - _EVOLVED_MKS_MARGIN:
+            evolved = True
+
     # --- radius ---
     if not np.isfinite(rad) and np.isfinite(Teff):
-        if np.isfinite(plx) and plx > 0 and np.isfinite(Kmag):
-            M_Ks = Kmag - _A_EBV["K"]*ebv - 10.0 + 5.0*np.log10(plx)
+        if np.isfinite(M_Ks):
             bc = _bc_Ks(Teff)
             if np.isfinite(bc):
                 M_bol = M_Ks + bc
                 lum = 10.0**(-0.4*(M_bol - _MBOL_SUN))
                 rad = np.sqrt(lum) / (Teff/_TEFF_SUN)**2
                 method["rad"] = "Stefan-Boltzmann (parallax + Ks)"
-        if not np.isfinite(rad):
+        if not np.isfinite(rad) and not evolved:
+            # the dwarf-sequence radius is only valid on the main sequence
             rad = _monotonic_interp(
                 Teff, _mamajek_column("Teff"),
                 _mamajek_column("R_Rsun"), tol=200.0
@@ -351,26 +393,33 @@ def estimate_stellar_parameters(Vmag: float = np.nan, Gmag: float = np.nan,
             estimated.append("rad")
 
     # --- mass ---
-    if not np.isfinite(mass) and np.isfinite(Teff):
-        if (np.isfinite(plx) and plx > 0 and np.isfinite(Kmag)
-                and Teff < 4200.0):
-            M_Ks = Kmag - _A_EBV["K"]*ebv - 10.0 + 5.0*np.log10(plx)
-            mass = _monotonic_interp(
-                M_Ks, _mamajek_column("M_Ks"),
-                _mamajek_column("Msun"), tol=0.3
-                )
-        if not np.isfinite(mass):
-            mass = _monotonic_interp(
-                Teff, _mamajek_column("Teff"),
-                _mamajek_column("Msun"), tol=200.0
-                )
-        if np.isfinite(mass):
-            mass = float(np.clip(mass, 0.07, 100.0))
+    if not np.isfinite(mass):
+        if evolved:
+            # photometry does not constrain an evolved star's mass;
+            # adopt a nominal value (cf. the field red-giant mass
+            # distribution, which peaks near 1 M_sun)
+            mass = _EVOLVED_MASS
+            method["mass"] = "assumed (evolved star)"
             estimated.append("mass")
+        elif np.isfinite(Teff):
+            if (np.isfinite(M_Ks) and Teff < 4200.0):
+                mass = _monotonic_interp(
+                    M_Ks, _mamajek_column("M_Ks"),
+                    _mamajek_column("Msun"), tol=0.3
+                    )
+            if not np.isfinite(mass):
+                mass = _monotonic_interp(
+                    Teff, _mamajek_column("Teff"),
+                    _mamajek_column("Msun"), tol=200.0
+                    )
+            if np.isfinite(mass):
+                mass = float(np.clip(mass, 0.07, 100.0))
+                method["mass"] = "dwarf sequence"
+                estimated.append("mass")
 
     return {
         "mass": mass, "rad": rad, "Teff": Teff,
-        "estimated": estimated, "method": method,
+        "estimated": estimated, "evolved": evolved, "method": method,
         }
 
 

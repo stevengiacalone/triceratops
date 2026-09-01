@@ -96,6 +96,47 @@ class TestInsufficientData:
         assert np.isfinite(res["mass"])
 
 
+class TestEvolvedStars:
+    def test_low_logg_flags_evolved_and_assigns_solar_mass(self):
+        res = estimate_stellar_parameters(
+            Teff=4700.0, logg=2.5, Vmag=8.0, Kmag=5.9, plx=3.33
+        )
+        assert res["evolved"] is True
+        assert res["mass"] == 1.0
+        assert res["method"]["mass"] == "assumed (evolved star)"
+
+    def test_radius_far_above_main_sequence_flags_evolved(self):
+        # a star with a known radius ~3.7x the main-sequence value at
+        # its Teff (a la TOI-197): only the mass is missing
+        res = estimate_stellar_parameters(
+            rad=2.90, Teff=5083.0, Vmag=8.15, Kmag=6.6, plx=10.4
+        )
+        assert res["evolved"] is True
+        assert res["estimated"] == ["mass"]
+        assert res["mass"] == 1.0
+        assert res["rad"] == 2.90  # provided radius is kept
+
+    def test_evolved_radius_needs_parallax(self):
+        # evolved (low logg) but no parallax -> radius left unestimated
+        # rather than taking a wildly wrong dwarf-sequence value
+        res = estimate_stellar_parameters(Teff=4700.0, logg=2.2)
+        assert res["evolved"] is True
+        assert np.isnan(res["rad"])
+        assert res["mass"] == 1.0
+
+    def test_evolved_with_parallax_gets_stefan_boltzmann_radius(self):
+        res = estimate_stellar_parameters(
+            Teff=4700.0, logg=2.5, Kmag=5.96, plx=3.33
+        )
+        assert res["evolved"] is True
+        assert "Stefan-Boltzmann" in res["method"]["rad"]
+        assert res["rad"] > 5.0  # unmistakably a giant
+
+    def test_main_sequence_star_not_flagged(self):
+        res = estimate_stellar_parameters(**M_DWARF)
+        assert res["evolved"] is False
+
+
 class TestSunLikeStar:
     def test_solar_analog(self):
         # Sun at 10 pc: V ~ 4.83 + 5 = ... use apparent mags consistent

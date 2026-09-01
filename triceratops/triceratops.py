@@ -122,7 +122,7 @@ class target:
         new_df = df[
             "ID", "Tmag", "Vmag", "GAIAmag", "gaiabp", "gaiarp",
             "Jmag", "Hmag", "Kmag", "ebv",
-            "ra", "dec", "mass", "rad", "Teff", "plx",
+            "ra", "dec", "mass", "rad", "Teff", "logg", "plx",
             # for spurious objects, etc.
             # see https://arxiv.org/abs/2108.04778 Section 3.1 for details
             "disposition", "duplicate_id"
@@ -282,6 +282,12 @@ class target:
         "params_estimated" column listing which parameters were
         estimated for each star ("" if none).
 
+        Stars identified as evolved (from logg, or a radius/luminosity
+        well above the main sequence) are assigned a nominal 1 M_Sun
+        when they lack a mass, and their "params_estimated" entry is
+        marked "(evolved)". An evolved star's radius is only estimated
+        when a parallax is available.
+
         Args:
             overwrite (bool): If True, re-estimate mass/rad/Teff for
                 every star, ignoring any values already present. If
@@ -291,7 +297,7 @@ class target:
         phot_cols = {
             "Vmag": "Vmag", "Gmag": "GAIAmag", "BPmag": "gaiabp",
             "RPmag": "gaiarp", "Jmag": "Jmag", "Hmag": "Hmag",
-            "Kmag": "Kmag", "plx": "plx", "ebv": "ebv",
+            "Kmag": "Kmag", "plx": "plx", "ebv": "ebv", "logg": "logg",
             }
         flags = []
         for idx in self.stars.index:
@@ -313,15 +319,25 @@ class target:
             res = estimate_stellar_parameters(**phot, **known)
             for param in res["estimated"]:
                 self.stars.loc[idx, param] = res[param]
-            flags.append(",".join(res["estimated"]))
+            flag = ",".join(res["estimated"])
+            if flag and res["evolved"]:
+                flag += " (evolved)"
+            flags.append(flag)
         self.stars["params_estimated"] = flags
         n_est = int(np.sum([f != "" for f in flags]))
+        n_evo = int(np.sum(["evolved" in f for f in flags]))
         if verbose and n_est > 0:
-            print(
+            msg = (
                 f"Estimated missing stellar parameters for {n_est} of "
                 f"{len(self.stars)} stars from photometry. See the "
                 f"'params_estimated' column of the .stars dataframe."
                 )
+            if n_evo > 0:
+                msg += (
+                    f" {n_evo} appear evolved and were assigned a "
+                    f"nominal 1 M_Sun."
+                    )
+            print(msg)
         return
 
     def add_star(self, ID: int, Tmag: float, bound: bool):
