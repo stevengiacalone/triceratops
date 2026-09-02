@@ -36,6 +36,7 @@ release = '1.0.16'
 extensions = [
 "sphinx.ext.autodoc",
 "sphinx.ext.napoleon",
+"sphinx.ext.mathjax",
 "nbsphinx",
 ]
 

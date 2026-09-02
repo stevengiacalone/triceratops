@@ -215,6 +215,7 @@ class TestBEBCollisionMask:
 # Source-level regression test
 # ---------------------------------------------------------------------------
 
+@pytest.mark.heavy
 class TestSourceRegression:
     """Verify the actual source line uses the correct collision variable.
 
@@ -301,6 +302,7 @@ class TestSourceRegression:
 # NEB_unknown source-level regression test
 # ---------------------------------------------------------------------------
 
+@pytest.mark.heavy
 class TestNEBUnknownCollisionMask:
     """NC-04: lnZ_NEB_unknown twin branch must use coll_twin, not coll.
 
@@ -379,6 +381,7 @@ class TestNEBUnknownCollisionMask:
 # Comprehensive check across ALL EB functions
 # ---------------------------------------------------------------------------
 
+@pytest.mark.heavy
 class TestAllEBTwinBranches:
     """Verify every EB function's q >= 0.95 parallel mask uses coll_twin.
 

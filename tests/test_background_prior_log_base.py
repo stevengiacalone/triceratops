@@ -4,25 +4,16 @@ Verifies that background star priors use natural logarithm (np.log) rather
 than base-10 logarithm (np.log10). The prior is added to natural-log
 likelihoods in Bayesian evidence integrals, so it must be a natural log.
 
-These tests are designed to run without installing the full triceratops
-package -- they add the source directory to sys.path and import directly.
+The repo root is put on sys.path by the pytest configuration in
+pyproject.toml, so triceratops imports resolve to the source tree.
 """
 from __future__ import annotations
-
-import os
-import sys
 
 import numpy as np
 import pytest
 
-# ---------------------------------------------------------------------------
-# Make triceratops importable without pip install
-# ---------------------------------------------------------------------------
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _REPO_ROOT not in sys.path:
-    sys.path.insert(0, _REPO_ROOT)
-
-from triceratops.priors import lnprior_background  # noqa: E402
+from triceratops.funcs import separation_at_contrast
+from triceratops.priors import lnprior_background
 
 
 # ---------------------------------------------------------------------------
@@ -40,6 +31,9 @@ _DELTA_MAGS = np.array([3.0])  # interpolates to sep = 0.75 arcsec
 # The expected separation after interpolation
 _EXPECTED_SEP = np.interp(_DELTA_MAGS, _CONTRASTS, _SEPS)[0]  # 0.75
 
+# lnprior_background() now takes the limiting angular separation directly
+_LIM_SEPS = separation_at_contrast(_DELTA_MAGS, _SEPS, _CONTRASTS)
+
 # The prior argument (before taking the log)
 _PRIOR_ARG = (_N_COMP / 0.1) * (1 / 3600) ** 2 * _EXPECTED_SEP ** 2
 
@@ -49,17 +43,13 @@ class TestLnpriorBackgroundUsesNaturalLog:
 
     def test_result_equals_natural_log(self) -> None:
         """The function output must equal np.log(arg), not np.log10(arg)."""
-        result = lnprior_background(
-            _N_COMP, _DELTA_MAGS, _SEPS, _CONTRASTS
-        )
+        result = lnprior_background(_N_COMP, _LIM_SEPS)
         expected = np.log(_PRIOR_ARG)
         assert result[0] == pytest.approx(expected, rel=1e-12)
 
     def test_result_does_not_equal_log10(self) -> None:
         """Confirm the old (buggy) log10 value is NOT returned."""
-        result = lnprior_background(
-            _N_COMP, _DELTA_MAGS, _SEPS, _CONTRASTS
-        )
+        result = lnprior_background(_N_COMP, _LIM_SEPS)
         wrong_value = np.log10(_PRIOR_ARG)
         assert result[0] != pytest.approx(wrong_value, rel=1e-6)
 
@@ -100,9 +90,7 @@ class TestMathematicalRelationship:
 
     def test_log10_times_ln10_equals_ln(self) -> None:
         """old_value * ln(10) == new_value for the lnprior_background case."""
-        result_fixed = lnprior_background(
-            _N_COMP, _DELTA_MAGS, _SEPS, _CONTRASTS
-        )
+        result_fixed = lnprior_background(_N_COMP, _LIM_SEPS)
         # Compute what the old (buggy) code would have returned
         old_buggy = np.log10(_PRIOR_ARG)
         new_correct = result_fixed[0]
@@ -132,9 +120,7 @@ class TestMathematicalRelationship:
     def test_various_n_comp_values(self) -> None:
         """The ln(10) relationship holds regardless of N_comp."""
         for N_comp in [1, 10, 50, 100, 500, 1000]:
-            result = lnprior_background(
-                N_comp, _DELTA_MAGS, _SEPS, _CONTRASTS
-            )
+            result = lnprior_background(N_comp, _LIM_SEPS)
             arg = (N_comp / 0.1) * (1 / 3600) ** 2 * _EXPECTED_SEP ** 2
             expected = np.log(arg)
             assert result[0] == pytest.approx(expected, rel=1e-12), (

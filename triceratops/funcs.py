@@ -1,10 +1,12 @@
+import os
 import numpy as np
-from pandas import read_csv
+from pandas import read_csv, to_numeric, DataFrame
 from pandas.errors import EmptyDataError
 from astropy import constants
 from scipy.interpolate import InterpolatedUnivariateSpline
 from mechanicalsoup import StatefulBrowser
 from urllib.request import urlopen
+from urllib.error import HTTPError, URLError
 from bs4 import BeautifulSoup
 from time import sleep
 from astropy.io import fits
@@ -162,6 +164,299 @@ def color_Teff_relations(V, Ks):
     return Teff
 
 
+# mean main-sequence (dwarf) stellar sequence of Pecaut & Mamajek (2013),
+# used to estimate stellar parameters of stars that are missing them in
+# the TIC. See triceratops/data/mamajek_dwarf_sequence.csv for provenance.
+mamajek_sequence = read_csv(
+    os.path.join(
+        os.path.dirname(__file__), "data", "mamajek_dwarf_sequence.csv"
+        ),
+    comment="#"
+    )
+
+# extinction ratios A_X / E(B-V) for R_V = 3.1 (Cardelli et al. 1989);
+# 2MASS values from Indebetouw et al. (2005), Gaia from Casagrande &
+# VandenBerg (2018). Only used to deredden colors, so approximate values
+# are sufficient at the low reddening typical of TESS targets.
+A_EBV = {
+    "V": 3.10, "G": 2.80, "BP": 3.37, "RP": 2.14,
+    "J": 0.72, "H": 0.46, "K": 0.31,
+    }
+
+Mbol_sun = 4.74
+Teff_sun = 5772.0
+
+
+def float_or_nan(x):
+    """
+    Converts x to a float, returning NaN if it is not a finite number.
+    Args:
+        x: Value to convert.
+    Returns:
+        value (float): float(x), or NaN.
+    """
+    try:
+        x = float(x)
+    except (TypeError, ValueError):
+        return np.nan
+    return x if np.isfinite(x) else np.nan
+
+
+def mamajek_column(col: str):
+    """
+    Returns a column of the Mamajek dwarf sequence as a float array.
+    Args:
+        col (str): Column name. The synthetic color "GKs" is built from
+                   the absolute magnitudes M_G and M_Ks.
+    Returns:
+        values (numpy array): The requested column.
+    """
+    if col == "GKs":
+        return (mamajek_sequence["M_G"] - mamajek_sequence["M_Ks"]).values
+    return mamajek_sequence[col].values.astype(float)
+
+
+def monotonic_interp(x: float, xvals: np.array, yvals: np.array,
+                     tol: float = 0.0):
+    """
+    Interpolates yvals vs xvals after sorting and dropping non-increasing
+    points, so that np.interp is well defined.
+    Args:
+        x (float): Location to interpolate at.
+        xvals, yvals (numpy arrays): Points to interpolate between.
+        tol (float): Allowed distance of x beyond the tabulated range of
+                     xvals before NaN is returned instead.
+    Returns:
+        value (float): Interpolated value, or NaN if x is out of range
+                       or fewer than two usable points remain.
+    """
+    mask = np.isfinite(xvals) & np.isfinite(yvals)
+    xvals, yvals = xvals[mask], yvals[mask]
+    if len(xvals) < 2:
+        return np.nan
+    order = np.argsort(xvals)
+    xvals, yvals = xvals[order], yvals[order]
+    keep = np.concatenate(([True], np.diff(xvals) > 1e-9))
+    xvals, yvals = xvals[keep], yvals[keep]
+    if len(xvals) < 2 or x < xvals[0] - tol or x > xvals[-1] + tol:
+        return np.nan
+    return float(np.interp(x, xvals, yvals))
+
+
+def color_to_teff(color_value: float, col: str):
+    """
+    Estimates Teff from a dereddened color using the Mamajek dwarf
+    sequence. The near-infrared colors J-H and H-Ks are only used for
+    cool stars, where they are single-valued.
+    Args:
+        color_value (float): Dereddened color.
+        col (str): Mamajek sequence column for that color.
+    Returns:
+        Teff (float): Effective temperature [K], or NaN.
+    """
+    teffs = mamajek_column("Teff")
+    colors = mamajek_column(col)
+    if col in ("JH", "HKs"):
+        cool = teffs < 5500
+        teffs, colors = teffs[cool], colors[cool]
+    return monotonic_interp(color_value, colors, teffs, tol=0.15)
+
+
+def bc_Ks(teff: float):
+    """
+    Bolometric correction in the 2MASS Ks band, BC_Ks = (V-Ks) + BC_V,
+    interpolated over the Mamajek dwarf sequence.
+    Args:
+        teff (float): Effective temperature [K].
+    Returns:
+        BC_Ks (float): Bolometric correction [mag], or NaN.
+    """
+    return monotonic_interp(
+        teff, mamajek_column("Teff"),
+        mamajek_column("VKs") + mamajek_column("BCv"),
+        tol=200.0
+        )
+
+
+def estimate_stellar_parameters(Vmag: float = np.nan, Gmag: float = np.nan,
+                                BPmag: float = np.nan, RPmag: float = np.nan,
+                                Jmag: float = np.nan, Hmag: float = np.nan,
+                                Kmag: float = np.nan, plx: float = np.nan,
+                                ebv: float = 0.0, logg: float = np.nan,
+                                mass: float = np.nan, rad: float = np.nan,
+                                Teff: float = np.nan):
+    """
+    Estimates a star's mass, radius, and/or effective temperature from
+    broadband photometry, assuming it lies on the main sequence.
+
+    Teff is anchored to the best available dereddened color using the
+    mean dwarf sequence of Pecaut & Mamajek (2013). The radius is then
+    obtained from the parallax via the Stefan-Boltzmann law when a
+    parallax and Ks magnitude are available, and from the dwarf sequence
+    otherwise. The mass is read from the dwarf sequence (as a function
+    of M_Ks for cool stars with a parallax, else as a function of Teff).
+
+    Stars found to be evolved (a low surface gravity, or a radius /
+    luminosity well above the main sequence at their Teff) are handled
+    separately: the radius is only estimated when it can come from a
+    parallax, and the mass is set to a nominal 1 M_sun, since photometry
+    alone does not constrain an evolved star's mass.
+
+    Only the parameters passed as NaN are estimated. A parameter passed
+    with a finite value is returned unchanged and used as a constraint
+    (e.g. a known Teff is used as the anchor instead of a color).
+
+    Args:
+        Vmag, Gmag, BPmag, RPmag, Jmag, Hmag, Kmag (float): Apparent
+            magnitudes (Johnson V, Gaia G/BP/RP, 2MASS J/H/Ks). Pass NaN
+            for those that are unavailable.
+        plx (float): Parallax [mas].
+        ebv (float): Reddening E(B-V) [mag].
+        logg (float): Surface gravity [dex]. Used only to identify
+            evolved stars; NaN if unknown.
+        mass (float): Known mass [M_sun], or NaN to estimate.
+        rad (float): Known radius [R_sun], or NaN to estimate.
+        Teff (float): Known effective temperature [K], or NaN to estimate.
+
+    Returns:
+        result (dict): Keys "mass", "rad", "Teff" (estimates filled in
+            where possible), "estimated" (list of the parameters that
+            were newly estimated), "evolved" (bool; whether the star was
+            treated as evolved), and "method" (how Teff and the radius
+            were determined).
+    """
+    Vmag, Gmag = float_or_nan(Vmag), float_or_nan(Gmag)
+    BPmag, RPmag = float_or_nan(BPmag), float_or_nan(RPmag)
+    Jmag, Hmag, Kmag = float_or_nan(Jmag), float_or_nan(Hmag), float_or_nan(Kmag)
+    plx, logg = float_or_nan(plx), float_or_nan(logg)
+    mass, rad, Teff = float_or_nan(mass), float_or_nan(rad), float_or_nan(Teff)
+    ebv = float_or_nan(ebv)
+    if not np.isfinite(ebv) or ebv < 0:
+        ebv = 0.0
+
+    estimated = []
+    method = {"Teff": "input", "rad": "input", "mass": "input"}
+
+    # --- effective temperature, from the best available color ---
+    if not np.isfinite(Teff):
+        candidates = []
+        if np.isfinite(BPmag) and np.isfinite(RPmag):
+            candidates.append((
+                (BPmag - RPmag) - (A_EBV["BP"] - A_EBV["RP"])*ebv,
+                "BpRp", "BP-RP color"
+                ))
+        if np.isfinite(Vmag) and np.isfinite(Kmag):
+            candidates.append((
+                (Vmag - Kmag) - (A_EBV["V"] - A_EBV["K"])*ebv,
+                "VKs", "V-Ks color"
+                ))
+        if np.isfinite(Gmag) and np.isfinite(Kmag):
+            candidates.append((
+                (Gmag - Kmag) - (A_EBV["G"] - A_EBV["K"])*ebv,
+                "GKs", "G-Ks color"
+                ))
+        if np.isfinite(Gmag) and np.isfinite(RPmag):
+            candidates.append((
+                (Gmag - RPmag) - (A_EBV["G"] - A_EBV["RP"])*ebv,
+                "GRp", "G-RP color"
+                ))
+        if np.isfinite(Jmag) and np.isfinite(Hmag):
+            candidates.append((
+                (Jmag - Hmag) - (A_EBV["J"] - A_EBV["H"])*ebv,
+                "JH", "J-H color"
+                ))
+        if np.isfinite(Hmag) and np.isfinite(Kmag):
+            candidates.append((
+                (Hmag - Kmag) - (A_EBV["H"] - A_EBV["K"])*ebv,
+                "HKs", "H-Ks color"
+                ))
+        for color_value, col, label in candidates:
+            teff_try = color_to_teff(color_value, col)
+            if np.isfinite(teff_try):
+                Teff = float(np.clip(teff_try, 2300.0, 50000.0))
+                method["Teff"] = label
+                estimated.append("Teff")
+                break
+
+    # M_Ks (absolute Ks magnitude), used for the evolved-star test, the
+    # Stefan-Boltzmann radius, and the cool-star mass relation
+    if np.isfinite(plx) and plx > 0 and np.isfinite(Kmag):
+        M_Ks = Kmag - A_EBV["K"]*ebv - 10.0 + 5.0*np.log10(plx)
+    else:
+        M_Ks = np.nan
+
+    # --- is the star evolved (off the main sequence)? ---
+    # flagged by a low surface gravity, a radius well above the
+    # dwarf-sequence value at its Teff, or an over-luminous M_Ks
+    evolved = False
+    if np.isfinite(logg) and logg < 3.5:
+        evolved = True
+    elif np.isfinite(rad) and np.isfinite(Teff):
+        rad_ms = monotonic_interp(
+            Teff, mamajek_column("Teff"),
+            mamajek_column("R_Rsun"), tol=200.0
+            )
+        if np.isfinite(rad_ms) and rad > 1.7*rad_ms:
+            evolved = True
+    elif np.isfinite(M_Ks) and np.isfinite(Teff):
+        mks_ms = monotonic_interp(
+            Teff, mamajek_column("Teff"),
+            mamajek_column("M_Ks"), tol=200.0
+            )
+        if np.isfinite(mks_ms) and M_Ks < mks_ms - 1.0:
+            evolved = True
+
+    # --- radius ---
+    if not np.isfinite(rad) and np.isfinite(Teff):
+        if np.isfinite(M_Ks):
+            bc = bc_Ks(Teff)
+            if np.isfinite(bc):
+                M_bol = M_Ks + bc
+                lum = 10.0**(-0.4*(M_bol - Mbol_sun))
+                rad = np.sqrt(lum) / (Teff/Teff_sun)**2
+                method["rad"] = "Stefan-Boltzmann (parallax + Ks)"
+        if not np.isfinite(rad) and not evolved:
+            # the dwarf-sequence radius is only valid on the main sequence
+            rad = monotonic_interp(
+                Teff, mamajek_column("Teff"),
+                mamajek_column("R_Rsun"), tol=200.0
+                )
+            method["rad"] = "dwarf sequence (Teff)"
+        if np.isfinite(rad):
+            rad = float(np.clip(rad, 0.05, 200.0))
+            estimated.append("rad")
+
+    # --- mass ---
+    if not np.isfinite(mass):
+        if evolved:
+            # photometry does not constrain an evolved star's mass;
+            # adopt 1 M_sun (near the peak of the field red-giant mass
+            # distribution)
+            mass = 1.0
+            method["mass"] = "assumed (evolved star)"
+            estimated.append("mass")
+        elif np.isfinite(Teff):
+            if (np.isfinite(M_Ks) and Teff < 4200.0):
+                mass = monotonic_interp(
+                    M_Ks, mamajek_column("M_Ks"),
+                    mamajek_column("Msun"), tol=0.3
+                    )
+            if not np.isfinite(mass):
+                mass = monotonic_interp(
+                    Teff, mamajek_column("Teff"),
+                    mamajek_column("Msun"), tol=200.0
+                    )
+            if np.isfinite(mass):
+                mass = float(np.clip(mass, 0.07, 100.0))
+                method["mass"] = "dwarf sequence"
+                estimated.append("mass")
+
+    return {
+        "mass": mass, "rad": rad, "Teff": Teff,
+        "estimated": estimated, "evolved": evolved, "method": method,
+        }
+
+
 def renorm_flux(flux, flux_err, star_fluxratio: float):
     """
     Renormalizes light curve flux to account for flux contribution
@@ -239,6 +534,76 @@ def separation_at_contrast(delta_mags: np.array,
     return sep
 
 
+def parse_contrast_curves(contrast_curve_file, filt="TESS"):
+    """
+    Normalizes contrast curve inputs so that one or more contrast curves
+    can be supplied to the analysis.
+    Args:
+        contrast_curve_file (str or list of str): Path(s) to contrast
+            curve text file(s), or None.
+        filt (str or list of str): Photometric filter(s) of the contrast
+            curve(s). A single filter is broadcast to all files. Options
+            are TESS, Vis, J, H, and K.
+    Returns:
+        files (list of str or None): List of contrast curve paths, or
+            None if no contrast curve was provided.
+        filts (list of str or None): Matching list of filters, or None.
+    """
+    if contrast_curve_file is None:
+        return None, None
+    if (isinstance(contrast_curve_file, (str, bytes))
+            or not hasattr(contrast_curve_file, "__iter__")):
+        files = [contrast_curve_file]
+    else:
+        files = list(contrast_curve_file)
+    if len(files) == 0:
+        return None, None
+    if isinstance(filt, (str, bytes)) or not hasattr(filt, "__iter__"):
+        filts = [filt]
+    else:
+        filts = list(filt)
+    if len(filts) == 1:
+        filts = filts*len(files)
+    if len(filts) != len(files):
+        raise ValueError(
+            "Number of contrast curve filters ({0}) does not match the "
+            "number of contrast curve files ({1}).".format(
+                len(filts), len(files)
+                )
+            )
+    return files, filts
+
+
+def limiting_separation(delta_mags_list: list, contrast_curve_files: list):
+    """
+    Determines the limiting angular separation (in arcsec) beyond which
+    each simulated companion can be ruled out, combining the constraints
+    from one or more contrast curves. A companion is considered ruled out
+    if any single contrast curve rules it out, so the tightest (smallest)
+    limiting separation across all curves is adopted.
+    Args:
+        delta_mags_list (list of numpy arrays): Contrasts of the simulated
+            companions (delta_mag), one array per contrast curve, each
+            evaluated in that curve's photometric filter.
+        contrast_curve_files (list of str): Paths to the contrast curve
+            text files, in the same order as delta_mags_list.
+    Returns:
+        seps (numpy array): Separation beyond which each simulated
+            companion can be ruled out (arcsec).
+    """
+    seps = None
+    for delta_mags, cc_file in zip(delta_mags_list, contrast_curve_files):
+        separations, contrasts = file_to_contrast_curve(cc_file)
+        this_seps = separation_at_contrast(
+            delta_mags, separations, contrasts
+            )
+        if seps is None:
+            seps = this_seps
+        else:
+            seps = np.minimum(seps, this_seps)
+    return seps
+
+
 def query_TRILEGAL(RA: float, Dec: float, verbose: int = 1, verify_ssl: bool = True):
     """
     Begins TRILEGAL query.
@@ -289,8 +654,9 @@ def query_TRILEGAL(RA: float, Dec: float, verbose: int = 1, verify_ssl: bool = T
                 print(f"TRILEGAL v{version} failed: {exc}")
             continue
     print(
-        "TRILEGAL unavailable after trying versions 1.6 and 1.5; "
-        "using saved stellar populations instead."
+        "TRILEGAL unavailable after trying versions 1.6 and 1.5. "
+        "The scenarios that need a simulated background population "
+        "(DTP, DEB, DEBx2P, BTP, BEB, BEBx2P) will be skipped."
     )
     return None
 
@@ -306,8 +672,8 @@ def save_trilegal(output_url, ID: int):
     """
     if output_url is None:
         print(
-            "Could not access TRILEGAL. "
-            + "Ignoring BTP, BEB, BEBx2P, DTP, DEB, and DEBx2P scenarios."
+            "Could not obtain a field-star population. Ignoring the "
+            + "DTP, DEB, DEBx2P, BTP, BEB, and BEBx2P scenarios."
             )
         return 0.0
     else:
@@ -330,12 +696,165 @@ def save_trilegal(output_url, ID: int):
         df.to_csv(fname)
         return fname
 
+
+def gaia_to_Tmag(G, BP, RP):
+    """
+    Converts Gaia DR3 magnitudes to a TESS magnitude using the
+    (BP - RP) colour relation of Stassun et al. (2019) (TIC v8).
+    Args:
+        G, BP, RP (float or numpy array): Gaia G, BP and RP magnitudes.
+    Returns:
+        Tmag (float or numpy array): TESS magnitude.
+    """
+    G = np.asarray(G, dtype=float)
+    color = np.asarray(BP, dtype=float) - np.asarray(RP, dtype=float)
+    Tmag = (
+        G - 0.00522555*np.clip(color, -0.2, 3.5)**3
+        + 0.0891337*np.clip(color, -0.2, 3.5)**2
+        - 0.633923*np.clip(color, -0.2, 3.5)
+        + 0.0324473
+        )
+    # no colour available: use the mean G - T offset
+    Tmag = np.where(np.isfinite(color), Tmag, G - 0.43)
+    return Tmag
+
+
+def query_gaia_background(RA: float, Dec: float, ID: int,
+                          field: float = 0.1, mag_limit: float = 21.0,
+                          verbose: int = 1):
+    """
+    Queries Gaia DR3 for the field-star population toward (RA, Dec), for
+    use in the blended-star scenarios (DTP/DEB/BTP/BEB and their twins)
+    in place of a TRILEGAL simulation.
+
+    Real Gaia sources are used down to the given magnitude limit. Each
+    star's effective temperature is estimated from its dereddened BP-RP
+    colour and its mass, radius, surface gravity and absolute
+    magnitudes from the main-sequence (dwarf) sequence of Pecaut &
+    Mamajek (2013); metallicity is assumed solar. The TESS magnitude is
+    from the Stassun et al. (2019) G-T relation, and J/H/Ks apparent
+    magnitudes from the dwarf sequence at the star's Teff and distance.
+
+    Args:
+        RA, Dec (float): Target coordinates [deg].
+        ID (int): Target ID, used for the output file name.
+        field (float): Solid angle of the queried field [deg^2].
+        mag_limit (float): Faint Gaia G magnitude limit.
+        verbose (int): 1 to print progress, 0 to print nothing.
+    Returns:
+        fname (str or None): Path to a CSV with the columns that
+            trilegal_results() reads (Mact, logg, logTe, [M/H], TESS,
+            J, H, Ks), or None if the query failed or returned nothing
+            usable.
+    """
+    from astroquery.gaia import Gaia
+
+    radius = np.sqrt(field/pi)  # deg; circle with area `field`
+    adql = (
+        "SELECT phot_g_mean_mag, phot_bp_mean_mag, phot_rp_mean_mag, "
+        "parallax, parallax_over_error "
+        "FROM gaiadr3.gaia_source "
+        "WHERE 1 = CONTAINS(POINT('ICRS', ra, dec), "
+        "CIRCLE('ICRS', {0}, {1}, {2})) "
+        "AND phot_g_mean_mag < {3}".format(RA, Dec, radius, mag_limit)
+        )
+    try:
+        Gaia.ROW_LIMIT = -1
+        # the synchronous endpoint is much faster for the typical few
+        # hundred stars; fall back to async for dense (plane) fields
+        try:
+            tbl = Gaia.launch_job(adql, verbose=False).get_results()
+            if len(tbl) >= 2000:
+                tbl = Gaia.launch_job_async(adql, verbose=False).get_results()
+        except Exception:
+            tbl = Gaia.launch_job_async(adql, verbose=False).get_results()
+    except Exception as exc:
+        if verbose:
+            print(
+                "Gaia DR3 query failed ({0}). The scenarios that need a "
+                "field-star population will be skipped.".format(exc)
+                )
+        return None
+    if len(tbl) == 0:
+        if verbose:
+            print("Gaia DR3 returned no field stars.")
+        return None
+
+    Gmag = np.asarray(tbl["phot_g_mean_mag"], dtype=float)
+    BPmag = np.asarray(tbl["phot_bp_mean_mag"], dtype=float)
+    RPmag = np.asarray(tbl["phot_rp_mean_mag"], dtype=float)
+    plx = np.asarray(tbl["parallax"], dtype=float)
+    plx_snr = np.asarray(tbl["parallax_over_error"], dtype=float)
+    Tmag = gaia_to_Tmag(Gmag, BPmag, RPmag)
+
+    # sorted (x, y) tables from the dwarf sequence for vectorized interp
+    def seq_table(xcol, ycol):
+        x, y = mamajek_column(xcol), mamajek_column(ycol)
+        keep = np.isfinite(x) & np.isfinite(y)
+        x, y = x[keep], y[keep]
+        order = np.argsort(x)
+        x, y = x[order], y[order]
+        keep = np.concatenate(([True], np.diff(x) > 1e-9))
+        return x[keep], y[keep]
+
+    cx, cy = seq_table("BpRp", "Teff")
+    Teff = np.interp(BPmag - RPmag, cx, cy, left=cy[0], right=cy[-1])
+    tx, ty = seq_table("Teff", "Msun")
+    mass = np.interp(Teff, tx, ty)
+    tx, ty = seq_table("Teff", "R_Rsun")
+    rad = np.interp(Teff, tx, ty)
+    tx, ty = seq_table("Teff", "M_G")
+    M_G = np.interp(Teff, tx, ty)
+    tx, ty = seq_table("Teff", "M_J")
+    M_J = np.interp(Teff, tx, ty)
+    tx, ty = seq_table("Teff", "M_Ks")
+    M_Ks = np.interp(Teff, tx, ty)
+    tx, ty = seq_table("Teff", "JH")
+    JH = np.interp(Teff, tx, ty)
+
+    logg = np.log10(G*(mass*Msun)/(rad*Rsun)**2)
+    # distance modulus: parallax when reliable, else photometric (G - M_G)
+    use_plx = np.isfinite(plx) & (plx > 0.0) & (plx_snr > 5.0)
+    dmod = np.where(
+        use_plx,
+        5.0*np.log10(1000.0/np.where(plx > 0.0, plx, np.nan)) - 5.0,
+        Gmag - M_G
+        )
+
+    good = np.isfinite(Teff) & np.isfinite(mass) & np.isfinite(dmod)
+    rows = np.column_stack([
+        mass[good], logg[good], np.log10(Teff[good]),
+        np.zeros(np.sum(good)), Tmag[good],
+        (M_J + dmod)[good], (M_J - JH + dmod)[good], (M_Ks + dmod)[good],
+        ])
+
+    if len(rows) == 0:
+        if verbose:
+            print("Gaia DR3 field stars could not be characterized.")
+        return None
+
+    df = DataFrame(
+        rows,
+        columns=["Mact", "logg", "logTe", "[M/H]", "TESS", "J", "H", "Ks"]
+        )
+    fname = str(ID) + "_gaia_background.csv"
+    df.to_csv(fname, index=False)
+    if verbose:
+        print(
+            "Gaia DR3: {0} field stars toward the target "
+            "(G < {1}).".format(len(df), mag_limit)
+            )
+    return fname
+
+
 def trilegal_results(trilegal_fname: str, Tmag: float):
     """
-    Retrieves arrays of stars from trilegal query.
+    Reads a field-star population file (from a TRILEGAL simulation or
+    from query_gaia_background) and returns arrays of the stars fainter
+    than the target.
     Args:
-        trilegal_fname (str): File containing query results.
-        Tmag (float): TESS magnitude of the star.
+        trilegal_fname (str): File containing the population.
+        Tmag (float): TESS magnitude of the target star.
     Returns:
         Tmags (numpy array): TESS magnitude of all stars
                              fainter than the target.
@@ -348,15 +867,24 @@ def trilegal_results(trilegal_fname: str, Tmag: float):
         Zs (numpy array): Metallicities of all stars fainter than the
                           target [dex].
     """
-    df = read_csv(trilegal_fname)[:-2]
-    Masses = df["Mact"].values
-    loggs = df["logg"].values
-    Teffs = 10**df["logTe"].values
-    Zs = np.array(df["[M/H]"], dtype=float)
-    Tmags = df["TESS"].values
-    Jmags = df["J"].values
-    Hmags = df["H"].values
-    Kmags = df["Ks"].values
+    df = read_csv(trilegal_fname)
+    # TRILEGAL files end with 1-2 footer lines; a Gaia file has none.
+    # Keep only rows whose stellar parameters parse as numbers.
+    df = df[
+        to_numeric(df["Mact"], errors="coerce").notna()
+        & to_numeric(df["logg"], errors="coerce").notna()
+        ].reset_index(drop=True)
+    Masses = to_numeric(df["Mact"]).values
+    loggs = to_numeric(df["logg"]).values
+    Teffs = 10**to_numeric(df["logTe"]).values
+    Zs = to_numeric(df["[M/H]"]).values.astype(float)
+    Jmags = to_numeric(df["J"]).values
+    Hmags = to_numeric(df["H"]).values
+    Kmags = to_numeric(df["Ks"]).values
+    Tmags = (
+        to_numeric(df["TESS"]).values if "TESS" in df.columns
+        else np.full(df.shape[0], np.nan)
+        )
     headers = np.array(list(df))
     # if able to use TRILEGAL v1.6 and get TESS mags, use them
     if "TESS" in headers:
@@ -443,34 +971,61 @@ def find_url(ID: str, sector: int):
     str5 = segment_ID(str(ID)[-4:])
         
     url += str1+"/"+str2+"/"+str3+"/"+str4+"/"+str5+"/"
-    
-    urlpath = urlopen(url)
-    string = urlpath.read().decode('utf-8')
+
+    no_data_msg = (
+        "No SPOC light curve found for TIC " + str(ID) + " in sector "
+        + str(sector) + ", so no aperture is available. This target may "
+        + "not have 2-minute cadence data in that sector."
+        )
+    try:
+        urlpath = urlopen(url)
+        string = urlpath.read().decode('utf-8')
+    except HTTPError as e:
+        if e.code == 404:
+            raise FileNotFoundError(no_data_msg) from e
+        raise RuntimeError(
+            "MAST archive returned an error for TIC " + str(ID)
+            + " sector " + str(sector) + " (" + url + ")."
+            ) from e
+    except URLError as e:
+        raise RuntimeError(
+            "Could not reach the MAST archive for TIC " + str(ID)
+            + " sector " + str(sector) + " (" + url + ")."
+            ) from e
     soup = BeautifulSoup(string, 'html.parser')
     for link in soup.find_all('a'):
-        if (link.get('href')[-9:]) == "s_lc.fits":
-            url += link.get('href')
+        href = link.get('href') or ""
+        if href[-9:] == "s_lc.fits":
+            return url + href
 
-    return url
+    raise FileNotFoundError(no_data_msg)
+
 
 def get_aperture(ID, sector):
     """
-    Returns aperture array that can be input into
-    calc_depths method for a given sector.
+    Returns the SPOC optimal photometric aperture for a given sector, in
+    the [[col, row], ...] format expected by target.calc_depths().
     Args:
         ID (str): TIC ID of star.
         sector (int): TESS sector.
     Returns:
-        ap_pixels (numpy array): Aperture pixels.
+        ap_pixels (numpy array): Aperture pixels, one [col, row] per row.
     """
     fits_file = find_url(ID, sector)
 
     with fits.open(fits_file, mode="readonly") as hdulist:
-        aperture = hdulist[2].data
-        
-    ap_pixels = np.argwhere(aperture == np.max(aperture))
-    ap_pixels[:,0] += hdulist[2].header["CRVAL2P"]
-    ap_pixels[:,1] += hdulist[2].header["CRVAL1P"]
-    ap_pixels = np.flip(ap_pixels, axis=1)
-    
+        aperture = hdulist["APERTURE"].data.astype(int)
+        col_ref = hdulist["APERTURE"].header["CRVAL1P"]
+        row_ref = hdulist["APERTURE"].header["CRVAL2P"]
+
+    # bit 2 of the SPOC aperture bitmask flags pixels used in the
+    # optimal photometric aperture
+    rows, cols = np.nonzero(np.bitwise_and(aperture, 2))
+    if len(rows) == 0:
+        raise ValueError(
+            "The SPOC aperture mask for TIC " + str(ID) + " sector "
+            + str(sector) + " contains no optimal-aperture pixels."
+            )
+    ap_pixels = np.column_stack([cols + col_ref, rows + row_ref])
+
     return ap_pixels

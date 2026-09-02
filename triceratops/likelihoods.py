@@ -1,16 +1,26 @@
 import numpy as np
+import scipy.integrate
 from astropy import constants
 
-# Older pytransit releases use NumPy aliases removed in modern NumPy.
-# Inject shims before the pytransit import runs; both guards are no-ops
-# on NumPy versions where the names still exist.
+# The pinned pytransit 2.2 uses several NumPy/SciPy names that have since
+# been removed. Inject shims before the pytransit import runs; each guard
+# is a no-op on versions where the name still exists.
 #
 # np.int (Python builtin alias): removed in NumPy 1.24.
-# np.trapz (renamed to np.trapezoid): removed in NumPy 2.0.
+# np.trapz -> np.trapezoid: removed in NumPy 2.0.
+# np.NaN / np.Inf: removed in NumPy 2.0 (pytransit.utils.eclipses).
+# scipy.integrate.trapz -> trapezoid: removed in SciPy 1.14
+# (pytransit.models.swiftmodel).
 if not hasattr(np, "int"):
     np.int = int  # type: ignore[attr-defined]
 if not hasattr(np, "trapz"):
     np.trapz = np.trapezoid  # type: ignore[attr-defined]
+if not hasattr(np, "NaN"):
+    np.NaN = np.nan  # type: ignore[attr-defined]
+if not hasattr(np, "Inf"):
+    np.Inf = np.inf  # type: ignore[attr-defined]
+if not hasattr(scipy.integrate, "trapz"):
+    scipy.integrate.trapz = scipy.integrate.trapezoid
 
 from pytransit import QuadraticModel
 

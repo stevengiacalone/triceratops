@@ -24,8 +24,10 @@ from .likelihoods import (simulate_TP_transit,
 from ._numerics import _normalize_probabilities
 from .funcs import (save_trilegal,
                    query_TRILEGAL,
+                   query_gaia_background,
                    renorm_flux,
                    stellar_relations,
+                   estimate_stellar_parameters,
                    get_aperture)
 from .marginal_likelihoods import *
 
@@ -42,7 +44,9 @@ class target:
     def __init__(self, ID: int, sectors: np.ndarray,
                  search_radius: int = 10, mission: str = "TESS",
                  lightkurve_cache_dir = None, trilegal_fname = None,
-                 ra: float=None, dec: float=None, verify_ssl: bool=True):
+                 ra: float=None, dec: float=None, verify_ssl: bool=True,
+                 estimate_missing_params: bool=True,
+                 background_population_source: str="gaia"):
         """Initializes TRICERATOPS.
 
         Queries TIC for sources near the target and obtains a cutout
@@ -64,6 +68,15 @@ class target:
             verify_ssl (bool): True to verify SSL certificates,
                 False to ignore. ONLY SET TO FALSE IF ABSOLUTELY
                 NECESSARY.
+            estimate_missing_params (bool): If True (default), estimate
+                any missing stellar mass, radius, and/or Teff in the
+                .stars dataframe from the available photometry using
+                main-sequence relations (see estimate_stellar_params).
+            background_population_source (str): Where the field-star
+                population for the blended-star scenarios (DTP, DEB,
+                BTP, BEB, ...) comes from: "gaia" (default) queries real
+                Gaia DR3 sources, "trilegal" runs a TRILEGAL simulation.
+                Ignored if trilegal_fname is given.
         """
         self.ID = ID
         self.mission = mission
@@ -114,27 +127,42 @@ class target:
             catalog="TIC"
             )
         new_df = df[
-            "ID", "Tmag", "Jmag", "Hmag", "Kmag",
-            "ra", "dec", "mass", "rad", "Teff", "plx",
+            "ID", "Tmag", "Vmag", "GAIAmag", "gaiabp", "gaiarp",
+            "Jmag", "Hmag", "Kmag", "ebv",
+            "ra", "dec", "mass", "rad", "Teff", "logg", "plx",
             # for spurious objects, etc.
             # see https://arxiv.org/abs/2108.04778 Section 3.1 for details
             "disposition", "duplicate_id"
             ]
         stars = new_df.to_pandas()
 
-        # start TRILEGAL query if needed
-        if trilegal_fname is None:
-            output_url = query_TRILEGAL(
+        # obtain the field-star population for the blended-star scenarios
+        if background_population_source not in ("gaia", "trilegal"):
+            raise ValueError(
+                "background_population_source must be 'gaia' or "
+                "'trilegal'."
+                )
+        self.background_population_source = background_population_source
+        if trilegal_fname is not None:
+            # user supplied a population file directly
+            self.trilegal_fname = trilegal_fname
+            self.trilegal_url = None
+        elif background_population_source == "gaia":
+            self.trilegal_url = None
+            self.trilegal_fname = query_gaia_background(
+                stars["ra"].values[0],
+                stars["dec"].values[0],
+                ID,
+                verbose=0
+                )
+        else:
+            self.trilegal_url = query_TRILEGAL(
                 stars["ra"].values[0],
                 stars["dec"].values[0],
                 verbose=0,
-                verify_ssl=True
+                verify_ssl=verify_ssl
                 )
-            self.trilegal_url = output_url
             self.trilegal_fname = None
-        else:
-            self.trilegal_fname = trilegal_fname
-            self.trilegal_url = None
 
         TESS_images = []
         col0s, row0s = [], []
@@ -256,10 +284,81 @@ class target:
         stars["PA (E of N)"] = pa
 
         self.stars = stars
+        if estimate_missing_params:
+            self.estimate_stellar_params()
         self.TESS_images = TESS_images
         self.col0s = col0s
         self.row0s = row0s
         self.pix_coords = pix_coords
+        return
+
+    def estimate_stellar_params(self, overwrite: bool = False,
+                                verbose: int = 1):
+        """Estimates missing stellar parameters from photometry.
+
+        Fills in any missing mass, radius, and/or Teff for stars in the
+        .stars dataframe using the star's broadband photometry (Gaia,
+        2MASS, Johnson V) and main-sequence relations, via
+        triceratops.funcs.estimate_stellar_parameters. Adds a
+        "params_estimated" column listing which parameters were
+        estimated for each star ("" if none).
+
+        Stars identified as evolved (from logg, or a radius/luminosity
+        well above the main sequence) are assigned a nominal 1 M_Sun
+        when they lack a mass, and their "params_estimated" entry is
+        marked "(evolved)". An evolved star's radius is only estimated
+        when a parallax is available.
+
+        Args:
+            overwrite (bool): If True, re-estimate mass/rad/Teff for
+                every star, ignoring any values already present. If
+                False (default), only fill in missing values.
+            verbose (int): 1 to print a summary, 0 to print nothing.
+        """
+        phot_cols = {
+            "Vmag": "Vmag", "Gmag": "GAIAmag", "BPmag": "gaiabp",
+            "RPmag": "gaiarp", "Jmag": "Jmag", "Hmag": "Hmag",
+            "Kmag": "Kmag", "plx": "plx", "ebv": "ebv", "logg": "logg",
+            }
+        flags = []
+        for idx in self.stars.index:
+            row = self.stars.loc[idx]
+            known = {
+                "mass": np.nan if overwrite else row.get("mass", np.nan),
+                "rad": np.nan if overwrite else row.get("rad", np.nan),
+                "Teff": np.nan if overwrite else row.get("Teff", np.nan),
+                }
+            if all(np.isfinite(pd.to_numeric(v, errors="coerce"))
+                   for v in known.values()):
+                flags.append("")
+                continue
+            phot = {
+                key: pd.to_numeric(row.get(col, np.nan), errors="coerce")
+                for key, col in phot_cols.items()
+                }
+            phot["ebv"] = phot["ebv"] if np.isfinite(phot["ebv"]) else 0.0
+            res = estimate_stellar_parameters(**phot, **known)
+            for param in res["estimated"]:
+                self.stars.loc[idx, param] = res[param]
+            flag = ",".join(res["estimated"])
+            if flag and res["evolved"]:
+                flag += " (evolved)"
+            flags.append(flag)
+        self.stars["params_estimated"] = flags
+        n_est = int(np.sum([f != "" for f in flags]))
+        n_evo = int(np.sum(["evolved" in f for f in flags]))
+        if verbose and n_est > 0:
+            msg = (
+                f"Estimated missing stellar parameters for {n_est} of "
+                f"{len(self.stars)} stars from photometry. See the "
+                f"'params_estimated' column of the .stars dataframe."
+                )
+            if n_evo > 0:
+                msg += (
+                    f" {n_evo} appear evolved and were assigned a "
+                    f"nominal 1 M_Sun."
+                    )
+            print(msg)
         return
 
     def add_star(self, ID: int, Tmag: float, bound: bool):
@@ -319,6 +418,41 @@ class target:
         self.stars = self.stars[~self.stars["ID"].isin(drop_stars)]
         return
 
+    def remove_nearby_stars(self):
+        """For excluding all nearby stars from the analysis.
+
+        Drops every star except the target from the .stars dataframe, so
+        that no NEB or NTP scenarios are considered by calc_probs(). Use
+        this when follow-up observations (e.g. seeing-limited ground-based
+        photometry) have shown that the transit occurs on-target, ruling
+        out nearby stars as the source of the signal.
+
+        Run this after calc_depths(). calc_probs() still needs the
+        'fluxratio' and 'tdepth' columns it produces, and if you pass
+        dilution_corrected=False the target flux ratio must be known to
+        correct the light curve.
+        """
+        if "tdepth" not in self.stars.columns:
+            print(
+                "WARNING: remove_nearby_stars() is being run before "
+                + "calc_depths(). The target light curve will not be "
+                + "corrected for dilution by nearby stars. Run "
+                + "calc_depths() first to account for this."
+                )
+        n_removed = len(self.stars) - 1
+        self.stars = self.stars.iloc[:1].reset_index(drop=True)
+        self.pix_coords = [
+            pix_coord[:1] for pix_coord in self.pix_coords
+            ]
+        if n_removed > 0:
+            print(
+                "Removed " + str(n_removed) + " nearby star(s). Only the "
+                + "target will be considered by calc_probs() (NFPP = 0)."
+                )
+        else:
+            print("No nearby stars to remove.")
+        return
+
     def update_star(self, ID: int, param: str, value: float):
         """For updating the properties of a star.
 
@@ -336,23 +470,45 @@ class target:
 
     def get_spoc_apertures(self):
         """
-        Returns apertures used by the SPOC in the given
-        sectors, if available.
-        Args:
-            self
+        Returns the SPOC optimal photometric aperture for each of the
+        target's sectors, ready to pass to calc_depths(all_ap_pixels=).
+
+        The returned list always has one entry per sector, in the same
+        order as self.sectors. Sectors for which no SPOC aperture could
+        be retrieved (e.g. FFI-only sectors, or a failed archive query)
+        get a None entry and are reported; supply an aperture for those
+        sectors yourself, or drop them, before calling calc_depths().
+
         Returns:
-            aps (list): List of aperture pixels, in order of
-                        sectors as input.
+            aps (list): List of aperture-pixel arrays (or None), one per
+                        sector.
         """
+        if self.mission != "TESS":
+            print("SPOC apertures are only available for TESS targets.")
+            return [None for _ in self.sectors]
+
         aps = []
-        this_ID = self.ID
-        these_sectors = self.sectors
-        try:
-            for sector in these_sectors:
-                ap = get_aperture(this_ID, sector)
-                aps.append(ap)
-        except:
-            print("No SPOC apertures available.")
+        failed = []
+        for sector in self.sectors:
+            try:
+                aps.append(get_aperture(self.ID, sector))
+            except Exception as e:
+                aps.append(None)
+                failed.append(sector)
+                print(
+                    "Could not get SPOC aperture for sector "
+                    + str(sector) + ": " + str(e)
+                    )
+        if failed:
+            warnings.warn(
+                "No SPOC aperture for sector(s) "
+                + ", ".join(str(s) for s in failed)
+                + ". The returned list has None for these; provide an "
+                + "aperture for them or drop those sectors before "
+                + "calling calc_depths().",
+                RuntimeWarning,
+                stacklevel=2,
+                )
         return aps
 
     def plot_field(self, sector: int = None, ap_pixels = None,
@@ -556,7 +712,8 @@ class target:
             plt.savefig(fname+".pdf")
         return
 
-    def calc_depths(self, tdepth: float, all_ap_pixels = None):
+    def calc_depths(self, tdepth: float, all_ap_pixels = None,
+                    dilution_corrected: bool = True):
         """Calculates required transit depth of each star.
 
         Calculates the transit depth each source near the target would
@@ -565,10 +722,26 @@ class target:
         Gaussian with a standard deviation of 0.75 pixels.
 
         Args:
-            tdepth (float): Reported transit depth [ppm].
+            tdepth (float): Transit depth as it appears in the light
+                curve (fractional, not ppm).
             all_ap_pixels (list of numpy arrays): Apertures used to
                 extract light curve.
+            dilution_corrected (bool): Whether the light curve the depth
+                was measured from has already been corrected for dilution
+                by nearby stars (e.g. SPOC PDCSAP flux). If True
+                (default), tdepth is the on-target depth. If False, it is
+                the depth in the raw aperture (SAP) light curve. Use the
+                same value here as in calc_probs().
         """
+        if all_ap_pixels is not None and any(
+                ap is None for ap in all_ap_pixels
+                ):
+            raise ValueError(
+                "all_ap_pixels contains None for one or more sectors "
+                "(e.g. from get_spoc_apertures() when an aperture could "
+                "not be retrieved). Provide an aperture for every sector, "
+                "or restrict the target to the sectors that have one."
+                )
         if all_ap_pixels is None:
             print("No apertures provided, assuming 5x5 centered on target.")
             all_ap_pixels = []
@@ -629,11 +802,18 @@ class target:
         # to stars dataframe
         flux_ratios = np.mean(flux_ratio_per_aperture, axis=0)
         self.stars["fluxratio"] = flux_ratios
-        # calculate transit depth of each star given input transit depth
+        # depth of the dip in the raw aperture light curve. If tdepth is
+        # already dilution-corrected it is the on-target depth, so the
+        # aperture dip is smaller by the target flux ratio.
+        if dilution_corrected:
+            aperture_depth = tdepth * flux_ratios[0]
+        else:
+            aperture_depth = tdepth
+        # transit depth each star would need to host to produce that dip
         tdepths = np.zeros(len(self.stars))
         for i in range(len(flux_ratios)):
             if flux_ratios[i] != 0:
-                tdepths[i] = 1-(flux_ratios[i]-tdepth)/flux_ratios[i]
+                tdepths[i] = aperture_depth / flux_ratios[i]
         tdepths[tdepths > 1] = 0
         self.stars["tdepth"] = tdepths
 
@@ -672,12 +852,13 @@ class target:
 
     def calc_probs(self, time: np.ndarray, flux_0: np.ndarray,
                    flux_err_0: float, P_orb,
-                   contrast_curve_file: str = None, filt: str = "TESS",
+                   contrast_curve_file=None, filt="TESS",
                    N: int = 1000000, parallel: bool = False,
                    drop_scenario: list = [],
                    verbose: int = 1, flatpriors: bool = False,
                    exptime: float = 0.00139, nsamples: int = 20,
-                   molusc_file: str = None):
+                   molusc_file: str = None,
+                   dilution_corrected: bool = True):
         """Run to calculate FPP and NFPP.
 
         Calculates the relative probability of each scenario.
@@ -686,14 +867,25 @@ class target:
             time (numpy array): Time of each data point
                 [days from transit midpoint].
             flux_0 (numpy array): Normalized flux of each data point.
+                By default this is assumed to already be corrected for
+                dilution by nearby stars, i.e. normalized so the
+                out-of-transit target flux is 1 (e.g. SPOC PDCSAP flux).
+                See dilution_corrected.
             flux_err_0 (float): Uncertainty of flux.
             P_orb (float or numpy array): Orbital period [days] OR
                 min and max periods to consider (i.e., [P_min, P_max]).
-            contrast_curve_file (str): Path to contrast curve text file.
-                File should contain column with separations (in arcsec)
-                followed by column with Delta_mags.
-            filt (str): Photometric filter of contrast curve. Options are
-                TESS, Vis, J, H, and K.
+            contrast_curve_file (str or list of str): Path to contrast
+                curve text file, or a list of paths to use more than one
+                contrast curve in the analysis. Each file should contain
+                a column with separations (in arcsec) followed by a
+                column with Delta_mags. When multiple curves are given, a
+                simulated companion is ruled out if any single curve
+                rules it out (the tightest constraint is adopted).
+            filt (str or list of str): Photometric filter of the contrast
+                curve(s). Options are TESS, Vis, J, H, and K. If a list of
+                contrast curves is given, this may be a single filter
+                (applied to all curves) or a list of filters matching
+                contrast_curve_file.
             N (int): Number of draws for MC.
             parallel (bool): Whether or not to simulate light curves
                 in parallel.
@@ -704,11 +896,28 @@ class target:
             nsamples (int): Sampling rate for supersampling.
             molusc_file (str): Path to MOLUSC output with stellar
                 binary properties.
+            dilution_corrected (bool): Whether flux_0 has already been
+                corrected for dilution by nearby stars (e.g. SPOC PDCSAP
+                flux). If True (default), the target light curve is used
+                as-is and each nearby star's light curve is derived from
+                it. If False, flux_0 is treated as the raw aperture (SAP)
+                light curve and is dilution-corrected internally. Use the
+                same value here as in calc_depths().
         """
         # remove nans from light curve
         mask = ~np.isnan(time) & ~np.isnan(flux_0)
         time = time[mask]
         flux_0 = flux_0[mask]
+        self.dilution_corrected = dilution_corrected
+        # target flux ratio, used to relate the target and nearby-star
+        # light curves (always the first row of .stars)
+        fluxratio_target = self.stars["fluxratio"].values[0]
+        if not dilution_corrected:
+            # convert the raw aperture light curve to the on-target
+            # (dilution-corrected) convention used below
+            flux_0, flux_err_0 = renorm_flux(
+                flux_0, flux_err_0, fluxratio_target
+                )
         # construct a new dataframe that gives the values of lnL, best
         # fit parameters, lnprior, and relative probability of
         # each scenario considered
@@ -733,11 +942,32 @@ class target:
         best_fluxratio_comp = np.zeros(N_scenarios)
         lnZ = np.zeros(N_scenarios)
 
-        for i, ID in enumerate(filtered_stars["ID"].values):
-            # subtract flux from other stars in the aperture
-            flux, flux_err = renorm_flux(
-                flux_0, flux_err_0, filtered_stars["fluxratio"].values[i]
+        # get the field-star population file used by the blended-star
+        # scenarios (downloading the TRILEGAL result now if that source
+        # was chosen and deferred; the Gaia file is written in __init__)
+        if self.trilegal_fname is None and self.trilegal_url is not None:
+            # cache it for future calc_probs() calls to avoid repeated
+            # downloads and HTTP 400 errors from TRILEGAL expiring the
+            # result on long-lived target instances
+            self.trilegal_fname = save_trilegal(self.trilegal_url, self.ID)
+        trilegal_fname = self.trilegal_fname
+        # if there is no field-star population (the query failed), the
+        # scenarios that need one are skipped (handled like drop_scenario)
+        trilegal_missing = not isinstance(trilegal_fname, str)
+        if trilegal_missing and verbose == 1:
+            print(
+                "No field-star population available; skipping the "
+                "DTP, DEB, DEBx2P, BTP, BEB, and BEBx2P scenarios."
                 )
+
+        for i, ID in enumerate(filtered_stars["ID"].values):
+            # derive this star's light curve from the on-target light
+            # curve: re-dilute by the target flux ratio, then undilute by
+            # this star's. For the target (fluxratio == fluxratio_target)
+            # this leaves flux_0 unchanged.
+            fluxratio_i = filtered_stars["fluxratio"].values[i]
+            flux = 1.0 + (fluxratio_target/fluxratio_i)*(flux_0 - 1.0)
+            flux_err = flux_err_0 * fluxratio_target/fluxratio_i
 
             M_s = filtered_stars["mass"].values[i]
             R_s = filtered_stars["rad"].values[i]
@@ -750,18 +980,6 @@ class target:
             Z = 0.0
             ra = filtered_stars["ra"].values[i]
             dec = filtered_stars["dec"].values[i]
-
-            # get url to TRILEGAL results and save
-            if self.trilegal_fname is None:
-                output_url = self.trilegal_url
-                trilegal_fname = save_trilegal(output_url, self.ID)
-                # save the downloaded filename for future calc_probs() calls to avoid:
-                # 1. repeated download, and
-                # 2. HTTP 400 error, if the users use the target instance for a long time
-                #   such that TRILEGAL deletes the result.
-                self.trilegal_fname = trilegal_fname
-            else:
-                trilegal_fname = self.trilegal_fname
 
             # target star
             if i == 0:
@@ -1114,7 +1332,7 @@ class target:
                         best_fluxratio_comp[j] = res_twin["fluxratio_comp"][0]
                         lnZ[j] = res_twin["lnZ"]
 
-                    if "DTP" in drop_scenario:
+                    if "DTP" in drop_scenario or trilegal_missing:
                         j = 9
                         targets[j] = ID
                         star_num[j] = 1
@@ -1158,7 +1376,7 @@ class target:
                         best_fluxratio_comp[j] = res["fluxratio_comp"][0]
                         lnZ[j] = res["lnZ"]
 
-                    if "DEB" in drop_scenario:
+                    if "DEB" in drop_scenario or trilegal_missing:
                         j = 10
                         targets[j] = ID
                         star_num[j] = 1
@@ -1226,7 +1444,7 @@ class target:
                         best_fluxratio_comp[j] = res_twin["fluxratio_comp"][0]
                         lnZ[j] = res_twin["lnZ"]
 
-                    if "BTP" in drop_scenario:
+                    if "BTP" in drop_scenario or trilegal_missing:
                         j = 12
                         targets[j] = ID
                         star_num[j] = 2
@@ -1270,7 +1488,7 @@ class target:
                         best_fluxratio_comp[j] = res["fluxratio_comp"][0]
                         lnZ[j] = res["lnZ"]
 
-                    if "BEB" in drop_scenario:
+                    if "BEB" in drop_scenario or trilegal_missing:
                         j = 13
                         targets[j] = ID
                         star_num[j] = 2
@@ -1494,7 +1712,9 @@ class target:
         Args:
             time (numpy array): Time of each data point
                 [days from transit midpoint].
-            flux_0 (numpy array): Normalized flux of each data point.
+            flux_0 (numpy array): Normalized flux of each data point,
+                using the same convention as calc_probs() (see its
+                dilution_corrected argument).
             flux_err_0 (float): Uncertainty of flux.
             save (bool): Whether or not to save plot as pdf.
             fname (str): File name of pdf.
@@ -1507,6 +1727,13 @@ class target:
         fluxratios_EB = self.fluxratio_EB[self.probs["ID"] != 0]
         fluxratios_comp = self.fluxratio_comp[self.probs["ID"] != 0]
 
+        # match the light-curve handling used in calc_probs()
+        fluxratio_target = self.stars["fluxratio"].values[0]
+        if not getattr(self, "dilution_corrected", True):
+            flux_0, flux_err_0 = renorm_flux(
+                flux_0, flux_err_0, fluxratio_target
+                )
+
         model_time = np.linspace(min(time), max(time), 100)
 
         f, ax = plt.subplots(
@@ -1518,13 +1745,13 @@ class target:
                     k = j
                 else:
                     k = 3*i+j
-                # subtract flux from other stars in the aperture
+                # derive this star's light curve from the on-target one
                 idx = np.argwhere(
                     self.stars["ID"].values == str(df["ID"].values[k])
                     )[0, 0]
-                flux, flux_err = renorm_flux(
-                    flux_0, flux_err_0, self.stars["fluxratio"].values[idx]
-                    )
+                fluxratio_i = self.stars["fluxratio"].values[idx]
+                flux = 1.0 + (fluxratio_target/fluxratio_i)*(flux_0 - 1.0)
+                flux_err = flux_err_0 * fluxratio_target/fluxratio_i
                 # all TPs
                 if j == 0:
                     if star_num[k] == 1:

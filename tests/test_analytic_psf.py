@@ -21,6 +21,7 @@ import os
 import sys
 
 import numpy as np
+import pytest
 from scipy.integrate import dblquad
 from scipy.special import ndtr
 
@@ -242,6 +243,7 @@ def test_distant_star():
 
 # ---- test 9: source-level regression -- calc_depths uses ndtr, not dblquad ----
 
+@pytest.mark.heavy
 def test_calc_depths_uses_ndtr():
     """Verify that target.calc_depths source uses ndtr, not dblquad.
 
@@ -273,6 +275,7 @@ def test_calc_depths_uses_ndtr():
     )
 
 
+@pytest.mark.heavy
 def test_triceratops_module_imports_ndtr_not_dblquad():
     """Verify the module-level imports use ndtr, not dblquad."""
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

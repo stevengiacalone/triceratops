@@ -3,6 +3,8 @@ triceratops
 
 .. image:: https://img.shields.io/badge/GitHub-stevengiacalone%2Ftriceratops-blue.svg?style=flat
     :target: https://github.com/stevengiacalone/triceratops
+.. image:: https://github.com/stevengiacalone/triceratops/actions/workflows/tests.yml/badge.svg
+    :target: https://github.com/stevengiacalone/triceratops/actions/workflows/tests.yml
 .. image:: http://img.shields.io/badge/license-MIT-blue.svg?style=flat
     :target: https://github.com/stevengiacalone/triceratops/blob/master/LICENSE
 .. image:: http://img.shields.io/badge/arXiv-2002.00691-orange.svg?style=flat
