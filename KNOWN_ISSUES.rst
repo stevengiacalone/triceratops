@@ -24,14 +24,27 @@ Open
 **Validate the Gaia DR3 background-population default.** As of this
 change the blended-star (DTP/DEB/BTP/BEB) scenarios draw their
 field-star population from real Gaia DR3 sources by default rather than
-a TRILEGAL simulation (``background_population_source``). Local checks
-confirm the Gaia population is physically sensible and scales correctly
-with galactic latitude, but a direct comparison against TRILEGAL on the
-paper's benchmark sample (known planets + known NFPs) has not yet been
-run -- TRILEGAL was unreachable during development. Run
-``tests/manual/background_source_comparison.py --fpp`` on that sample
-once TRILEGAL is available and confirm no known planet's classification
-degrades and no known NFP gets validated.
+a TRILEGAL simulation (``background_population_source``).
+
+So far:
+
+- The Gaia population is physically sensible and its star count scales
+  correctly with galactic latitude (WASP-156 field: 275 stars at
+  b = -55 deg, 806 at +24 deg, 24459 at +2 deg).
+- End to end on WASP-156b (TOI 465.01), N = 1e6: FPP ~ 0.0005,
+  NFPP = 0, i.e. still a validated planet. The blended-star scenarios
+  contribute only ~0.001 to the FPP for this isolated, high-latitude
+  target, so the source choice barely matters here; it will matter much
+  more for crowded / low-latitude targets.
+
+Still to do -- a direct Gaia-vs-TRILEGAL comparison on the paper's
+benchmark sample (known planets + known NFPs). TRILEGAL has been
+unreachable throughout development (its ``stev.oapd.inaf.it`` server
+returns SSL / connection errors), so
+``background_population_source="trilegal"`` currently just skips the
+D/B scenarios. Run ``tests/manual/background_source_comparison.py
+--fpp`` on that sample once TRILEGAL is available and confirm no known
+planet's classification degrades and no known NFP gets validated.
 
 Known limitations of the Gaia population:
 
