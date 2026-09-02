@@ -25,8 +25,8 @@ ID = 270380593
 SECTORS = np.array([4])
 P_ORB = 3.836169
 TDEPTH = 0.005
-N_DRAWS = 20000
-N_REPEATS = 6
+N_DRAWS = int(os.environ.get("SMOKE_N", 1_000_000))
+N_REPEATS = int(os.environ.get("SMOKE_REPEATS", 3))
 
 
 def bin_light_curve(time, flux, flux_err, n_bins=200):
@@ -67,6 +67,7 @@ def main():
 
     print("background population source: %s"
           % getattr(target, "background_population_source", "?"))
+    print("field-star population file: %r" % target.trilegal_fname)
     print("calc_probs (N=%d, x%d) ..." % (N_DRAWS, N_REPEATS))
     ferr = float(np.mean(flux_err))
     fpps, nfpps = [], []
@@ -77,23 +78,27 @@ def main():
         )
         fpps.append(target.FPP)
         nfpps.append(target.NFPP)
-        print("  run %d: FPP = %.4f  NFPP = %.4f"
-              % (k + 1, target.FPP, target.NFPP))
+        print("  run %d: FPP = %.4f  NFPP = %.4f  degenerate=%s"
+              % (k + 1, target.FPP, target.NFPP,
+                 getattr(target, "FPP_degenerate", "?")))
+        top = target.probs.sort_values("prob", ascending=False).head(6)
+        for _, row in top.iterrows():
+            print("      %-7s prob=%.4f" % (row["scenario"], row["prob"]))
     fpps, nfpps = np.array(fpps), np.array(nfpps)
 
-    ok = np.all(np.isfinite(fpps)) and np.all(np.isfinite(nfpps)) \
-        and np.all((fpps >= 0) & (fpps <= 1)) \
+    finite = np.all(np.isfinite(fpps)) and np.all(np.isfinite(nfpps))
+    in_range = np.all((fpps >= 0) & (fpps <= 1)) \
         and np.all((nfpps >= 0) & (nfpps <= 1))
 
-    line = ("WASP-156b (Gaia population): "
+    line = ("WASP-156b (Gaia population, N=%d): "
             "FPP = %.4f +/- %.4f, NFPP = %.4f +/- %.4f"
-            % (fpps.mean(), fpps.std(), nfpps.mean(), nfpps.std()))
+            % (N_DRAWS, fpps.mean(), fpps.std(),
+               nfpps.mean(), nfpps.std()))
     print(line)
-    # surface the numbers as a GitHub Actions notice annotation
     if os.environ.get("GITHUB_ACTIONS"):
         print("::notice title=Tutorial FPP/NFPP::" + line)
 
-    if not ok:
+    if not (finite and in_range):
         raise RuntimeError("FPP/NFPP not all finite values in [0, 1]")
     print("OK")
 
