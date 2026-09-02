@@ -57,8 +57,9 @@ jobs:
 
   tutorial:
     # End-to-end smoke test: the first tutorial example (WASP-156b) run
-    # with a small N. Hits MAST and TRILEGAL, so it is allowed to fail
-    # without failing the workflow -- inspect its log for regressions.
+    # with a small N, plus a Gaia-vs-TRILEGAL field-population check.
+    # Hits MAST, Gaia and TRILEGAL, so it is allowed to fail without
+    # failing the workflow -- inspect its log for regressions.
     name: tutorial smoke (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
     continue-on-error: true
@@ -77,3 +78,5 @@ jobs:
           pip install .
       - name: Run tutorial smoke test
         run: python tests/manual/tutorial_smoke.py
+      - name: Compare background-population sources
+        run: python tests/manual/background_source_comparison.py

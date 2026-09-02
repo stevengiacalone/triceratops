@@ -219,7 +219,7 @@ class TestLogPriors:
 class TestTrilegalUnavailable:
     def test_save_trilegal_returns_non_str_when_url_is_none(self, capsys):
         # calc_probs relies on `not isinstance(trilegal_fname, str)` to
-        # detect a failed TRILEGAL query and skip the D/B scenarios
+        # detect a failed field-star query and skip the D/B scenarios
         result = save_trilegal(None, 12345)
         assert not isinstance(result, str)
-        assert "TRILEGAL" in capsys.readouterr().out
+        assert "field-star population" in capsys.readouterr().out

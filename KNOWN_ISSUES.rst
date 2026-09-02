@@ -18,6 +18,33 @@ Open
 
 *None currently.*
 
+Open
+----
+
+**Validate the Gaia DR3 background-population default.** As of this
+change the blended-star (DTP/DEB/BTP/BEB) scenarios draw their
+field-star population from real Gaia DR3 sources by default rather than
+a TRILEGAL simulation (``background_population_source``). Local checks
+confirm the Gaia population is physically sensible and scales correctly
+with galactic latitude, but a direct comparison against TRILEGAL on the
+paper's benchmark sample (known planets + known NFPs) has not yet been
+run -- TRILEGAL was unreachable during development. Run
+``tests/manual/background_source_comparison.py --fpp`` on that sample
+once TRILEGAL is available and confirm no known planet's classification
+degrades and no known NFP gets validated.
+
+Known limitations of the Gaia population:
+
+- shallower than TRILEGAL in crowded / low galactic latitude fields
+  (Gaia completeness drops with crowding), which biases the D/B FPP
+  contribution low there. A ``gaiaunlimited`` selection-function
+  correction plus a faint-tail luminosity-function extrapolation would
+  address this.
+- all field stars are treated as dwarfs (main-sequence Teff/logg from
+  BP-RP); the giant population TRILEGAL includes is approximated.
+- metallicity is assumed solar (only used for a coarse limb-darkening
+  grid lookup).
+
 Follow-up ideas
 ---------------
 

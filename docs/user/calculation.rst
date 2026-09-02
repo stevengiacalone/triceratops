@@ -193,11 +193,18 @@ scenarios by the frequency of the star doing the blending:
   maximum orbital period; and that period gives the companion frequency.
 - For the background-star scenarios (``DTP``, ``DEB``, ``BTP``,
   ``BEB``, and their twins), :math:`w^{(n)}` is the frequency of a
-  chance-aligned foreground/background star, estimated from a
-  `TRILEGAL <https://stev.oapd.inaf.it/cgi-bin/trilegal>`_ simulation of
-  a 0.1 deg\ :sup:`2` field around the target (stars brighter than the
-  target or fainter than TESS mag 21 are removed), again combined with
-  the contrast curve.
+  chance-aligned foreground/background star, estimated from the
+  field-star population in a 0.1 deg\ :sup:`2` field around the target
+  (stars brighter than the target are removed), again combined with the
+  contrast curve. By default this population is **real Gaia DR3
+  sources** down to G = 21, with stellar properties from main-sequence
+  relations and a TESS magnitude from the Stassun et al. (2019) G-T
+  relation; pass ``background_population_source="trilegal"`` to
+  ``target`` to use a
+  `TRILEGAL <https://stev.oapd.inaf.it/cgi-bin/trilegal>`_ simulation
+  instead. Gaia removes the dependence on the TRILEGAL web service and
+  captures the real field, but is shallower in crowded / low-latitude
+  fields where TRILEGAL is the better choice.
 - :math:`w^{(n)}` is capped at 1, and set to 1 for scenarios with no
   unresolved companion (``TP``, ``EB``, ``EBx2P``, ``NTP``, ``NEB``,
   ``NEBx2P``).
@@ -284,8 +291,9 @@ distributions sampled (Giacalone et al. 2021, Section 2.4.2) are:
 - **Long-period mass ratio** :math:`q_\mathrm{long}` (unresolved bound
   companions): :math:`q^{0.3}` below :math:`q = 0.3` and
   :math:`q^{-0.95}` above, with :math:`F_\mathrm{twin} = 0.05`.
-- **Simulated star**: for the diluted/background scenarios, the blended
-  star's properties are drawn directly from the TRILEGAL population.
+- **Field star**: for the diluted/background scenarios, the blended
+  star's properties are drawn at random from the field-star population
+  (Gaia DR3 or TRILEGAL; see above).
 
 The eccentricity is fixed to zero and the orbital period is fixed to
 the reported value (or sampled uniformly between ``P_min`` and
@@ -349,6 +357,11 @@ Assumptions and limitations
   pixel-level position; that information is complementary.
 - A low NFPP does not by itself validate a planet — it only means the
   signal is unlikely to come from a *resolved* neighbor.
+- The default Gaia DR3 field-star population is shallower than a
+  TRILEGAL simulation in crowded / low galactic latitude fields, which
+  biases the blended-star (D/B) contribution to the FPP low there.
+  Field stars are all treated as dwarfs. Use
+  ``background_population_source="trilegal"`` for such targets.
 
 Practical recommendations
 -------------------------
@@ -366,5 +379,9 @@ Practical recommendations
 - If seeing-limited follow-up has shown the transit to be **on-target**,
   call ``target.remove_nearby_stars()`` before ``calc_probs()`` to drop
   the ``NTP``/``NEB`` scenarios (``NFPP`` becomes 0).
+- For targets in crowded / low galactic latitude fields, build the
+  ``target`` with ``background_population_source="trilegal"`` so the
+  blended-star scenarios use a population that stays complete below the
+  Gaia limit.
 - Use ``drop_scenario`` to exclude specific scenarios that independent
   information has ruled out.

@@ -51,7 +51,13 @@ Other additions on this release:
   ``pkg_resources``; ``triceratops.likelihoods`` shims the removed
   NumPy/SciPy names, ``setup.py`` holds NumPy/SciPy back where wheels
   exist and requires ``setuptools<81`` on 3.12+.
-- ``calc_probs`` no longer crashes when the TRILEGAL query fails: the
-  scenarios that need a simulated background population (DTP, DEB,
-  DEBx2P, BTP, BEB, BEBx2P) are skipped, and FPP/NFPP are returned
-  without them.
+- ``calc_probs`` no longer crashes when the field-star query fails: the
+  scenarios that need a background population (DTP, DEB, DEBx2P, BTP,
+  BEB, BEBx2P) are skipped, and FPP/NFPP are returned without them.
+- The field-star population for the blended-star scenarios now comes
+  from **real Gaia DR3 sources by default** (``query_gaia_background``)
+  instead of a TRILEGAL simulation. This removes the dependence on the
+  TRILEGAL web service and uses the actual field. ``target`` takes
+  ``background_population_source`` ("gaia" default, or "trilegal").
+  Gaia is shallower in crowded / low galactic latitude fields, where
+  TRILEGAL remains the better choice; see KNOWN_ISSUES.rst.

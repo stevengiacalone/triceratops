@@ -24,6 +24,7 @@ from .likelihoods import (simulate_TP_transit,
 from ._numerics import _normalize_probabilities
 from .funcs import (save_trilegal,
                    query_TRILEGAL,
+                   query_gaia_background,
                    renorm_flux,
                    stellar_relations,
                    estimate_stellar_parameters,
@@ -44,7 +45,8 @@ class target:
                  search_radius: int = 10, mission: str = "TESS",
                  lightkurve_cache_dir = None, trilegal_fname = None,
                  ra: float=None, dec: float=None, verify_ssl: bool=True,
-                 estimate_missing_params: bool=True):
+                 estimate_missing_params: bool=True,
+                 background_population_source: str="gaia"):
         """Initializes TRICERATOPS.
 
         Queries TIC for sources near the target and obtains a cutout
@@ -70,6 +72,11 @@ class target:
                 any missing stellar mass, radius, and/or Teff in the
                 .stars dataframe from the available photometry using
                 main-sequence relations (see estimate_stellar_params).
+            background_population_source (str): Where the field-star
+                population for the blended-star scenarios (DTP, DEB,
+                BTP, BEB, ...) comes from: "gaia" (default) queries real
+                Gaia DR3 sources, "trilegal" runs a TRILEGAL simulation.
+                Ignored if trilegal_fname is given.
         """
         self.ID = ID
         self.mission = mission
@@ -129,19 +136,33 @@ class target:
             ]
         stars = new_df.to_pandas()
 
-        # start TRILEGAL query if needed
-        if trilegal_fname is None:
-            output_url = query_TRILEGAL(
+        # obtain the field-star population for the blended-star scenarios
+        if background_population_source not in ("gaia", "trilegal"):
+            raise ValueError(
+                "background_population_source must be 'gaia' or "
+                "'trilegal'."
+                )
+        self.background_population_source = background_population_source
+        if trilegal_fname is not None:
+            # user supplied a population file directly
+            self.trilegal_fname = trilegal_fname
+            self.trilegal_url = None
+        elif background_population_source == "gaia":
+            self.trilegal_url = None
+            self.trilegal_fname = query_gaia_background(
+                stars["ra"].values[0],
+                stars["dec"].values[0],
+                ID,
+                verbose=0
+                )
+        else:
+            self.trilegal_url = query_TRILEGAL(
                 stars["ra"].values[0],
                 stars["dec"].values[0],
                 verbose=0,
-                verify_ssl=True
+                verify_ssl=verify_ssl
                 )
-            self.trilegal_url = output_url
             self.trilegal_fname = None
-        else:
-            self.trilegal_fname = trilegal_fname
-            self.trilegal_url = None
 
         TESS_images = []
         col0s, row0s = [], []
@@ -921,6 +942,24 @@ class target:
         best_fluxratio_comp = np.zeros(N_scenarios)
         lnZ = np.zeros(N_scenarios)
 
+        # get the field-star population file used by the blended-star
+        # scenarios (downloading the TRILEGAL result now if that source
+        # was chosen and deferred; the Gaia file is written in __init__)
+        if self.trilegal_fname is None and self.trilegal_url is not None:
+            # cache it for future calc_probs() calls to avoid repeated
+            # downloads and HTTP 400 errors from TRILEGAL expiring the
+            # result on long-lived target instances
+            self.trilegal_fname = save_trilegal(self.trilegal_url, self.ID)
+        trilegal_fname = self.trilegal_fname
+        # if there is no field-star population (the query failed), the
+        # scenarios that need one are skipped (handled like drop_scenario)
+        trilegal_missing = not isinstance(trilegal_fname, str)
+        if trilegal_missing and verbose == 1:
+            print(
+                "No field-star population available; skipping the "
+                "DTP, DEB, DEBx2P, BTP, BEB, and BEBx2P scenarios."
+                )
+
         for i, ID in enumerate(filtered_stars["ID"].values):
             # derive this star's light curve from the on-target light
             # curve: re-dilute by the target flux ratio, then undilute by
@@ -941,23 +980,6 @@ class target:
             Z = 0.0
             ra = filtered_stars["ra"].values[i]
             dec = filtered_stars["dec"].values[i]
-
-            # get url to TRILEGAL results and save
-            if self.trilegal_fname is None:
-                output_url = self.trilegal_url
-                trilegal_fname = save_trilegal(output_url, self.ID)
-                # save the downloaded filename for future calc_probs() calls to avoid:
-                # 1. repeated download, and
-                # 2. HTTP 400 error, if the users use the target instance for a long time
-                #   such that TRILEGAL deletes the result.
-                self.trilegal_fname = trilegal_fname
-            else:
-                trilegal_fname = self.trilegal_fname
-
-            # if the TRILEGAL query failed there is no simulated
-            # background population, so the scenarios that need one are
-            # skipped (handled like drop_scenario below)
-            trilegal_missing = not isinstance(trilegal_fname, str)
 
             # target star
             if i == 0:

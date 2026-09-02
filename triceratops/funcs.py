@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from pandas import read_csv
+from pandas import read_csv, to_numeric, DataFrame
 from pandas.errors import EmptyDataError
 from astropy import constants
 from scipy.interpolate import InterpolatedUnivariateSpline
@@ -672,8 +672,8 @@ def save_trilegal(output_url, ID: int):
     """
     if output_url is None:
         print(
-            "Could not access TRILEGAL. "
-            + "Ignoring BTP, BEB, BEBx2P, DTP, DEB, and DEBx2P scenarios."
+            "Could not obtain a field-star population. Ignoring the "
+            + "DTP, DEB, DEBx2P, BTP, BEB, and BEBx2P scenarios."
             )
         return 0.0
     else:
@@ -696,12 +696,165 @@ def save_trilegal(output_url, ID: int):
         df.to_csv(fname)
         return fname
 
+
+def gaia_to_Tmag(G, BP, RP):
+    """
+    Converts Gaia DR3 magnitudes to a TESS magnitude using the
+    (BP - RP) colour relation of Stassun et al. (2019) (TIC v8).
+    Args:
+        G, BP, RP (float or numpy array): Gaia G, BP and RP magnitudes.
+    Returns:
+        Tmag (float or numpy array): TESS magnitude.
+    """
+    G = np.asarray(G, dtype=float)
+    color = np.asarray(BP, dtype=float) - np.asarray(RP, dtype=float)
+    Tmag = (
+        G - 0.00522555*np.clip(color, -0.2, 3.5)**3
+        + 0.0891337*np.clip(color, -0.2, 3.5)**2
+        - 0.633923*np.clip(color, -0.2, 3.5)
+        + 0.0324473
+        )
+    # no colour available: use the mean G - T offset
+    Tmag = np.where(np.isfinite(color), Tmag, G - 0.43)
+    return Tmag
+
+
+def query_gaia_background(RA: float, Dec: float, ID: int,
+                          field: float = 0.1, mag_limit: float = 21.0,
+                          verbose: int = 1):
+    """
+    Queries Gaia DR3 for the field-star population toward (RA, Dec), for
+    use in the blended-star scenarios (DTP/DEB/BTP/BEB and their twins)
+    in place of a TRILEGAL simulation.
+
+    Real Gaia sources are used down to the given magnitude limit. Each
+    star's effective temperature is estimated from its dereddened BP-RP
+    colour and its mass, radius, surface gravity and absolute
+    magnitudes from the main-sequence (dwarf) sequence of Pecaut &
+    Mamajek (2013); metallicity is assumed solar. The TESS magnitude is
+    from the Stassun et al. (2019) G-T relation, and J/H/Ks apparent
+    magnitudes from the dwarf sequence at the star's Teff and distance.
+
+    Args:
+        RA, Dec (float): Target coordinates [deg].
+        ID (int): Target ID, used for the output file name.
+        field (float): Solid angle of the queried field [deg^2].
+        mag_limit (float): Faint Gaia G magnitude limit.
+        verbose (int): 1 to print progress, 0 to print nothing.
+    Returns:
+        fname (str or None): Path to a CSV with the columns that
+            trilegal_results() reads (Mact, logg, logTe, [M/H], TESS,
+            J, H, Ks), or None if the query failed or returned nothing
+            usable.
+    """
+    from astroquery.gaia import Gaia
+
+    radius = np.sqrt(field/pi)  # deg; circle with area `field`
+    adql = (
+        "SELECT phot_g_mean_mag, phot_bp_mean_mag, phot_rp_mean_mag, "
+        "parallax, parallax_over_error "
+        "FROM gaiadr3.gaia_source "
+        "WHERE 1 = CONTAINS(POINT('ICRS', ra, dec), "
+        "CIRCLE('ICRS', {0}, {1}, {2})) "
+        "AND phot_g_mean_mag < {3}".format(RA, Dec, radius, mag_limit)
+        )
+    try:
+        Gaia.ROW_LIMIT = -1
+        # the synchronous endpoint is much faster for the typical few
+        # hundred stars; fall back to async for dense (plane) fields
+        try:
+            tbl = Gaia.launch_job(adql, verbose=False).get_results()
+            if len(tbl) >= 2000:
+                tbl = Gaia.launch_job_async(adql, verbose=False).get_results()
+        except Exception:
+            tbl = Gaia.launch_job_async(adql, verbose=False).get_results()
+    except Exception as exc:
+        if verbose:
+            print(
+                "Gaia DR3 query failed ({0}). The scenarios that need a "
+                "field-star population will be skipped.".format(exc)
+                )
+        return None
+    if len(tbl) == 0:
+        if verbose:
+            print("Gaia DR3 returned no field stars.")
+        return None
+
+    Gmag = np.asarray(tbl["phot_g_mean_mag"], dtype=float)
+    BPmag = np.asarray(tbl["phot_bp_mean_mag"], dtype=float)
+    RPmag = np.asarray(tbl["phot_rp_mean_mag"], dtype=float)
+    plx = np.asarray(tbl["parallax"], dtype=float)
+    plx_snr = np.asarray(tbl["parallax_over_error"], dtype=float)
+    Tmag = gaia_to_Tmag(Gmag, BPmag, RPmag)
+
+    # sorted (x, y) tables from the dwarf sequence for vectorized interp
+    def seq_table(xcol, ycol):
+        x, y = mamajek_column(xcol), mamajek_column(ycol)
+        keep = np.isfinite(x) & np.isfinite(y)
+        x, y = x[keep], y[keep]
+        order = np.argsort(x)
+        x, y = x[order], y[order]
+        keep = np.concatenate(([True], np.diff(x) > 1e-9))
+        return x[keep], y[keep]
+
+    cx, cy = seq_table("BpRp", "Teff")
+    Teff = np.interp(BPmag - RPmag, cx, cy, left=cy[0], right=cy[-1])
+    tx, ty = seq_table("Teff", "Msun")
+    mass = np.interp(Teff, tx, ty)
+    tx, ty = seq_table("Teff", "R_Rsun")
+    rad = np.interp(Teff, tx, ty)
+    tx, ty = seq_table("Teff", "M_G")
+    M_G = np.interp(Teff, tx, ty)
+    tx, ty = seq_table("Teff", "M_J")
+    M_J = np.interp(Teff, tx, ty)
+    tx, ty = seq_table("Teff", "M_Ks")
+    M_Ks = np.interp(Teff, tx, ty)
+    tx, ty = seq_table("Teff", "JH")
+    JH = np.interp(Teff, tx, ty)
+
+    logg = np.log10(G*(mass*Msun)/(rad*Rsun)**2)
+    # distance modulus: parallax when reliable, else photometric (G - M_G)
+    use_plx = np.isfinite(plx) & (plx > 0.0) & (plx_snr > 5.0)
+    dmod = np.where(
+        use_plx,
+        5.0*np.log10(1000.0/np.where(plx > 0.0, plx, np.nan)) - 5.0,
+        Gmag - M_G
+        )
+
+    good = np.isfinite(Teff) & np.isfinite(mass) & np.isfinite(dmod)
+    rows = np.column_stack([
+        mass[good], logg[good], np.log10(Teff[good]),
+        np.zeros(np.sum(good)), Tmag[good],
+        (M_J + dmod)[good], (M_J - JH + dmod)[good], (M_Ks + dmod)[good],
+        ])
+
+    if len(rows) == 0:
+        if verbose:
+            print("Gaia DR3 field stars could not be characterized.")
+        return None
+
+    df = DataFrame(
+        rows,
+        columns=["Mact", "logg", "logTe", "[M/H]", "TESS", "J", "H", "Ks"]
+        )
+    fname = str(ID) + "_gaia_background.csv"
+    df.to_csv(fname, index=False)
+    if verbose:
+        print(
+            "Gaia DR3: {0} field stars toward the target "
+            "(G < {1}).".format(len(df), mag_limit)
+            )
+    return fname
+
+
 def trilegal_results(trilegal_fname: str, Tmag: float):
     """
-    Retrieves arrays of stars from trilegal query.
+    Reads a field-star population file (from a TRILEGAL simulation or
+    from query_gaia_background) and returns arrays of the stars fainter
+    than the target.
     Args:
-        trilegal_fname (str): File containing query results.
-        Tmag (float): TESS magnitude of the star.
+        trilegal_fname (str): File containing the population.
+        Tmag (float): TESS magnitude of the target star.
     Returns:
         Tmags (numpy array): TESS magnitude of all stars
                              fainter than the target.
@@ -714,15 +867,24 @@ def trilegal_results(trilegal_fname: str, Tmag: float):
         Zs (numpy array): Metallicities of all stars fainter than the
                           target [dex].
     """
-    df = read_csv(trilegal_fname)[:-2]
-    Masses = df["Mact"].values
-    loggs = df["logg"].values
-    Teffs = 10**df["logTe"].values
-    Zs = np.array(df["[M/H]"], dtype=float)
-    Tmags = df["TESS"].values
-    Jmags = df["J"].values
-    Hmags = df["H"].values
-    Kmags = df["Ks"].values
+    df = read_csv(trilegal_fname)
+    # TRILEGAL files end with 1-2 footer lines; a Gaia file has none.
+    # Keep only rows whose stellar parameters parse as numbers.
+    df = df[
+        to_numeric(df["Mact"], errors="coerce").notna()
+        & to_numeric(df["logg"], errors="coerce").notna()
+        ].reset_index(drop=True)
+    Masses = to_numeric(df["Mact"]).values
+    loggs = to_numeric(df["logg"]).values
+    Teffs = 10**to_numeric(df["logTe"]).values
+    Zs = to_numeric(df["[M/H]"]).values.astype(float)
+    Jmags = to_numeric(df["J"]).values
+    Hmags = to_numeric(df["H"]).values
+    Kmags = to_numeric(df["Ks"]).values
+    Tmags = (
+        to_numeric(df["TESS"]).values if "TESS" in df.columns
+        else np.full(df.shape[0], np.nan)
+        )
     headers = np.array(list(df))
     # if able to use TRILEGAL v1.6 and get TESS mags, use them
     if "TESS" in headers:
