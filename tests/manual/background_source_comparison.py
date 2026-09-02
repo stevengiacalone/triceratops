@@ -21,6 +21,12 @@ import sys
 import numpy as np
 from astropy.coordinates import SkyCoord
 
+
+def notice(msg):
+    print(msg)
+    if os.environ.get("GITHUB_ACTIONS"):
+        print("::notice title=background comparison::" + msg)
+
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
 _LC = os.path.join(_REPO_ROOT, "examples", "TOI465_01_lightcurve.csv")
@@ -67,9 +73,12 @@ def population_summary(name, ra, dec):
         n_tri = None
     if n_gaia and n_tri:
         r = n_gaia/n_tri
-        print("  N_gaia / N_trilegal = {0:.2f}  "
-              "(background-star prior shifts by {1:+.2f} nat)".format(
-                  r, np.log(r)))
+        notice("{0} (b={1:+.0f}): N_gaia={2}, N_trilegal={3}, "
+               "ratio={4:.2f} (prior shift {5:+.2f} nat)".format(
+                   name, b, n_gaia, n_tri, r, np.log(r)))
+    elif n_gaia:
+        notice("{0} (b={1:+.0f}): N_gaia={2}, TRILEGAL unavailable".format(
+            name, b, n_gaia))
 
 
 def fpp_comparison():
@@ -78,22 +87,30 @@ def fpp_comparison():
     name, ID, sectors, ra, dec, P_orb, tdepth = TARGETS[0]
     time, flux, flux_err = np.loadtxt(_LC, delimiter=",", unpack=True)
     ferr = float(np.mean(flux_err))
-    print("\n=== FPP comparison: {0} ===".format(name))
+    N = int(os.environ.get("SMOKE_N", 1_000_000))
+    n_rep = int(os.environ.get("SMOKE_REPEATS", 3))
+    print("\n=== FPP comparison: {0} (N={1}, x{2}) ===".format(name, N, n_rep))
     for source in ("gaia", "trilegal"):
         try:
             t = tr.target(ID=ID, sectors=np.array(sectors),
                           background_population_source=source)
             t.calc_depths(tdepth=tdepth,
                           all_ap_pixels=t.get_spoc_apertures())
-            t.calc_probs(time=time, flux_0=flux, flux_err_0=ferr,
-                         P_orb=P_orb, N=20000, parallel=False, verbose=0)
-            db = t.probs[t.probs["scenario"].isin(
-                ["DTP", "DEB", "DEBx2P", "BTP", "BEB", "BEBx2P"])]
-            print("  {0:9s}: FPP={1:.4f}  NFPP={2:.4f}  "
-                  "P(D/B scenarios)={3:.4f}".format(
-                      source, t.FPP, t.NFPP, db["prob"].sum()))
+            fpp, nfpp, db = [], [], []
+            for _ in range(n_rep):
+                t.calc_probs(time=time, flux_0=flux, flux_err_0=ferr,
+                             P_orb=P_orb, N=N, parallel=False, verbose=0)
+                fpp.append(t.FPP)
+                nfpp.append(t.NFPP)
+                db.append(t.probs[t.probs["scenario"].isin(
+                    ["DTP", "DEB", "DEBx2P", "BTP", "BEB",
+                     "BEBx2P"])]["prob"].sum())
+            notice("{0}: FPP={1:.4f}+/-{2:.4f}  NFPP={3:.4f}  "
+                   "P(D/B)={4:.4f}".format(
+                       source, np.mean(fpp), np.std(fpp),
+                       np.mean(nfpp), np.mean(db)))
         except Exception as exc:
-            print("  {0:9s}: error ({1})".format(source, exc))
+            notice("{0}: error ({1})".format(source, exc))
 
 
 if __name__ == "__main__":

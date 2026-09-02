@@ -79,4 +79,6 @@ jobs:
       - name: Run tutorial smoke test
         run: python tests/manual/tutorial_smoke.py
       - name: Compare background-population sources
-        run: python tests/manual/background_source_comparison.py
+        env:
+          SMOKE_REPEATS: "2"
+        run: python tests/manual/background_source_comparison.py --fpp
