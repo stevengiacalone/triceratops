@@ -1,12 +1,13 @@
 """End-to-end smoke test of the first tutorial example.
 
 Runs the TESS example from docs/tutorials/example.ipynb (WASP-156b /
-TIC 270380593, sector 4) with a small number of Monte Carlo draws and
-checks that calc_probs() returns finite FPP / NFPP in [0, 1].
+TIC 270380593, sector 4), with the default Gaia DR3 background-star
+population, a few times, and checks that calc_probs() returns finite
+FPP / NFPP in [0, 1]. Prints the mean and standard deviation.
 
-This hits MAST (TIC, TESSCut) and TRILEGAL, so it is not part of the
-pytest suite; it is run as a separate, non-blocking CI job and can be
-run by hand:
+This hits MAST (TIC, TESSCut) and the Gaia archive, so it is not part
+of the pytest suite; it is run as a separate, non-blocking CI job and
+can be run by hand:
 
     python tests/manual/tutorial_smoke.py
 """
@@ -24,7 +25,8 @@ ID = 270380593
 SECTORS = np.array([4])
 P_ORB = 3.836169
 TDEPTH = 0.005
-N_DRAWS = 5000
+N_DRAWS = 20000
+N_REPEATS = 6
 
 
 def bin_light_curve(time, flux, flux_err, n_bins=200):
@@ -63,23 +65,36 @@ def main():
     time, flux, flux_err = bin_light_curve(time, flux, flux_err)
     print("  binned light curve: %d points" % time.size)
 
-    print("calc_probs (N=%d) ..." % N_DRAWS)
-    target.calc_probs(
-        time=time, flux_0=flux, flux_err_0=float(np.mean(flux_err)),
-        P_orb=P_ORB, N=N_DRAWS, parallel=False, verbose=0,
-    )
-    fpp, nfpp = target.FPP, target.NFPP
-    print("  FPP  = %.4f" % fpp)
-    print("  NFPP = %.4f" % nfpp)
+    print("background population source: %s"
+          % getattr(target, "background_population_source", "?"))
+    print("calc_probs (N=%d, x%d) ..." % (N_DRAWS, N_REPEATS))
+    ferr = float(np.mean(flux_err))
+    fpps, nfpps = [], []
+    for k in range(N_REPEATS):
+        target.calc_probs(
+            time=time, flux_0=flux, flux_err_0=ferr,
+            P_orb=P_ORB, N=N_DRAWS, parallel=False, verbose=0,
+        )
+        fpps.append(target.FPP)
+        nfpps.append(target.NFPP)
+        print("  run %d: FPP = %.4f  NFPP = %.4f"
+              % (k + 1, target.FPP, target.NFPP))
+    fpps, nfpps = np.array(fpps), np.array(nfpps)
 
-    ok = True
-    for name, val in (("FPP", fpp), ("NFPP", nfpp)):
-        if not np.isfinite(val) or not (0.0 <= val <= 1.0):
-            print("  FAIL: %s = %r is not a finite value in [0, 1]"
-                  % (name, val))
-            ok = False
+    ok = np.all(np.isfinite(fpps)) and np.all(np.isfinite(nfpps)) \
+        and np.all((fpps >= 0) & (fpps <= 1)) \
+        and np.all((nfpps >= 0) & (nfpps <= 1))
+
+    line = ("WASP-156b (Gaia population): "
+            "FPP = %.4f +/- %.4f, NFPP = %.4f +/- %.4f"
+            % (fpps.mean(), fpps.std(), nfpps.mean(), nfpps.std()))
+    print(line)
+    # surface the numbers as a GitHub Actions notice annotation
+    if os.environ.get("GITHUB_ACTIONS"):
+        print("::notice title=Tutorial FPP/NFPP::" + line)
+
     if not ok:
-        raise RuntimeError("FPP/NFPP out of range")
+        raise RuntimeError("FPP/NFPP not all finite values in [0, 1]")
     print("OK")
 
 
